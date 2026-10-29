@@ -1,0 +1,8 @@
+[package]
+name = "gource-sim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Gource rewrite: sim crate (empty in phase 1)"
+
+[dependencies]

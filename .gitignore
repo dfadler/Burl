@@ -24,3 +24,6 @@ logs/*
 *.d
 .deps
 .dirstamp
+
+# Rust rewrite
+/target

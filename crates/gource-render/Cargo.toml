@@ -1,0 +1,8 @@
+[package]
+name = "gource-render"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Gource rewrite: render crate (empty in phase 1)"
+
+[dependencies]

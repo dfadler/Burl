@@ -1,0 +1,15 @@
+[package]
+name = "gource"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Gource rewrite: the application binary (phase 1: --output-custom-log only)"
+
+[[bin]]
+name = "gource"
+path = "src/main.rs"
+
+[dependencies]
+gource-util.workspace = true
+gource-conf.workspace = true
+gource-formats.workspace = true

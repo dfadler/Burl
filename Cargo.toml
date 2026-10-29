@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.57.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/acaudwell/Gource"
+
+[workspace.dependencies]
+gource-util = { path = "crates/gource-util" }
+gource-conf = { path = "crates/gource-conf" }
+gource-formats = { path = "crates/gource-formats" }
+gource-sim = { path = "crates/gource-sim" }
+gource-render = { path = "crates/gource-render" }
+regex = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+roxmltree = "0.20"
+pcre2 = "0.2"

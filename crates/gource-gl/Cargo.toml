@@ -1,0 +1,8 @@
+[package]
+name = "gource-gl"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Gource rewrite: gl crate (empty in phase 1)"
+
+[dependencies]

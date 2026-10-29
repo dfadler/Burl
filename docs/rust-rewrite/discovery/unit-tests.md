@@ -3,7 +3,7 @@
 Outcome: built and run, all pass (rc 0): 2 test cases, 69 assertions (parse_date_time_tests 58, regex_tests 11). Full log: golden/unit-tests.txt (ANSI stripped).
 
 ## Build (nothing installed; reuses gb/obj from build-and-goldens.md)
-Scratchpad gb/ = /private/tmp/claude-501/-Users-dfadler-Development-Burl/28b2cf9c-5b37-48fc-9223-8a7d96cdc267/scratchpad/gb ; script gb/tbuild.sh.
+Build directory: a temp dir produced by `golden/scripts/build.sh`; the test build script is `golden/scripts/tbuild.sh` (takes `BUILD=`).
 - src/test/main.cpp uses `boost/test/included/unit_test.hpp` (header-only), so -lboost_unit_test_framework is NOT needed.
 - The test target links all `${sources}` but NOT src/main.cpp (the Boost header supplies main). So: all gb/obj/*.o except src_main.cpp.o.
 - Compile each of the 3 test files (F = main, datetime_tests, regex_tests):

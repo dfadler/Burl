@@ -25,7 +25,7 @@ Legend: `[x]` verified against source or a binary, `[~]` catalogued from a child
 | tests-and-golden-strategy.md | existing tests/fixtures, headless status, 3-tier golden strategy |
 | timing.md | AUTHORITATIVE per-frame timing flow, time settings table, exporter vs interactive, stop conditions, wall-clock entry points |
 | build-and-goldens.md | how the C++ binary was built here without autotools (clang++ -arch x86_64), dependency versions, golden capture commands |
-| golden/ | captured goldens: help-short/long, exit-codes, custom-log/* for 5 fixtures; scripts/ to rebuild and recapture |
+| golden/ | captured goldens: help-short/long, exit-codes, custom-log/* for 5 fixtures plus stdin variants, unit-tests.txt; scripts/ (parameterised by BUILD=, with README) rebuild the binary and recapture everything; glibc_rand.py model |
 | verification-tick2.md | citation sample check: 32 cites, no substantive errors, line shifts (now patched) |
 | verification-tick3-scene.md | independently re-derived pseudocode for every sim function (f32/f64 noted) and a 9-row discrepancy table (now patched into scene-model.md / app-core.md) |
 | misc-traces.md | PPM exporter thread, stdin isFinished, multi-repo reset set, --save-config format, hover/follow, captions, HiDPI, custom-log writer |
@@ -38,10 +38,10 @@ Legend: `[x]` verified against source or a binary, `[~]` catalogued from a child
 | Tick | Spent | Remaining | Notes |
 |------|-------|-----------|-------|
 | 1 | 10 | 90 | 8 first-wave children (app-core used 3, the rest 1 each). All returned. |
-| 4 | 5 | 71 | Final verification pass (from the 15-agent reserve), started 18:04Z, done 18:18Z: ~300 claims/cites checked across timing.md, all Tick 2 additions, misc-traces, unit-tests, parity spec, architecture map. No structural errors; line shifts and a handful of wrong statements corrected in place with "(corrected tick 4)" markers. |
-| total | 29 | 71 | Loop stopped 2026-10-29T18:20Z after 4 ticks (1h22m of the 5h window). Stop rule met; 71 agents unspent. |
-| 3 | 5 | 76 | 5 children, started 17:45Z, done 18:00Z: scene verification 1, misc traces 1, unit tests 1, parity spec 1, architecture map 1. |
-| 2 | 9 | 81 | 8 children, started early at 17:14Z, done 17:40Z. Verifier 1, timing 1, build+goldens 1 (resumed once), gource.cpp finish 1, core gaps 1, config sequencing 1, rendering gaps 2, crate verification 1. |
+| 4 | 5 | 71 | Final verification pass (from the 15-agent reserve), started ~17:34Z, done ~17:40Z (times approximate): ~300 claims/cites checked across timing.md, all Tick 2 additions, misc-traces, unit-tests, parity spec, architecture map. No structural errors; line shifts and a handful of wrong statements corrected in place with "(corrected tick 4)" markers. |
+| total | 29 | 71 | Loop stopped 2026-10-29T17:47Z after 4 ticks (48 min of the 5h window; ticks were fast-forwarded as soon as each wave returned). Stop rule met; 71 agents unspent. |
+| 3 | 5 | 76 | 5 children, started ~17:25Z, done ~17:33Z (approximate): scene verification 1, misc traces 1, unit tests 1, parity spec 1, architecture map 1. |
+| 2 | 9 | 81 | 8 children, started early at 17:14Z, done ~17:24Z (approximate). Verifier 1, timing 1, build+goldens 1 (resumed once), gource.cpp finish 1, core gaps 1, config sequencing 1, rendering gaps 2, crate verification 1. |
 
 ## Done criterion (checklist)
 
@@ -94,7 +94,7 @@ Mechanical check: every `.cpp` under src/ (excluding vendored tinyxml) is named 
 
 - glibc `rand()` TYPE_3 first outputs were reproduced from a Python model, not run against a real glibc; macOS Park-Miller was confirmed by a compiled test here. Windows MSVC `rand()` not researched.
 - `vec2(rand()%100-50, rand()%100-50)` argument evaluation order is unspecified in C++; clang left-to-right assumed. Pin it in the parity spec when the reference binary is chosen.
-- stdin log behaviour (partial-line loss, empty-stdin startup, `--stop-at-end` never firing) is read from source, not exercised.
+- stdin log behaviour: parser path and unterminated-last-line drop were exercised against the built binary (misc-traces.md, last section); empty-stdin startup and `--stop-at-end` with stdin remain read from source only.
 - PPM pipe / SIGPIPE behaviour not exercised.
 - No render golden exists; SDL's dummy driver has no GL on macOS and opening a real window was avoided. Use the Xvfb + llvmpipe recipe in parity-test-spec.md on Linux.
 - Windows-only paths (DPI awareness, console, HWND subclass, frameless) are catalogued from source only.

@@ -29,7 +29,7 @@ The repo has no pre-generated `configure` (only autogen.sh and configure.ac), so
 `brew install autoconf automake lib## Direct build (no autotools) - worked
 Key finding: Homebrew under /usr/local is x86_64 (pkg-config, SDL2, boost dylibs are all x86_64) while the shell is arm64. Without `-arch x86_64`, SDL.h pulls in x86 intrinsics and every file fails with `raointintrin.h: use of undeclared identifier '__builtin_ia32_aadd32'`. Rosetta works (`arch -x86_64 /usr/bin/true`). Fixed by `-arch x86_64`.
 
-Copy of src/ and data/ in scratchpad `.../scratchpad/gb`; scripts `.../scratchpad/build.sh` and `link.sh`.
+Build copy of src/ and data/ in a temp directory; the reproducible scripts are `golden/scripts/build.sh`, `link.sh`, `gold.sh`, `tbuild.sh` (see `golden/scripts/README.md`; they take `BUILD=` and default `REPO` to this checkout). The original session-scoped build directory is gone.
 Per-file compile (53 files: src/main.cpp + Makefile.am `sources` + src/tinyxml/*.cpp, all compiled clean, zero failures):
 
     clang++ -arch x86_64 -std=c++17 -O1 -w -I src -I src/core -I src/tinyxml -DSDLAPP_RESOURCE_DIR=\"$S/data\" -DHAVE_TIMEGM -DHAVE_UNSETENV $(pkg-config --cflags sdl2 SDL2_image glew freetype2 libpcre2-8 libpng) -I/usr/local/include -I/usr/local/opt/boost/include -c FILE -o obj/FILE.o

@@ -353,7 +353,7 @@ dateAtPosition (cpp:288-305): `percent<1.0 && commitlog->getCommitAt(percent, co
 
 ## 14. Rust-port hazards (sim state)
 1. users/files/tagusermap/gGourceDirMap are std::map: use BTreeMap (byte-wise string order); interactUsers force application is in-place and order dependent.
-2. f32 vs f64: runtime, dt, scaled_dt, max_tick_rate f32 (`1.0/60.0` narrowed from f64; `1.0f/(float)g` f32); `time_inc` f64 then `(int)` truncation (ctx); gravity `/=1.1` / `*=1.1` are double ops narrowed to f32 (cpp:846,850); zoom multiplier is a float (cpp:404, CORRECTED); `DEGREES_TO_RADIANS` is the double macro 0.017453292 (pi.h:33), so rotate_angle math is double then narrowed; time_scale/days_per_second use floorf.
+2. f32 vs f64: runtime, dt, scaled_dt, max_tick_rate f32 (`1.0/60.0` narrowed from f64; `1.0f/(float)g` f32); `time_inc` is `float` (gource.cpp:1723): the product is computed in f64 and narrowed to f32 before `(int)` truncation (corrected tick 3); gravity `/=1.1` / `*=1.1` are double ops narrowed to f32 (cpp:846,850); zoom multiplier is a float (cpp:404, CORRECTED); `DEGREES_TO_RADIANS` is the double macro 0.017453292 (pi.h:33), so rotate_angle math is double then narrowed; time_scale/days_per_second use floorf.
 3. tag_seq shared by files and users; incremented only on successful addFile and each addUser.
 4. Unknown actions -> Modify; unseen file auto-created for any action; directory entries only honour "D".
 5. addFile root-promotion loop; commit_seq per action.
@@ -611,7 +611,7 @@ updateBounds (1335): every user `updateQuadItemBounds()`; user_bounds over all, 
 |---|---|---|
 | read side | 1137 | readLog enqueues the next commit if the queue is empty, or while `back().timestamp <= currtime` and size<100. Commits are appended in the order the RCommitLog yields them; NO sorting in gource.cpp |
 | consume | 1744-1774 | loop on `queue.front()` only: `if(commit.timestamp > currtime) break;` else processCommit. A commit OLDER than currtime is processed immediately in the same frame; never dropped |
-| head-of-line blocking | 1757 | a future-dated head blocks later queue entries even if they are older than currtime |
+| head-of-line blocking | 1754 | a future-dated head blocks later queue entries even if they are older than currtime |
 | auto-skip | 1749 | evaluated each iteration BEFORE the future check: `auto_skip_seconds>=0 && idle_time>=auto_skip_seconds && !stop_position_reached` -> `currtime=lasttime=front.timestamp; idle_time=0` (works backwards too) |
 | default time travel | 1763-1769 | after processing: `if(lasttime > commit.timestamp) currtime = commit.timestamp;` then `lasttime = commit.timestamp`. So an out-of-order older commit PULLS currtime BACK to its timestamp and lasttime tracks the LAST processed commit (not the max). Later commits then wait while currtime climbs again at days_per_second |
 | `no_time_travel` | 1759-1762 | `if(ts>lasttime) lasttime=ts`; currtime never pulled back |

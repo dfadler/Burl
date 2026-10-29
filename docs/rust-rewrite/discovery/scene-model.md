@@ -48,7 +48,7 @@ All paths relative to repo root. Line cites are `file:line` in `src/` unless not
 | shadowOffset | vec2 | (2,2) |
 | name | string | ctor arg |
 | namewidth | f32 | 0 |
-| accel | vec2 | uninitialised (RFile/RUser use it) |
+| accel | vec2 | zero-initialised: GLM_FORCE_CTOR_INIT (core/vectors.h:34) makes vec ctors zero-init (corrected tick 3) |
 | speed | f32 | 1.0 |
 | elapsed | f32 | 0.0 (per-pawn clock, advanced in `logic`) |
 | fadetime | f32 | 1.0 |
@@ -208,7 +208,7 @@ Quadtree semantics needed to reproduce the visit set (core/quadtree.cpp): root d
 | nametime / name_interval | f32 | `filename_time` (default 4.0, min 2.0 validated gource_settings.cpp:945-947) |
 | namecol | vec3 | (1,1,1) |
 | file_colour | vec3 | ctor arg (`cf.colour`) |
-| touch_colour | vec3 | uninitialised until first touch |
+| touch_colour | vec3 | zero-initialised via GLM_FORCE_CTOR_INIT (core/vectors.h:34) until first touch |
 | dir | RDirNode* | 0 until `addFile` calls `setDir` |
 | removed_timestamp | time_t | 0 |
 | forced_removal, expired, removing | bool | false |
@@ -276,7 +276,7 @@ Initial `file_colour` comes from the commit parser: `RCommit::fileColour(filenam
 | name_interval | f32 | 5.0 (nametime stays 5.0) |
 | min_units_ps | f32 | 100.0 (unused) |
 | usercol | vec3 | 7.2 |
-| accel | vec2 | uninitialised in C++ (Pawn ctor) - use (0,0) |
+| accel | vec2 | zero-initialised via GLM_FORCE_CTOR_INIT (core/vectors.h:34); use (0,0) |
 
 Constants (user.cpp:20-22): `gGourceBeamDist=100.0`, `gGourceActionDist=50.0`, `gGourcePersonalSpaceDist=100.0`. Settings defaults: `user_idle_time=3.0`, `user_friction=1.0`, `max_file_lag=5.0`, `max_user_speed=500`, `user_scale=1.0` (gource_settings.cpp:468-473).
 
@@ -369,3 +369,15 @@ Constants (user.cpp:20-22): `gGourceBeamDist=100.0`, `gGourceActionDist=50.0`, `
 - `src/spline.cpp/.h`, `src/bloom.*`, frustum, fxfont, camera (gource.cpp:1475-1550 only skimmed for rotation), `gource.h` member defaults, `file_key` (FileKey legend) - outside this subtask.
 - Quadtree internals beyond what is cited (`getItemsAt`, `QuadNode::empty`) not read in detail (core/quadtree.cpp:135-300).
 - `gource_settings.cpp` validators for `user_scale`, `max_files` etc. only grepped.
+
+## Tick 3 corrections (from verification-tick3-scene.md)
+
+- `time_inc` is `float` (gource.cpp:1723); app-core.md's f64 claim corrected.
+- `toa` in ZoomCamera is `1.99999988f`, not 2.0, because the f64 literal 0.017453292 is narrowed (app-core.md:88).
+- `file_area` as stored in the f32 field is 50.26548386 (section 3.1 quotes the f64 product 50.2654824).
+- `accel`, `dest`, `touch_colour` are zero-initialised by GLM_FORCE_CTOR_INIT (core/vectors.h:34), not uninitialised.
+- Only `since_node_visible` is guarded by `if(visible)` (dirnode.cpp:924-927); `since_last_file_change` / `since_last_node_change` always advance (section 3.5 wording).
+- `RDirNode::split` and `calcArea` do not exist as functions: the regroup happens at the tail of `addFile`, and `dir_area` is a field.
+- User-user quadtree query box is +/-(10, 13.33); with max_depth==1 every user interacts with every other, otherwise only users in overlapping leaves. The port must reproduce the quadtree, not approximate it.
+- `vec2(rand()%100-50, rand()%100-50)` has unspecified argument evaluation order in C++; clang evaluates left-to-right in practice. The port must pin an order and the parity spec must record which libc/compiler produced the reference.
+- Commits are never sorted anywhere; they are consumed in log order through a one-commit pushback buffer (see verification-tick3-scene.md).

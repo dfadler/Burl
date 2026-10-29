@@ -27,12 +27,18 @@ Legend: `[x]` verified against source or a binary, `[~]` catalogued from a child
 | build-and-goldens.md | how the C++ binary was built here without autotools (clang++ -arch x86_64), dependency versions, golden capture commands |
 | golden/ | captured goldens: help-short/long, exit-codes, custom-log/* for 5 fixtures; scripts/ to rebuild and recapture |
 | verification-tick2.md | citation sample check: 32 cites, no substantive errors, line shifts (now patched) |
+| verification-tick3-scene.md | independently re-derived pseudocode for every sim function (f32/f64 noted) and a 9-row discrepancy table (now patched into scene-model.md / app-core.md) |
+| misc-traces.md | PPM exporter thread, stdin isFinished, multi-repo reset set, --save-config format, hover/follow, captions, HiDPI, custom-log writer |
+| unit-tests.md | Boost tests built and run (69 assertions pass); 28 datetime parse goldens; golden/unit-tests.txt |
+| parity-test-spec.md | executable parity plan: parser goldens, --debug-dump-state JSONL schema, PRNG modes, C++ dump patch, tolerances, visual SSIM recipe, 28-row matrix |
+| rust-architecture-map.md | crate/module layout, arena tree model, threading, renderer trait, hand-rolled CLI, regex strategy, PRNG/timing, 9 phases with parity gates |
 
 ## Agent budget (100 total)
 
 | Tick | Spent | Remaining | Notes |
 |------|-------|-----------|-------|
 | 1 | 10 | 90 | 8 first-wave children (app-core used 3, the rest 1 each). All returned. |
+| 3 | 5 | 76 | 5 children, started 17:45Z, done 18:00Z: scene verification 1, misc traces 1, unit tests 1, parity spec 1, architecture map 1. |
 | 2 | 9 | 81 | 8 children, started early at 17:14Z, done 17:40Z. Verifier 1, timing 1, build+goldens 1 (resumed once), gource.cpp finish 1, core gaps 1, config sequencing 1, rendering gaps 2, crate verification 1. |
 
 ## Done criterion (checklist)
@@ -43,13 +49,13 @@ Legend: `[x]` verified against source or a binary, `[~]` catalogued from a child
 - [x] Every CLI flag enumerated with source line, default, validation, error text — settings-cli.md; help text golden-captured from the real binary in golden/help-*.txt
 - [x] Every config-file key and section enumerated, incl. precedence — settings-cli.md + tick 2 multi-section sequencing (ConfFile::save format still untraced)
 - [x] Custom log format fully specified — log-formats.md (regex verified); goldens in golden/custom-log/
-- [~] Simulation/layout algorithms captured — scene-model.md; tick 2 resolved out-of-order timestamps, quadtree ordering (visit order matters, set order does not), render-only functions. Remaining: independent verification of RUser::logic / RFile::logic / RDirNode::applyForces+move / ZoomCamera::adjust formulas; whether RCommitLog sorts commits
+- [x] Simulation/layout algorithms captured — scene-model.md + app-core.md, independently re-derived in verification-tick3-scene.md (9 minor discrepancies patched; commits never sorted)
 - [x] Output pipeline captured — output-pipeline.md + tick 2 (uniforms, fonts, labels, UI geometry, pawn formulas, DPI, textures)
 - [x] Each C++ dependency mapped to Rust crates — deps-and-rust-mapping.md; 40 crates verified on crates.io, licenses GPLv3-compatible, GL stack recommendation (sdl2+glow GL 3.2 core), glibc vs macOS rand() documented
 - [x] Build/packaging/platform specifics noted — deps-and-rust-mapping.md, settings-cli.md, build-and-goldens.md
-- [~] Test fixtures understood; golden-output strategy written — tests-and-golden-strategy.md; parser + help goldens captured. utf8-caption.log is a --caption-file fixture (test.conf:39), not a log. Remaining: build+run src/test unit tests; no render golden (needs a real GL window; SDL dummy driver has no GL)
+- [x] Test fixtures understood; golden-output strategy written — tests-and-golden-strategy.md + parity-test-spec.md; parser, help, exit-code and unit-test goldens captured. utf8-caption.log is a --caption-file fixture (test.conf:39). No render golden on this machine (needs a real GL window; SDL dummy driver has no GL); Linux Xvfb + llvmpipe recipe written
 - [x] Exit codes and error messages catalogued — settings-cli.md, app-core.md; golden/exit-codes.txt from the binary
-- [~] Citation-verifier pass over every doc — tick 2 pass covered the eight tick-1 docs (verification-tick2.md); tick 2 additions and timing.md not yet verified
+- [~] Citation-verifier pass over every doc — tick 2 covered the eight tick-1 docs; tick 3 covered the sim formulas. Not yet verified: timing.md, the Tick 2 additions sections, misc-traces.md, parity-test-spec.md option spellings, rust-architecture-map.md consistency with the docs
 - [x] Authoritative timing section — timing.md (min_delta_msec is 16 in Gource; exporter step 1/gource_fps; frame-dump phase depends on log load time; contradictions in other docs patched)
 - [x] Build attempt — succeeded without autotools (clang++ -arch x86_64, Rosetta); goldens captured; build-and-goldens.md
 
@@ -70,11 +76,17 @@ Legend: `[x]` verified against source or a binary, `[~]` catalogued from a child
 - Config: CLI scalars are applied to every [gource] section; only the first section is validated at startup; a later bad section terminates the process.
 - utf8 replace_invalid (commitlog.cpp:29) is not equivalent to String::from_utf8_lossy; the transcribed algorithm must be ported.
 
-## Open gaps (for tick 3)
+## Decisions flagged (behaviour the architecture map proposes to change vs C++)
 
-1. Scene-model verification: independently re-derive RUser::logic, RFile::logic, RDirNode::applyForces/move/updateSplinePoint, ZoomCamera::adjust from source and diff against scene-model.md/app-core.md; confirm whether RCommitLog/logmill sorts commits or relies on log order.
-2. Small untraced items: PPMExporter internals (ppm.cpp), commitlog isFinished for stdin, multi-repo settings re-import gource_settings.cpp:1280-1357, ConfFile::save format/ordering, hover->camera-follow path, loadCaptions regex group indexing, Bounds2D line width on HiDPI, --high-dpi -> enableHighDPIAwareness call site.
-3. Build and run src/test unit tests (datetime, regex) with the same clang++ recipe; record outputs as goldens.
-4. Parity-test spec: concrete debug-dump field list per entity (from scene-model member tables), fixed-dt mode, PRNG plan, and the exact golden commands; one doc.
-5. Rust architecture map: C++ file/class -> Rust crate/module layout, threading model (logmill thread, PPM writer thread), renderer trait boundary, settings/config model; one doc the rewrite can start from.
-6. Final verification pass (reserved 15): sample cites in all tick 2/3 additions, timing.md, and the architecture map.
+- Validate every [gource] section up front instead of only the first (C++ terminates mid-run on a bad later section). Deviation from parity; decide before implementing.
+- Block on log load in export mode so the PPM frame-dump phase does not depend on load time (C++ advances runtime/framecount during load). Deviation from parity; decide.
+- Accept --ffp and use the shader path anyway (C++ switches to fixed-function). Rendering-only.
+- Both deviations should be behind flags or recorded as intentional differences in the parity spec.
+
+## Open gaps (for tick 4, final verification pass; reserve 15)
+
+1. Verify timing.md citations and pseudocode against sdlapp.cpp / gource.cpp / gource_shell.cpp.
+2. Verify the "Tick 2 additions" sections of app-core.md, core-lib.md, output-pipeline.md, settings-cli.md (sample 6-8 cites each).
+3. Verify misc-traces.md and unit-tests.md claims (sample), and that parity-test-spec.md option spellings exist in golden/help-long.txt; fix spellings in place.
+4. Cross-check rust-architecture-map.md against the docs it cites: every claimed fact must appear in the cited doc; fix in place.
+5. Mechanical: re-run the source-file coverage check; confirm every doc in the Documents table exists; no leftover TODO/TBD markers.

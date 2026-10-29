@@ -1,0 +1,227 @@
+# Parity test spec: how the Rust port proves equivalence
+
+Sources: tests-and-golden-strategy.md (TGS), timing.md (T), scene-model.md (SM), app-core.md (AC, Tick 2 T2.x), log-formats.md (LF), build-and-goldens.md (BG), golden/. C++ cites are `path:line` as quoted by those docs; items marked `(unverified)` were not re-read in source.
+Reference binary = the C++ Gource v0.57 (built per BG: direct clang++ `-arch x86_64`). Rust binary = `gource-rs`. Both must accept identical argv.
+
+## 1. Parser parity (headless, byte exact)
+
+Gate: stdout of `--output-custom-log -`, plus exit code, plus stderr text. No window is created (main.cpp:119-122, TGS 4). Line format `%lld|%s|%s|%s\n` (ts|user|action|file; gource.cpp ~199-205). Commit grouping and colours are lost by design, so they are covered by the sim dump (section 2).
+
+### 1.1 Committed fixtures (goldens exist in `docs/rust-rewrite/discovery/golden/`)
+Run from repo root. `$G` = reference or Rust binary.
+```
+for n in custom-dir-delete file-removal file-to-dir utf8; do
+  $G --log-format custom --output-custom-log - tests/logs/$n.log > out/$n.txt 2> out/$n.stderr; echo "rc=$?" >> out/$n.rc
+  cmp out/$n.txt golden/custom-log/$n.txt; cmp out/$n.stderr golden/custom-log/$n.stderr.txt; done
+$G --log-format svn --output-custom-log - tests/logs/svn-dir-delete.log   # vs golden/custom-log/svn-dir-delete.txt
+$G --log-format custom --output-custom-log - tests/logs/utf8-caption.log  # rc=1, stderr == golden/custom-log/utf8-caption.stderr.txt, stdout empty
+```
+Also run each fixture WITHOUT `--log-format` (auto-detect order git, hg, bzr, git-raw, cvs-exp, svn, cvs2cl, custom, apache; LF:11) and require the same stdout as the explicit run.
+
+### 1.2 Help text and exit codes
+| Command | Expected |
+|---|---|
+| `$G -h` | stdout == `golden/help-short.txt`, stderr empty, rc 0 |
+| `$G -H` | stdout == `golden/help-long.txt`, stderr empty, rc 0 |
+| `$G --version` | rc 1, stderr == `golden/version.stderr.txt` ("unknown option version"), stdout empty |
+| `SDL_VIDEODRIVER=dummy $G --stop-at-time 1 -o - tests/logs/utf8.log` | C++ only: rc 1 + `golden/probe-dummy.stderr.txt`. Not a Rust gate (no SDL). |
+| all of the above | `golden/exit-codes.txt` is the authoritative rc list; the script asserts every `rc=` line. |
+Help line 1 carries "Gource v0.57" (BG); the Rust build keeps the string verbatim (a version bump is a deliberate golden update).
+
+### 1.3 Edge inputs (generate once with the C++ binary, commit under `tests/golden/edge/`)
+Empty file; CRLF custom log; blank lines; out-of-order timestamps; `|` in a name; UTF-8 BOM; `--start-date/--stop-date` window with `TZ=UTC` and `TZ=Pacific/Auckland`; explicit `--log-format cvs-exp` (must fail "unsupported log format", the LF:14 bug is preserved) vs auto-detect of a cvs-exp file (must succeed). Compare stdout, stderr, rc.
+
+### 1.4 Real VCS logs
+Pin one small public repo per VCS at a recorded commit. Generate the input with the exact command from LF (cwd = repo for git/svn), then feed the file to both binaries with an explicit `--log-format`:
+| VCS | Command (LF line) | `--log-format` |
+|---|---|---|
+| git | `git log --reverse --raw --encoding=UTF-8 --no-renames --pretty=format:user:%aN%n%ct > git.log` (LF:112; the binary adds `--no-show-signature` where supported) | `git` |
+| git raw | `git log --reverse --raw --pretty=raw > gitraw.log` (LF:129) | `git-raw` |
+| svn | `svn log -r 1:HEAD --xml --verbose --quiet > svn.log` (LF:144) | `svn` |
+| hg | `hg log -r 0:tip --style '<resource_dir>gource.style' -R <dir> > hg.log` (LF:156) | `hg` |
+| bzr | `bzr log --verbose -r 1..-1 --short -n0 --forward <dir> > bzr.log` (LF:169) | `bzr` |
+Cross-check the commands themselves: `$G --git-log-command`, `--svn-log-command`, `--hg-log-command`, `--bzr-log-command` print the string (TGS 6(1)); diff that output between binaries. Then directory mode (binary generates the log itself): `$G --output-custom-log - <repo_dir>` must be byte-identical between binaries (needs the VCS tools; CI-optional job).
+Date filter variants: `--start-date 2021-11-01 --stop-date 2021-11-02` on each (VCS filtering is date-granular, exact timestamp filtering happens in logmill/readLog, LF:41).
+
+### 1.5 Unit vectors (cargo test, no binary)
+Port the date vectors of `src/test/datetime_tests.cpp:23-112` (TGS 1) with `TZ` set per case (UTC, then Pacific/Auckland) and the regex cases of `src/test/regex_tests.cpp:22-45`. Add real `--file-filter`/`--user-filter` patterns with look-around or backrefs (the regex crate lacks them; use fancy-regex or PCRE2).
+
+## 2. Simulation parity: `--debug-dump-state FILE`
+
+### 2.1 Fixed inputs (every sim test unless the matrix says otherwise)
+```
+$G tests/logs/<fixture>.log --log-format <fmt> -1280x720 -r 60 -o /dev/null \
+   --seconds-per-day 1 --stop-at-time 10 --hash-seed 31 --disable-auto-skip --disable-auto-rotate \
+   --file-idle-time 0 --user-idle-time 3 --time-scale 1 --debug-dump-state out.jsonl
+```
+- Fixed dt: reuse the exporter path. With `-o`, `scaled_dt = max_tick_rate = 1.0f/gource_fps` (gource.cpp:251-253, 519; T 3). `-r 60` gives 1/60; `-r 30` gives gource_fps 60 and frameskip 1; `-r 25` gives gource_fps 75, 1/75 (T 3). The Rust `--debug-dump-state` implies the fixed-dt path without needing `-o`. The C++ side needs `-o /dev/null` and a GL window (Xvfb, section 3).
+- Frame phase: the C++ run advances `runtime` and `framecount` while the async logmill loads (gource.cpp:1579-1581; T 3 "Determinism"). The dump records `loaded_frame0` (framecount when `commitlog != 0` first held) and `runtime_at_load`; the comparator aligns on `frame - loaded_frame0` and compares `runtime - runtime_at_load`. Rust blocks on log load, so both are 0. Fixtures are tiny, so assert that `runtime_at_load` is a whole number of `1/gource_fps` steps.
+- `--seconds-per-day 1`: `days_per_second = 1.0/1` (gource_settings.cpp:1208); `time_inc = dt*86400.0*days_per_second` (gource.cpp:1723).
+- `--stop-at-time 10` (gource_settings.cpp:1341-1350). The run continues until users fade and `appFinished` (T 4), so dump until finished; cap with `--debug-dump-max-frames 4000`.
+- `--disable-auto-skip` sets `auto_skip_seconds=-1` (gource_settings.cpp:716-718); never combine with `-a` (it re-enables, T 2).
+- `--hash-seed 31` (default; gource_settings.cpp:1062-1066); second set uses `--hash-seed 7`.
+- `--disable-auto-rotate` removes the window-size dependence of the rotate trigger (AC T2.5). A second set runs without it at fixed 1280x720.
+- `--file-idle-time 0` (never fade); a second set uses `--file-idle-time 2 --file-idle-time-at-end 1` (integers via `atoi`, T 2).
+- `TZ=UTC`. No mouse, `--hide-mouse`: `selectedUser/File` stay 0 and `cursor_move` is 0.
+
+### 2.2 File format
+JSON Lines, UTF-8, one object per line, `\n` terminated, fixed key order. Written when `framecount % N == 0` (`--debug-dump-every N`, default 1), plus always the first loaded frame and the final frame (the one where `appFinished` is set, which is still drawn/dumped, T 4). f32 values are printed with `%.9g` (round-trip exact); the comparator parses them as f32. Arrays are sorted: dirs by `abspath`, files by `fullpath`, users by `name` (sorted-key maps, SM 10.4), actions by queue position (queued first, then active).
+
+```
+{ "frame": u64                      // Gource::framecount, gource.h:143
+, "g": {
+    "currtime": i64, "lasttime": i64          // time_t, gource.h:145-146
+  , "subseconds": f32, "runtime": f32         // gource.h:148,147
+  , "idle_time": f32                          // gource.h:152
+  , "paused": bool, "stop_position_reached": bool
+  , "commitqueue_len": u32, "last_percent": f32          // gource.h:91
+  , "rotation_remaining_angle": f32, "rotate_angle": f32 // gource.h:71,87
+  , "hash_seed": i32                          // gStringHashSeed
+  , "rand_calls": u64, "rand_last": u32       // section 2.4
+  , "first_rand_frame": i64                   // -1 until the first rand call
+  , "loaded_frame0": u64, "runtime_at_load": f32
+  , "n_dirs": u32, "n_files": u32, "n_users": u32, "n_removed_pending": u32  // gGourceRemovedFiles
+  , "tag_seq": i32
+  , "dir_bounds": [minx,miny,maxx,maxy,first:bool]       // gource.h:174
+  , "user_bounds": [minx,miny,maxx,maxy,first:bool] }    // gource.h:175
+, "camera": { "pos":[x,y,z], "dest":[x,y,z], "target":[x,y,z], "lockon": bool, "lockon_time": f32 }  // zoomcamera.h:27-43
+, "dirs": [ { "path": str            // abspath with trailing '/'
+            , "parent": str|null
+            , "pos":[x,y], "spos":[x,y], "accel":[x,y], "prev_accel":[x,y]       // SM 3.1
+            , "dir_area": f32, "file_area": f32, "dir_radius": f32, "parent_radius": f32
+            , "visible": bool, "position_initialized": bool
+            , "visible_count": i32, "depth": i32
+            , "since_node_visible": f32, "since_last_file_change": f32, "since_last_node_change": f32
+            , "col":[r,g,b,a]
+            , "quad_bounds":[minx,miny,maxx,maxy,first:bool] } ... ]
+, "files": [ { "path": str, "dir": str          // fullpath, owning dir abspath (SM 4)
+             , "pos":[x,y], "dest":[x,y], "distance": f32, "accel":[x,y]
+             , "elapsed": f32, "alpha": f32      // getAlpha()
+             , "hidden": bool, "removing": bool, "expired": bool, "forced_removal": bool
+             , "fade_start": f32, "last_action": f32, "removed_timestamp": i64
+             , "file_colour":[r,g,b], "touch_colour":[r,g,b], "colour":[r,g,b]   // colour = getColour()
+             , "size": f32, "name_interval": f32, "tagid": i32 } ... ]
+, "users": [ { "name": str                       // SM 7
+             , "pos":[x,y], "accel":[x,y], "speed": f32, "size": f32
+             , "elapsed": f32, "alpha": f32, "last_action": f32, "action_interval": f32
+             , "name_interval": f32, "usercol":[r,g,b], "highlighted": bool
+             , "queued": u32, "active": u32      // actions.size(), activeActions.size()
+             , "idle": bool, "fading": bool, "inactive": bool    // SM 7.2
+             , "tagid": i32
+             , "actions": [ { "file": str, "kind": "A"|"D"|"M", "timestamp": i64, "t": f32
+                            , "progress": f32, "rate": f32, "active": bool } ... ] } ... ] }
+```
+Uninitialised C++ values (`RUser::accel`, `RFile::dest`, `RFile::touch_colour`, `Pawn::accel`; SM 10.7) are value-initialised to zero in the C++ patch so the dump is defined. `in_frustum` and `node_count` are not dumped.
+Not dumped (REND/UI per AC T2.6): VBOs, textures, fonts, captions (gap), slider, key legend, bloom, spline, projected positions, date text.
+
+### 2.3 Cadence
+Fixtures: N=1 (about 700-900 frames at 60 fps for stop 10 plus fade). Real-repo runs: N=30 and `--stop-at-time 60`. First loaded frame and last frame always dumped.
+
+### 2.4 PRNG plan and `rand()` accounting
+All `rand()` sites route through one function: user.cpp:106, user.cpp:128, dirnode.cpp:625, gource.cpp:1555 (AC T2.8); `srand(time(0))` at gource_settings.cpp:1319 is the only seed site.
+- Rust: `trait GourceRand { fn next(&mut self) -> u32 }` returning 0..=2^31-1 like libc `rand()`, with a global call counter. Implementations: `Glibc` (TYPE_3, default seed 1), `Park` (macOS), `Xorshift` (documented own PRNG, production default where cross-binary parity is not needed), `Script` (values read from `--rand-script FILE`). Selected by `GOURCE_RS_PRNG=glibc|park|xorshift|script`.
+- glibc TYPE_3: `r[0]=seed; r[i]=(16807*r[i-1]) mod 2147483647` (Schrage, add 2147483647 if negative) for i=1..30; `r[i]=r[i-31]` for i=31..33; `r[i]=r[i-31]+r[i-3]` (u32 wrap) for i=34..343 (discarded); output k: `r[k+344]=r[k+313]+r[k+341]; out=r[k+344]>>1`. Default seed 1 yields 1804289383, 846930886, 1681692777 (`unverified`: confirm by a C helper on Linux in CI; test the first 10 000 values).
+- macOS: the C++ reference built per BG uses the macOS libc `rand()`, which is Park-Miller minimal standard (multiplier 16807, modulus 2^31-1), default seed 1 (`unverified`: confirm with `man 3 rand` and by recording the first outputs on the build machine). Therefore a macOS-generated golden is comparable only with the `Park` mode, and a Linux golden only with `Glibc`. Cross-binary comparison is per platform; store `tests/golden/sim/linux/` and `tests/golden/sim/macos/`. Across platforms use `Script` mode or the tolerance rules in 2.6.
+- `Script` mode (`--rand-script FILE`, implemented in both binaries): one integer per line, cyclic. Both binaries draw the identical stream, giving platform-independent exact comparison. This is the primary mode in the matrix; glibc/Park are supplementary.
+- Call order = force-application order: users in name order against quadtree visit order, then dirs recursively (SM 9, 10.4). `rand_calls`/`first_rand_frame` in every record expose order divergence even when positions still agree.
+
+### 2.5 Minimal C++ patch (reference side)
+1. `src/gource_settings.cpp/.h`: options `--debug-dump-state FILE`, `--debug-dump-every N`, `--debug-dump-max-frames N`, `--rand-script FILE` (near other debug options; hidden from `-h`/`-H` so help goldens do not change).
+2. `src/gource.cpp`, `Gource::update`: after `logic(runtime, scaled_dt)` (gource.cpp:265) and before `draw` (:269) call `if (dump) dumpState();`. This runs on every update (paused, loading, final), before `framecount++` (:284). Do not hook inside `logic`: it returns early at :1570, :1579-1581 and :1693.
+3. `Gource::dumpState()` (new, about 120 lines): read-only iteration of `gGourceDirMap`, `files`, `users` (sorted maps) and the SIM members in the schema (AC T2.6). Add `void dumpJson(FILE*) const` to RDirNode, RFile, RUser (avoids friend access to private fields). Do not call `isVisible()` (mutates `visible`, SM 10.5); read the stored flag.
+4. New `src/core/dumprand.cpp`: `unsigned long long g_rand_calls; int g_rand_last; int gource_rand(){ g_rand_calls++; return g_rand_last = script_or_rand(); }`; replace the four `rand()` calls; wrap the `srand` site so script mode ignores it.
+5. Value-initialise the uninitialised fields listed in 2.2 (no behaviour change except removing UB).
+6. Guard with `#ifdef GOURCE_DEBUG_DUMP` or keep on a separate branch; goldens record the patched reference git SHA and compiler flags (`-ffp-contract=off`, see 2.6).
+
+### 2.6 Comparison policy
+Comparator (`tools/compare_dump.py` or a `cargo xtask`) aligns on `frame - loaded_frame0`, compares record by record, and reports the first divergent field path.
+| Class | Rule |
+|---|---|
+| Integers, bools, strings, array lengths, key sets, `tagid`, timestamps, `rand_calls`, `first_rand_frame` | exact |
+| Floats: same platform and same PRNG (Script, or glibc vs glibc, or Park vs Park) | exact f32 bit equality; requires mirrored f32/f64 narrowing (SM 10.1), no fast-math, no FMA contraction (build the reference with `-ffp-contract=off`; Rust does not contract by default) |
+| Floats: different platform or PRNG | relative `|a-b| <= 1e-5 * max(1,|a|,|b|)` per field |
+| Position-like fields (`dirs.pos/spos/accel`, `users.pos/accel`, `camera.*`, bounds) when PRNG differs | Exact topology always. Positions compared by tolerance only up to the frame before `first_rand_frame`; afterwards positions are informational (logged, not failing) because the jitter makes the system chaotic. |
+| Fields depending on libm (`sinf/cosf` in rotate, `vectors.cpp:3`; `sqrtf` is exact) | tolerance 1e-5 relative even in same-PRNG runs across platforms |
+Order-sensitive accumulations (comment each in Rust; f32 addition is not associative):
+1. Quadtree visit order for `DirForceFunctor` and `UserForceFunctor`: leaf `Vec` insertion order, children TL, TR, BL, BR, closed bounds, first-visit dedupe when `node_count != 1` (SM 3.2, 3.7, 7.1; core-lib quadtree rule). Brute-force O(n^2) is not equivalent.
+2. `getFilesRecursive` prepends; `findDirs` stops at the first prefix match (SM 10.5).
+3. Sorted-key map iteration; insertion-ordered lists, never swap-remove (SM 10.4).
+4. `subseconds` carry and `camera.logic` lock-on blending (gource.cpp:1724-1733, ZoomCamera in AC).
+5. Parent reading a child's stale `dir_area`; `updateBounds` ordering (SM 10.6).
+6. `stringHash`: `i32` wrap, signed char, XOR with seed (SM 1).
+
+## 3. Visual parity (Linux CI)
+
+The section 2 dump is the primary gate. Visual checks catch drawing and state-to-pixel mapping bugs only. Linux only; macOS has no llvmpipe (TGS 6(3)).
+
+### 3.1 Capture
+```
+apt-get install -y xvfb mesa-utils libgl1-mesa-dri imagemagick ffmpeg
+xvfb-run -a -s "-screen 0 1280x720x24" env LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
+  gource tests/logs/file-removal.log --log-format custom -1280x720 -r 30 \
+  --seconds-per-day 1 --stop-at-time 10 --hash-seed 31 --disable-auto-skip --disable-auto-rotate \
+  --hide-mouse --bloom-intensity 0 -o ref.ppm
+ffmpeg -f image2pipe -c:v ppm -i ref.ppm -vsync 0 ref/f%04d.png
+```
+Structural set additionally hides text and overlays: `--hide date,filenames,usernames,dirnames,progress,mouse,key` (`unverified` spelling: check `golden/help-long.txt` before committing the script). SDL needs a real GL context (compatibility profile, core/display.cpp:219-256; the `dummy` video driver fails, BG). The Rust binary runs the same command under wgpu with a software adapter (`WGPU_BACKEND=vulkan` + Mesa lavapipe, or `gl` + llvmpipe) and writes `rust.ppm` with the same P6 framing (core/ppm.cpp:175-186), so one splitter serves both.
+Frame count must match exactly (at `-r 30`, every second update is written: frameskip 1, T 3); a mismatch fails before pixels are compared.
+
+### 3.2 Sampling and metric
+- Frames: 0, every 30th output frame (one per output second at `-r 30`), and the last frame; at least 4 samples per fixture. For `utf8` and `file-to-dir` also sample about 1 s after the first commit (action beam near mid-progress).
+- Metric: `compare -metric SSIM ref/fNNNN.png rust/fNNNN.png null:`; alternative `ffmpeg -lavfi ssim`.
+- Thresholds: structural set (no text, no bloom) SSIM >= 0.97; full render SSIM >= 0.90. Both are starting values: render the C++ binary twice and under another Mesa version, record the measured spread in the golden README and keep thresholds well above it. Also require mean colour difference <= 2/255 per channel.
+
+### 3.3 Exclusions
+- Text antialiasing: FreeType hinting vs the Rust text stack differs. Structural set hides all text. Text set uses the bundled `data/fonts/FreeSans.ttf`, compares only text bounding boxes at SSIM >= 0.80, or is skipped.
+- Bloom: disabled in the structural set; a dedicated case compares mean luminance of a gaussian-blurred (sigma 8) frame within 5%.
+- Vsync/wall timing: irrelevant (exporter path). Mouse cursor and selection: hidden.
+- Avatar case (`utf8.log` with `--user-image-dir tests/images/`): macOS NFC/NFD filename normalisation applies (TGS 3).
+- Resolution fixed at 1280x720 (camera distance depends on aspect, AC T2.5).
+
+## 4. Test matrix
+
+Fixtures in `tests/logs/`. Existing goldens: `docs/rust-rewrite/discovery/golden/`. Planned goldens: `tests/golden/`.
+| Fixture | Check | Command class | Expected artefact |
+|---|---|---|---|
+| custom-dir-delete.log | parser | `--log-format custom --output-custom-log -` | `golden/custom-log/custom-dir-delete.txt` (+ empty `.stderr.txt`, rc 0) |
+| file-removal.log | parser | same | `golden/custom-log/file-removal.txt` |
+| file-to-dir.log | parser | same | `golden/custom-log/file-to-dir.txt` |
+| utf8.log | parser | same | `golden/custom-log/utf8.txt` |
+| svn-dir-delete.log | parser | `--log-format svn` | `golden/custom-log/svn-dir-delete.txt` |
+| utf8-caption.log | parser error | `--log-format custom` | rc 1, `golden/custom-log/utf8-caption.stderr.txt`, empty stdout |
+| utf8-caption.log | caption dump | sim flags + `--caption-file` | `tests/golden/sim/utf8-caption.captions.jsonl` (needs a captions field; gap) |
+| the 5 commit fixtures | auto-detect | omit `--log-format` | same text as explicit run |
+| none | help | `-h`, `-H` | `golden/help-short.txt`, `golden/help-long.txt` |
+| none | bad option | `--version` | rc 1, `golden/version.stderr.txt`; `golden/exit-codes.txt` |
+| edge inputs (1.3) | parser | explicit and auto | `tests/golden/edge/*.txt, *.rc, *.stderr` |
+| pinned git/svn/hg/bzr repos | parser | commands in 1.4 | `tests/golden/real/{git,gitraw,svn,hg,bzr}.custom` |
+| date vectors | unit | `cargo test` | `src/test/datetime_tests.cpp:23-112` values |
+| regex cases | unit | `cargo test` | `src/test/regex_tests.cpp:22-45` |
+| file-removal.log | sim | 2.1, `--file-idle-time 0` and `2`, N=1 | `tests/golden/sim/{linux,macos}/file-removal.jsonl` |
+| file-removal.log | sim `-r 25` | fixed dt 1/75 | `.../file-removal-r25.jsonl` |
+| file-to-dir.log | sim | 2.1 | `.../file-to-dir.jsonl` (forced_removal, name collisions) |
+| custom-dir-delete.log | sim | 2.1 | `.../custom-dir-delete.jsonl` (recursive removal) |
+| svn-dir-delete.log | sim | 2.1, `--log-format svn` | `.../svn-dir-delete.jsonl` |
+| utf8.log | sim | 2.1 + `--user-image-dir tests/images/` | `.../utf8.jsonl` (signed-char hash) |
+| each sim fixture | hash seed | `--hash-seed 7` | `.../<name>-seed7.jsonl` |
+| each sim fixture | PRNG | Script, glibc, park | `.../<name>-script.jsonl` (cross-platform exact), `-glibc`, `-park` |
+| each sim fixture | rotation | without `--disable-auto-rotate`, 1280x720 | `.../<name>-rot.jsonl` (camera by tolerance) |
+| real git repo (200+ commits, many users) | sim | 2.1, `--stop-at-time 60`, N=30 | `tests/golden/sim/real-git.jsonl` (quadtree order, rand) |
+| file-removal, file-to-dir, utf8 | visual structure | 3.1 structural set | `tests/golden/vis/<name>/f%04d.png`, SSIM >= 0.97 |
+| file-removal.log | visual full | text and bloom on | SSIM >= 0.90 |
+| file-removal.log | visual bloom | blurred luminance | within 5% |
+| tests/test.conf (8 sections) | manual, not gated | `--load-config tests/test.conf` from `tests/` | none (TGS 2) |
+
+## 5. CI layout
+1. `parity-parser` (any OS, fast): section 1 plus cargo unit tests.
+2. `parity-sim`: Rust headless run compared to committed goldens (Linux and macOS goldens). A manual workflow regenerates goldens from the patched C++ (BG recipe or autotools) and commits the diff.
+3. `parity-visual-linux`: section 3, uploads PNG diffs on failure.
+4. macOS job: parser plus sim with `Park` goldens (C++ builds with `-arch x86_64`, Rosetta; Homebrew is Intel layout, BG).
+
+## 6. Gaps / unverified
+- Spellings of `--hide-*`, bloom and the new `--debug-*`/`--rand-script` options: check against `golden/help-long.txt`.
+- glibc and macOS `rand()` algorithms and first values are stated from general knowledge, not an official doc; verify on each platform (`man 3 rand`, glibc source) before relying on them.
+- The dump hook location (after gource.cpp:265) is a design; nothing was compiled. Line cites come from the other discovery docs.
+- Multi-repo (`[gource]` sections, default `stop_at_time = 60`, T 2) is not in the matrix; sequencing is untraced (TGS gaps).
+- Captions are not in the dump schema yet.
+- When the comparator exists, run a sabotage check (for example drop `idle_time += dt` in Rust and confirm the dump diff fails).

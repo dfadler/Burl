@@ -59,3 +59,9 @@ cvs-exp file works. Kept for parity, covered by a test. D1-D4 do not reach the l
   needed, not on every `GitCommitLog` construction as in C++; output is identical.
 - `RCommit::username` is `Vec<u8>` (raw during parsing, valid UTF-8 after `postprocess`)
   because the custom and hg grouping compares the raw bytes.
+- **SIGPIPE**: Rust ignores it, so `--output-custom-log - | head` writes the whole log and
+  exits 0 where the C++ binary dies on the broken pipe (the ledger lists PPM/SIGPIPE as
+  unexercised anyway).
+- **PCRE2 in CI**: `cargo test` with default features never exercises the PCRE2 engine; run
+  `cargo test -p gource-util --features pcre2` as well, and turn the feature on in phase 2
+  when the filters are imported.

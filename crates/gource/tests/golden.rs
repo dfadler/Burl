@@ -61,6 +61,7 @@ fn assert_bytes(what: &str, got: &[u8], want: &[u8]) {
 fn exit_codes_txt_rows() {
     let text = String::from_utf8(read(&golden_dir().join("exit-codes.txt"))).unwrap();
     let mut checked = 0;
+    let expected = text.lines().filter(|l| !l.contains(".bin  ")).count();
     for line in text.lines() {
         let (rc, rest) = line.trim_start_matches("rc=").split_once("  ").unwrap();
         let (name, cmd) = rest.split_once("  ").unwrap();
@@ -86,8 +87,8 @@ fn exit_codes_txt_rows() {
         assert_bytes(&format!("{name} stderr"), &out.stderr, &read(&dir.join(format!("{stem}.stderr.txt"))));
         checked += 1;
     }
-    // the committed exit-codes.txt has 10 rows: 9 replayable plus the SDL probe
-    assert_eq!(checked, 9, "rows replayed");
+    // every row except the SDL probe (.bin) was replayed
+    assert!(expected > 0 && checked == expected, "rows replayed: {checked} of {expected}");
 }
 
 /// `gource --log-format custom --output-custom-log - - < tests/logs/utf8.log` must equal

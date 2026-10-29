@@ -14,7 +14,7 @@ All paths relative to repo root. Line refs are to the checked-out submodule.
 | Not compiled into gource by Makefile.am: `ui/`, `tga.cpp`, `timer.cpp`, `utf8/` (header-only, used once), `ftgl/` (header only, used by fxfont). `tga.cpp` is listed only in gource.pro:84. No Gource source includes `core/ui/*` | Makefile.am:11-32, gource.pro:84, grep UIElement src (none) |
 | `mktime_utc` is used only by core/settings.cpp (other child); svn.cpp has its own copy of the same TZ hack and prefers `timegm` | settings.cpp:331,348; src/formats/svn.cpp:118-144,239-241 |
 | `GLTimer` (GL_TIME_ELAPSED query) is unused by Gource | grep (only timer.*) |
-| Fixed values worth preserving: precache set, glyph page 512 max, padding 3, quadtree depth 6/items 1, min frame delta 8 ms | sections below |
+| Fixed values worth preserving: precache set, glyph page 512 max, padding 3, quadtree depth 6/items 1, min frame delta 16 ms in Gource (GourceShell sets min_delta_msec=16, gource_shell.cpp:29; SDLApp default is 8) | sections below |
 
 ## 1. File inventory
 
@@ -231,7 +231,7 @@ Gource's own on-screen widgets (slider.cpp, key.cpp, textbox, caption) live in s
 
 ## 17. Rust rewrite guidance (derived)
 - Windowing: winit/SDL2 (sdl2 crate) + OpenGL (glow/glutin) compat profile is not available in core-profile-only stacks; visual equivalence is easiest with wgpu re-implementing fixed pipeline (orthographic 2D quads, perspective camera, alpha/additive blend, 16-bit depth for picking not required if `unproject` replaced by ray/plane math — Gource's `unproject` depth readback is used for mouse-to-world conversion, see callers).
-- Keep: 8 ms minimum step, float seconds `t,dt`, dpi-scaled mouse coordinates, FreeSans.ttf with integer advances, 512 px atlas pages, quadtree rules (depth 6 / 1 item / rebuild each tick / 1.0 padding / TL,TR,BL,BR order), logger tag format, resource lookup order, `--WxH`, `-f`, `-w` arg handling.
+- Keep: 16 ms minimum step (Gource overrides the 8 ms SDLApp default; see timing.md), float seconds `t,dt`, dpi-scaled mouse coordinates, FreeSans.ttf with integer advances, 512 px atlas pages, quadtree rules (depth 6 / 1 item / rebuild each tick / 1.0 padding / TL,TR,BL,BR order), logger tag format, resource lookup order, `--WxH`, `-f`, `-w` arg handling.
 - Drop: ui/, tga, timer, shader preprocessor, SDL1.2 paths, Windows console shim (unless Windows target).
 
 ## Gaps
@@ -239,3 +239,94 @@ Gource's own on-screen widgets (slider.cpp, key.cpp, textbox, caption) live in s
 - ui/ per-widget behaviour not catalogued beyond class list (unused).
 - Callers of `QuadTree::getItemsAt/visit*` in gource.cpp not traced to see whether std::set ordering affects results.
 - GL blend/state counts in gource.cpp only; user.cpp/file.cpp/dir.cpp/bloom draw code is for other children.
+
+## Tick 2 additions
+
+### (a) vectors.h / vectors.cpp
+- `vectors.cpp:3-5` `rotate_vec2(v,s,c) = vec2(v.x*c - v.y*s, v.x*s + v.y*c)` (caller passes sin, cos).
+- `vectors.cpp:7-23` all three `normalise` overloads (vec2/vec3/vec4) are identical in form:
+  ```
+  float l = glm::length(v);      // sqrt(dot(v,v)), f32
+  if(l > 0.0) return v / l;      // component-wise DIVISION by l (not multiply by 1/l)
+  return v;                      // zero vector -> returned unchanged; no NaN
+  ```
+  NaN length fails the test and returns v; +inf passes and yields NaN components. `glm::normalize` (used only in `plane.cpp:36`) is a different function (`v * inversesqrt(dot)`), not zero-guarded; it only feeds the draw-only frustum.
+- `vectors.h:30-42`: `GLM_FORCE_RADIANS`, `GLM_FORCE_CTOR_INIT` (zero-init), `GLM_ENABLE_EXPERIMENTAL`; `using glm::vec2/3/4/mat3/mat4`. Includes `gtc/type_ptr`, `matrix_transform`, `matrix_access`, `gtx/norm`. Gource uses `glm::length2`, `length`, `cross`, `dot`.
+- `lerp2`/`lerp3` (vectors.h:44-100): grep over `src/` finds NO use outside vectors.h. Dead code, do not port.
+- No colour-conversion helpers exist in vectors.*; colours are plain `vec3/vec4` (hash colours in (e)).
+
+### (b) Frustum (frustum.h:36-57, frustum.cpp)
+Fields in order: `float near_distance, far_distance; float view_ratio; float fov;` (`fov` is declared, never assigned) `near_half_width, near_half_height, far_half_width, far_half_height;` eight corner `vec3`s `near_{top_left,top_right,bottom_left,bottom_right}`, `far_{...}`; `Plane planes[6]` (order: top, bottom, left, right, near, far).
+- `updatePerspective`: `view_ratio = (float)display.width/(float)display.height`; `toa = (float)tan(fov*0.5*DEGREES_TO_RADIANS)` (pi.h:33 `0.017453292`); `near_half_height = near*toa; near_half_width = near_half_height*view_ratio`; same for far.
+- `updateView`: `view_ray = normalise(target-source)`; `horiz = normalise(cross(view_ray, up))`; `vert = cross(horiz, view_ray)`; corners = centre +/- vert*half_h -/+ horiz*half_w. Planes (3 points each): top(`ntr,ntl,ftl`), bottom(`nbl,nbr,fbr`), left(`ntl,nbl,fbl`), right(`nbr,ntr,fbr`), near(`ntl,ntr,nbr`), far(`ftr,ftl,fbl`).
+- `Plane(v1,v2,v3)` (plane.cpp:36-43): `normal = glm::normalize(cross(v3-v2, v1-v2))`, `point=v2`, `d=-dot(normal,point)`; `distance(p)=d+dot(normal,p)`.
+- `intersects(Bounds2D b, float z=0)`: per plane pick corner `x = n.x>0 ? max.x : min.x`, same for y, z fixed; `distance<0` -> false; else true. `intersects(Bounds3D)` same with z picked; `contains(p)`: all distances >= 0.
+- Usage in gource.cpp: ONE construction per drawn frame, `gource.cpp:2412` `Frustum(camera.getPos(), getTarget(), getUp(), getFOV(), getZNear(), getZFar())`, passed to `root->checkFrustum(frustum)` (gource.cpp:2437), which sets `RDirNode::in_frustum = frustum.intersects(quadItemBounds)` recursively (dirnode.cpp:1000-1008). `in_frustum` is read only by draw paths (dirnode.cpp:985 drawNames, 1012 drawShadows, 1036 updateFilesVBO, 1058 updateBloomVBO, 1079 drawFiles, 1152 drawBloom); the VBO builders only call `buffer.add`. QuadTree `*InFrustum` methods and `drawNodesInFrustum` have zero callers. Verdict: frustum culling is presentation-only and cannot affect simulation state.
+
+### (c) QuadTree queries and iteration-order sensitivity
+Rules (quadtree.cpp):
+- `QuadTree(bounds, max_depth, max_items)`; root = `new QuadNode(tree, 0, bounds, 0)`; node ctor sets `depth = parent_depth+1`, so ROOT depth = 1 (leaves at depth >= max_depth are unbounded: max_depth 6 means 5 levels of subdivision below root). `allowMoreItems = children.empty() && (depth >= max_depth || items.size() < max_items)` (quadtree.cpp:36-39). Gource uses `max_items=1` and `max_depth=1` when `dir_bounds.area() <= 10000`, else 6 (gource.cpp:1305-1312 users, 1430-1437 dirs). With max_depth 1 the root is one unbounded leaf and ALL items are visited in insertion order.
+- `QuadTree::addItem` sets `item->node_count = 0`, calls `root->addItem`, `unique_item_count++` (quadtree.cpp:496-500). `QuadNode::addItem`: if allowed, `items.push_back` (std::list), `item_count++`, `item->node_count++`. Else if it has children -> `addToChild`. Else subdivide: `middle = centre - min`, `relmax = max-min`; children in order [0] `(min, min+middle)`, [1] `(min+(middle.x,0), min+(relmax.x,middle.y))`, [2] `(min+(0,middle.y), min+(middle.x,relmax.y))`, [3] `(min+middle, max)`; existing items re-added in list order (`item_count--`, `node_count--`, `addToChild`), list cleared, then the new item `addToChild`. `addToChild` loops i=0..3 and adds to EVERY child with `bounds.overlaps(item->quadItemBounds)` (closed-interval overlap), so an item spanning k leaves sits in k lists (`node_count==k`); an item overlapping no child is silently dropped.
+- Inner nodes hold no items after a split. `empty() = items.empty() && children.empty()`. `getChildIndex(pos)`: first i in 0..3 with `children[i].bounds.contains(pos)` (closed), else -1.
+- `getItemsAt(set,pos)` (:135-155): if `items` non-empty insert all non-null into the set; else if no children 0; else descend ONE path via `getChildIndex(pos)` (-1 -> 0). `getItemsInFrustum/getItemsInBounds`: same shape, but descend into every child (index order 0..3) where `!child.empty() && (frustum.intersects(child.bounds) | bounds.overlaps(child.bounds))`; a leaf is returned wholesale with NO per-item overlap test. `visit*` variants are the same traversal but call the functor directly in list order instead of inserting into a `std::set`.
+- Both trees are destroyed and rebuilt every sim tick: `interactUsers` (gource.cpp:1292-1333; users in `std::map<string,RUser*>` key order; bounds = `user_bounds` padded +-1.0) and `interactDirs` (gource.cpp:1418-1447; `gGourceDirMap` = `std::map<string abspath,...>` order; only `!node->empty()` nodes). Tick order (gource.cpp:1867-1873): `updateBounds; interactUsers; updateUsers; interactDirs; updateDirs`. Paused: `updateBounds; interactUsers; interactDirs` (gource.cpp:1694-1696).
+
+Every QuadTree query caller (grep of all of src/):
+| Caller | Query | Container | Consumer | Affects sim state? |
+|---|---|---|---|---|
+| gource.cpp:1326 `interactUsers` | `userTree->visitItemsInBounds(a->quadItemBounds, UserForceFunctor)` | none; leaf list order, children 0..3 | `RUser::applyForceUser(b)` (user.cpp:88-110) mutates only `this->accel` | YES, by order |
+| dirnode.cpp:659 `RDirNode::applyForces` | `quadtree.visitItemsInBounds(quadItemBounds, DirForceFunctor)` | none; same order | `RDirNode::applyForceDir(d)` (dirnode.cpp:604-634) mutates only `this->accel` | YES, by order |
+| gource.cpp:1899 `mousetrace` | `userTree->getItemsAt(userset, projected_mouse)` | `std::set<QuadItem*>` ordered by pointer value | first element in pointer order with `!isFading() && quadItemBounds.contains(mouse)` -> `userSelection` (break) | No; hover target only |
+| gource.cpp:1915 `mousetrace` | `dirNodeTree->getItemsAt(dirset, projected_mouse)` | `std::set<QuadItem*>` pointer order | per dir, first file with `!isHidden() && overlaps(mouse)`; the `break` exits only the inner file loop, so the LAST dir in pointer order with a hit wins `fileSelection` | No; hover target only |
+All other query methods (`getLeavesInFrustum`, `getItemsInFrustum`, `getItemsInBounds`, `visitItemsAt`, `visitLeavesInFrustum`, `visitItemsInFrustum`, `drawNodesInFrustum`, `generateLists`) have no callers; `outline` is debug draw (gource.cpp:2555).
+
+ANSWER: pointer-ordered `std::set<QuadItem*>` iteration cannot change simulation state. The simulation never uses the set queries; the only set consumers are the mouse-hover picks (gource.cpp:1897-1935), where pointer-address order (non-deterministic under ASLR) only breaks ties between overlapping items for highlighting. Any deterministic tie-break is acceptable in a port.
+
+BUT the simulation IS sensitive to the visit-LIST order of `visitItemsInBounds`, which a port must reproduce exactly:
+1. `accel` is an f32 running sum (`accel -= (desired-dist)*normalise(dir)`, `accel += distance*normalise(dir)`); f32 addition is not associative, so neighbour visit order changes low bits, which then integrate into positions.
+2. Overlap-resolution branches (`user.cpp:105-108` dist<0.001; `dirnode.cpp:622-626` posd<0.00001) call libc `rand()`; which node receives which value depends on visit order. `rand()` is not seeded in a default run (srand only at gource_settings.cpp:1319 for `--start-position random`), so results depend on the platform libc default-seeded sequence (glibc and macOS differ).
+3. Dedupe: `UserForceFunctor` (user.h:98-126) and `DirForceFunctor` (dirnode.h:212-244) skip self; the dir functor also skips parent, direct children, ancestors and descendants (`isParent` chains). For items with `node_count != 1` a `std::set<T*> seen` applies the force only on the FIRST encounter in visit order (set is membership only, so its ordering is irrelevant). Leaves are visited wholesale, so far-away items are visited too; the force functions self-filter by distance (`distance2 > 0 -> return` for dirs, `dist < desired_dist` for users), which affects only the `loopCount` statistics.
+4. Effects are local: functors write only the CALLING node's `accel`, consumed later in `logic`, so the order in which nodes run their queries (map order; dir recursion is children-first, dirnode.cpp:650-654) does not matter; only neighbour order within one query does.
+Port rule: leaf `Vec` in insertion order; children order TL(0), TR(1), BL(2), BR(3); closed `overlaps`/`contains`; rebuild per tick from sorted-key map order; first-encounter dedupe. A brute-force O(n^2) loop is NOT equivalent (different summation order, rand() consumption order).
+
+### (d) utf8 (src/core/utf8/*, utf8-cpp, header-only)
+- Correction: gource_settings.cpp:25 only `#include`s `core/utf8/utf8.h`; its sole use is `utf8::utf16to8` at :836 inside `#ifdef _WIN32` (converts `p.filename().wstring()` for `--user-image-dir`; other platforms use `p.filename().string()` verbatim). `replace_invalid` is called in `formats/commitlog.cpp:29` inside `RCommitLog::filter_utf8` (commitlog.cpp:24-35) with replacement `'?'`, wrapped in `try{...}catch(...){ filtered = "???"; }`. Callers of `filter_utf8`: commitlog.cpp:292 (filename), :354 (username), gource.cpp:1112 (caption).
+- `replace_invalid(start,end,out,'?')` (checked.h:99-125): loop while `start != end`; `err = validate_next(start,end)` (core.h:240-293):
+  - `UTF8_OK`: copy consumed bytes unchanged.
+  - `NOT_ENOUGH_ROOM` (truncated sequence at end): emit one `?`, `start = end`.
+  - `INVALID_LEAD`: emit `?`, advance exactly 1 byte.
+  - `INCOMPLETE_SEQUENCE` / `OVERLONG_SEQUENCE` / `INVALID_CODE_POINT`: emit one `?`, `++start`, then skip all following continuation bytes (`(b>>6)==2`); one `?` per bad sequence.
+- Lead classification (core.h `sequence_length`): `<0x80`:1; `(b>>5)==6`:2; `(b>>4)==0xE`:3; `(b>>3)==0x1E`:4; else 0 = INVALID_LEAD (0x80-0xBF, 0xF8-0xFF). Each following byte must satisfy `(b>>6)==2`, else INCOMPLETE_SEQUENCE (or NOT_ENOUGH_ROOM at end). Decode: 2-byte `((b0<<6)&0x7ff)+(b1&0x3f)`; 3-byte `((b0<<12)&0xffff)+((b1<<6)&0xfff)+(b2&0x3f)`; 4-byte `((b0<<18)&0x1fffff)+((b1<<12)&0x3ffff)+((b2<<6)&0xfff)+(b3&0x3f)`. Then: code point invalid if `cp > 0x10FFFF` or in D800-DFFF -> INVALID_CODE_POINT; overlong if cp<0x80 and len!=1, cp<0x800 and len!=2, cp<0x10000 and len!=3 -> OVERLONG. NUL is valid and copied. F5-F7 leads decode >0x10FFFF -> INVALID_CODE_POINT.
+- Rust: `String::from_utf8_lossy` is NOT equivalent (per-maximal-subpart U+FFFD vs one `?` per bad run). Implement the loop above.
+- No other utf8 use in Gource sources (ftgl/FTUnicode.h and tinyxml carry their own decoders).
+
+### (e) stringhash.cpp:28-83, exact
+```
+int gStringHashSeed = 31;      // reset to 31 gource_settings.cpp:489; --hash-seed sets it :1066; Gource::changeColours() sets (rand()%10000)+1 gource.cpp:1555
+int stringHash(const std::string& str) {
+    int val = 0;
+    int n = str.size();                                  // size_t -> int
+    for (int i = 0; i < n; i++)
+        val = val + str[i] * (gStringHashSeed^(n-i));    // ^ is bitwise XOR, not power
+    if(val<0) val = -val;
+    return val;
+}
+vec2Hash:   h=stringHash(s); x=((h/7)%255)-127; y=((h/3)%255)-127; return normalise(vec2(x,y));
+vec3Hash:   same x,y; z = h % 255;  return normalise(vec3(x,y,z));
+colourHash: h=stringHash(s); if(h == 0) h++; r=(h/7)%255; g=(h/3)%255; b=h%255; return normalise(vec3(r,g,b));
+```
+- `str[i]` is plain `char`: SIGNED on x86/x64 and Apple arm64 (bytes >= 0x80 contribute negative), UNSIGNED on Linux aarch64/ppc. Assume signed (`b as i8 as i32`).
+- The multiply and add are signed 32-bit and overflow (UB in C++, wraps in practice): use `wrapping_mul/add`. `-val` of INT_MIN stays INT_MIN; use `wrapping_neg`, so hash can be negative and `/`,`%` then truncate toward zero (matches Rust i32).
+- Ints convert to f32 exactly; `normalise` = divide by `glm::length`, zero vector returned unchanged (vec2Hash gives (0,0) when x==y==0 after the offsets, e.g. when (h/7)%255 == 127 and (h/3)%255 == 127). Empty name: h=0 -> colourHash h=1 -> (0,0,1) normalised. Callers: dirnode.cpp:788/791 (initial dir offset, vec2Hash(abspath)), file.cpp:137 (ext colour; white if no ext), key.cpp:61, user.cpp:175 (`colourHash(name)`), commitlog.cpp:315.
+
+### (f) Which src/core files are built, and what Gource calls
+- Makefile.am:8-32 builds (src/core/): conffile, display, frustum, fxfont, logger, mousecursor, plane, ppm, quadtree, regex, resource, sdlapp, seeklog, settings, shader, shader_common, stringhash, texture, png_writer, timezone, vbo, vectors. gource.pro:65-87 builds the same plus `core/tga.cpp` (:84).
+- NOT built by either: `core/ui/*` (no include of `ui/` in any Gource source), `core/timer.cpp` (`GLTimer`, no caller), `core/utf8/*` and `core/ftgl/*` (header-only, included). `tga.cpp` only in qmake and nothing uses it; `bloom.tga`/`bloom_alpha.tga` are installed data (Makefile.am:69) loaded via `texturemanager.grab` -> `IMG_Load` (SDL_image, texture.cpp:258).
+- Correction to earlier text: `vbo.cpp` IS used by Gource: `quadbuf` (vbo.cpp:32-150: ctor(capacity), unload, resize, reset, vertices, capacity, texture_changes, `add` x3, update, draw) backs `file_vbo, user_vbo, edge_vbo, action_vbo` (gource.h:105-108) and text (fxfont.h:62); draw-only batching. `bloombuf` is in bloom.h, not core.
+- Sim-relevant core calls: quadtree (c), stringhash (e), `normalise` (a), `Bounds2D` (bounds.h update/contains/overlaps), utf8 filter (d). Rendering/IO/platform only: frustum, plane, texture, display, shader, fxfont, mousecursor, ppm, png_writer, vbo, resource, sdlapp, logger, timezone.
+
+## Tick 2 gaps
+- Frustum/Plane f32 bit-level behaviour only matters for cull decisions (presentation).
+- `accel` -> position integration in `RUser::logic`/`RDirNode::logic` not traced here (scene-model docs).
+- Whether mouse hover/selection feeds camera-follow state was not traced.
+- libc `rand()` sequence per platform is unspecified (see (c).2).

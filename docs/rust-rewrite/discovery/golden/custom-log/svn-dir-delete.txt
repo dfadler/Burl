@@ -1,0 +1,6 @@
+1263976518|bob|A|/blah/blah/filea.sh
+1263976518|bob|A|/blah/blah/fileb.sh
+1263976518|bob|A|/blah/blah/filec.sh
+1263976518|bob|A|/blah/blah/filed.sh
+1263976518|bob|A|/blah/blah/filee.sh
+1263976818|bob|D|/blah/

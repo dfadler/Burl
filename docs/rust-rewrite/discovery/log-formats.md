@@ -9,7 +9,7 @@ All paths relative to repo root. Cites are `path:line`.
 2. `fetchLog` (`logmill.cpp:190`): if `log_format` empty and path != `"-"` and path is a directory, `findRepository` (`logmill.cpp:163`) canonicalises the path and walks up parents; per directory the first hit in order `.git` (dir OR regular file) > `.hg` > `.bzr` > `.svn` (`logmill.cpp:171-174`); nearest ancestor wins; `logfile` is rewritten to the repo root and `log_format` set. None found: falls into auto-detect (all fail for dirs) -> "directory not supported" (`logmill.cpp:120`).
 3. Explicit format (`logmill.cpp:213-262`): tries only that class; `git` tries `GitCommitLog` then `GitRawCommitLog` (`logmill.cpp:216-224`). Failure of `checkFormat()` returns null.
 4. Auto-detect order for files/stdin (`logmill.cpp:272-334`): **git, hg, bzr, git-raw, cvs-exp, svn, cvs2cl, custom, apache**. First `checkFormat()` success wins.
-5. If `start_timestamp != 0` (`logmill.cpp:86`): read validated commits until `timestamp >= start_timestamp`, then `bufferCommit` it. Loop is `while(!shutdown && !isFinished())`; on stdin `isFinished()` is always false so it spins until a commit is found.
+5. If `start_timestamp != 0` (`logmill.cpp:85`): read validated commits until `timestamp >= start_timestamp`, then `bufferCommit` it. Loop is `while(!shutdown && !isFinished())`; on stdin `isFinished()` is always false so it spins until a commit is found.
 6. Errors (`logmill.cpp:98-123`): `SeekLogException` -> "unable to read log file"; `SDLAppException` -> its message; null clog + dir + format given -> "failed to generate log file" (+ " for the specified time period" if start/stop timestamp set); dir without format -> "directory not supported"; file -> "unsupported log format (you may need to regenerate your log file)".
 7. **Bug to preserve or fix consciously**: `--log-format cvs-exp` is accepted by settings (`src/gource_settings.cpp:784`) but `fetchLog` only matches the string `"cvs"` (`logmill.cpp:238`), and settings reject `"cvs"` (`gource_settings.cpp:779`). Explicit `cvs-exp` therefore yields "unsupported log format"; auto-detect of a cvs-exp file still works. Accepted values: git, cvs-exp, cvs2cl, svn, custom, hg, bzr, apache (`gource_settings.cpp:783-790`; help lists fewer, `:99`). `--log-format` is mandatory for stdin (`gource_settings.cpp:1636-1638`).
 8. Consumption (`src/gource.cpp:1131-1185`): `nextCommit` (validated); on failure non-seekable -> break (retried next frame), seekable -> continue (resync line by line). Commit with `timestamp > stop_timestamp` (when nonzero) sets stop_position_reached and is discarded (`gource.cpp:1148`). Queue refilled while `queue.empty() || (back.timestamp <= currtime && size < 100)` (`gource.cpp:1137`, max at `:919`). Empty first read throws "no commits found". **No sorting anywhere in the log layer**: commits processed in file order.
@@ -92,7 +92,7 @@ int stringHash(const std::string& str) {
     if (val < 0) val = -val;
     return val;
 }
-vec3 colourHash(str) {                           // :73-83
+vec3 colourHash(str) {                           // :71-83
     hash = stringHash(str); if (hash == 0) hash++;
     r = (hash/7) % 255; g = (hash/3) % 255; b = hash % 255;   // ints, truncating division
     return normalise(vec3(r, g, b));            // unit-length vector, not /255

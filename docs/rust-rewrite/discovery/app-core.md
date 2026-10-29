@@ -313,7 +313,7 @@ Mouse:
 | mouseClick | 436-499 | return if no log / disable_input / hide_mouse. cursor.updatePos(mousepos). UP: LMB -> mousedragged=false; LMB or RMB and no button still down -> grabMouse(false). Only DOWN continues. SDL1 wheel buttons zoom. MMB -> toggleCameraMode. RMB -> grabMouse(true). LMB -> mouseclicked=true; if canSeek() && `slider.click(mousepos,&position)` -> seekTo(position) |
 | selectBackground | 545-557 | if LMB pressed: selectUser(0); manual_camera=true; mousedragged=true; grabMouse(true) |
 | grabMouse | 307-336 | SDL2 relative mode + SDL_SetWindowGrab; on release warp to mousepos; cursor.showCursor(!grab) |
-| zoom(in) | 400-419 | manual_zoom=true; `zoom_multi = 1.1` (double); `distance = -camera.getDest().z`; in: `/=1.1` clamp >= camera_zoom_min; out: `*=1.1` clamp <= camera_zoom_max; `camera.setDistance(distance)` |
+| zoom(in) | 400-419 | manual_zoom=true; `float zoom_multi = 1.1` (double literal narrowed to f32; CORRECTED, was 'double'); `float distance = -camera.getDest().z`; in: `distance /= zoom_multi` (f32 op) clamp >= camera_zoom_min; out: `*=` clamp <= camera_zoom_max; `camera.setDistance(distance)` (cpp:400-419). Unlike `[`/`]` (gGourceForceGravity is `float` but `/= 1.1` is a double-precision op narrowed back, cpp:846/850) |
 Selection: selectUser (cpp:560-587): no-op if same user; deselect file+user; user==0 -> `camera.lockOn(false)`; else setSelected(true) and `if(track_users) camera.lockOn(true)`. selectFile (cpp:590-615): deselects user (no camera change) and file. selectNextUser (cpp:618-653): iterate tagusermap ascending; first with `!isInactive() && tagID > currTagId && alpha >= 1.0`; else first with `!isInactive() && alpha >= 1.0`; selectUser(result, 0 deselects).
 
 ## 9. Camera constants/behaviour in range
@@ -331,7 +331,7 @@ dateAtPosition (cpp:288-305): `percent<1.0 && commitlog->getCommitAt(percent, co
 ## 12. Randomness / system time
 | Use | Line |
 |---|---|
-| rand/srand/random: none in h or cpp:1-1400 | - |
+| rand/srand/random: none in h or cpp:1-1400 (but see Part 2 §8 CORRECTION: rand() IS used by sim in user.cpp:106,128 and dirnode.cpp:625; see Tick 2 §T2.9) | - |
 | SDL_GetTicks (profiling only) | cpp:263, 267, 1301, 1332 |
 | localtime() on commit timestamp (slider hover) | cpp:298 |
 | Real wall-clock dt drives sim when no exporter: `min(dt,1/60)` (nondeterministic run to run); exporter uses fixed step | cpp:248-253 |
@@ -353,7 +353,7 @@ dateAtPosition (cpp:288-305): `percent<1.0 && commitlog->getCommitAt(percent, co
 
 ## 14. Rust-port hazards (sim state)
 1. users/files/tagusermap/gGourceDirMap are std::map: use BTreeMap (byte-wise string order); interactUsers force application is in-place and order dependent.
-2. f32 vs f64: runtime, dt, scaled_dt, max_tick_rate f32 (`1.0/60.0` narrowed from f64; `1.0f/(float)g` f32); `time_inc` f64 then `(int)` truncation (ctx); zoom multiplier 1.1 and gravity `/=1.1` are double ops on f32 values; time_scale/days_per_second use floorf.
+2. f32 vs f64: runtime, dt, scaled_dt, max_tick_rate f32 (`1.0/60.0` narrowed from f64; `1.0f/(float)g` f32); `time_inc` f64 then `(int)` truncation (ctx); gravity `/=1.1` / `*=1.1` are double ops narrowed to f32 (cpp:846,850); zoom multiplier is a float (cpp:404, CORRECTED); `DEGREES_TO_RADIANS` is the double macro 0.017453292 (pi.h:33), so rotate_angle math is double then narrowed; time_scale/days_per_second use floorf.
 3. tag_seq shared by files and users; incremented only on successful addFile and each addUser.
 4. Unknown actions -> Modify; unseen file auto-created for any action; directory entries only honour "D".
 5. addFile root-promotion loop; commit_seq per action.
@@ -376,7 +376,7 @@ Scope note: keyboard/mouse event handlers (keyPress, mouseMove, mouseClick, ~lin
 | tail of `updateUsers` | 1401-1416 | `users.empty() && stop_position_reached` -> `appFinished=true` (1401-1403). If `idle_users==users.size()` -> `idle_time += dt` else `idle_time=0` (1406-1410). Then `deleteUser()` on each collected inactive user (1413-1415). With 0 users idle_users(0)==size(0), so idle_time accrues. |
 | `interactDirs` | 1418-1449 | Rebuilds dir quadtree every call (every frame, also while paused). Bounds = dir_bounds expanded by (1,1) each side (1421-1424). max_depth=1 unless `dir_bounds.area() > 10000.0` then `gGourceMaxQuadTreeDepth` (=6, :23) (1430-1435). `new QuadTree(bounds,max_depth,1)` (1437). Iterates `gGourceDirMap` (std::map<string,RDirNode*>, sorted by path string) and adds each non-empty node (1440-1446). Records ms via SDL_GetTicks (1426,1448), debug only. |
 | `updateDirs(dt)` | 1451-1454 | `root->applyForces(*dirNodeTree); root->logic(dt);` force/physics step for the dir tree. SIM STATE. |
-| `updateTime(time_t)` | 1456-1473 | 0 -> displaydate="" and return. Else `localtime()` (LOCAL TZ) + `strftime(buf[256], date_format)`. `date_offset=(int)(fontmedium.getWidth(displaydate)*0.5)`; `date_x_offset` only updated if `abs(old-new) > 5` (anti-wobble, 1472). |
+| `updateTime(time_t)` | 1456-1473 | 0 -> displaydate="" and return. Else `localtime()` (LOCAL TZ) + `strftime(buf[256], date_format)`. `date_offset = (int) fontmedium.getWidth(displaydate) * 0.5` (cast binds to the width first, then *0.5 in double, truncated on int assignment; render only); `date_x_offset` only updated if `abs(old-new) > 5` (anti-wobble, 1472). |
 | `updateCamera(dt)` | 1475-1550 | See section 4. |
 | `changeColours` | 1552-1566 | `gStringHashSeed = (rand()%10000)+1` (1555) then `colourize()` all users (map order), all files (map order), and `file_key`. libc rand() (see section 8). |
 | `logic(t,dt)` | 1568-1878 | Main per-frame simulation step; section 2. |
@@ -384,7 +384,7 @@ Scope note: keyboard/mouse event handlers (keyPress, mouseMove, mouseClick, ~lin
 | `loadingScreen` | 1991-2023 | Shown while `commitlog==0`. "Reading Log" (or "Aborting" if `shutdown`) + dots by `int(runtime*3.0f)%4` -> "", ".", "..", "..." (2003-2016). Drawn at (w/2 - textwidth/2, h/2 - 10) white (2022). Skipped if `!gGourceDrawBackground`. |
 | `drawBackground` | 2025-2060 | Clear to `background_colour`, alpha 0 if `transparent` else 1 (2028); optional background image centred at (w/2 - tw/2, h/2 - th/2), white modulate (2031-2059). Returns early if `!gGourceDrawBackground`. |
 | `drawScene(dt)` | 2062-2114 | Fixed order: edges -> file shadows -> actions -> files -> user shadows -> users -> bloom (each timed with SDL_GetTicks into debug counters). |
-| `updateAndDrawEdges` | 2116-2172 | `root->calcEdges()` ALWAYS (even if hide_tree; 2118), affects state. If `hide_tree` return. Ortho 2D (0,w,h,0,-1,1). Shader path: rebuild edge_vbo, shadow pass offset (2.0,2.0) px (2150), `shadow_strength` 0.5 (2147), then edges. FFP path: `drawEdgeShadows()` then `drawEdges()`. Blend SRC_ALPHA/ONE_MINUS_SRC_ALPHA, beamtex. |
+| `updateAndDrawEdges` | 2116-2172 | `root->calcEdges()` ALWAYS (even if hide_tree; 2118); it only calls `spline.update()` from the screen-projected positions (dirnode.cpp:882-893), RENDER-ONLY, nothing in sim reads the spline. If `hide_tree` return. Ortho 2D (0,w,h,0,-1,1). Shader path: rebuild edge_vbo, shadow pass offset (2.0,2.0) px (2150), `shadow_strength` 0.5 (2147), then edges. FFP path: `drawEdgeShadows()` then `drawEdges()`. Blend SRC_ALPHA/ONE_MINUS_SRC_ALPHA, beamtex. |
 | `drawActions` | 2174-2194 | Skip if hide_users. beamtex; action_vbo, or per-user `drawActions(dt)` (map order) in ffp. |
 | `drawBloom` | 2196-2218 | Skip if hide_bloom. Additive blend (GL_ONE,GL_ONE) (2201). bloom_shader+bloom_vbo, or FFP `bloomtex` + `root->drawBloom(dt)`. |
 | `setMessage(fmt,...)` | 2220-2232 | vsnprintf into 1024 buf (truncates); `message_timer = 5.0` s (2231). |
@@ -407,7 +407,7 @@ Scope note: keyboard/mouse event handlers (keyPress, mouseMove, mouseClick, ~lin
 | 5 | 1613-1652 | Poll arrow keys (SDL2 `SDL_GetKeyboardState` scancodes; SDL1 `SDL_GetKeyState`): right -> cursor_move.x=+10; left x=-10; up y=-10; down y=+10; each sets `manual_camera=true`. Assignments (not +=); order right,left,up,down so left beats right, down beats up. Runs while paused. |
 | 6 | 1655-1685 | If `rotate_angle != 0`: s=sinf, c=cosf. If manual_rotate: rotate about `vec2(camera.getPos())`: `root->rotate(s,c,centre)` and each user pos `rotate_vec2(pos-centre,s,c)+centre`; else about origin (`root->rotate(s,c)`; users `rotate_vec2(pos,s,c)`). `rotate_angle=0`. SIM STATE (float sin/cos). |
 | 7 | 1687-1690 | `if(recolour) {changeColours(); recolour=false;}` | uses rand() |
-| 8 | 1693-1699 | If `paused`: `updateBounds(); interactUsers(); interactDirs(); updateCamera(dt); return;` | No updateUsers/updateDirs/commits/captions/time. interactUsers still runs follow-user selection and idle accounting? (idle_time += dt happens in interactUsers/updateUsers tail at 1406-1410; see which function owns lines 1365-1416 - it is `updateUsers`, so NOT run while paused). |
+| 8 | 1693-1699 | If `paused`: `updateBounds(); interactUsers(); interactDirs(); updateCamera(dt); return;` | No updateUsers/updateDirs/commits/captions/time. (idle_time += dt is in the tail of `updateUsers` (cpp:1365-1416), so it is NOT run while paused: idle_time, follow-user selection, user logic/fading/deletion are all frozen; CORRECTED, earlier text was speculative). |
 | 9 | 1702-1704 | If `commitqueue.empty()` -> `readLog()` | |
 | 10 | 1707-1713 | Loop: if `loop && commitqueue.empty() && commitlog->isSeekable()` and `idle_time >= loop_delay_seconds` (default 3.0 gource_settings.cpp:416; <=0 rejected :734) -> `first_read=true; seekTo(0.0); readLog();` | |
 | 11 | 1715-1720 | First time (`currtime==0 && queue non-empty`): `currtime=lasttime=queue[0].timestamp; subseconds=0.0; loadCaptions();` | |
@@ -452,7 +452,7 @@ Debug text lines (x=1, y=20..740 step 20): FPS, Days Per Second, Commit Queue, U
 - Files (only if no user hit and !hide_files): `dirNodeTree->getItemsAt(set<QuadItem*>)` (pointer-ordered); for each dir iterate `getFiles()` list; first `!isHidden() && overlaps(pos)` wins within that dir via break, but the outer loop has no break, so a later dir in pointer order overwrites fileSelection (1917-1933).
 - Hover application: file branch checked first (1936) but since file search only runs when no user hit, a user hit wins. File hover clears hoverUser and vice versa; neither -> both cleared (1968-1973).
 - Click (`mouseclicked`): hoverUser -> `camera.lockOn(false); selectUser`; hoverFile -> `camera.lockOn(false); selectFile`; else `selectBackground()` (1975-1986). Those functions are outside range (selectBackground at gource.cpp:545).
-- Follow-user (tail of interactUsers, 1385-1398): only if nothing selected and user not idle and name equals a non-empty `follow_users` entry; every match calls selectUser (last wins).
+- Follow-user (inside updateUsers loop, cpp:1384-1398; CORRECTED, not interactUsers): only if nothing selected and user not idle and name equals a non-empty `follow_users` entry; every match calls selectUser (last wins).
 
 ## 6. Keyboard / mouse mapping in range
 
@@ -494,7 +494,7 @@ Only arrow keys polled in logic (1634-1652, magnitude 10.0). `hide_mouse` / `cur
 | 1,3 | 2774 | message position |
 | 20..740 step 20 | 2703-2754 | debug text rows |
 
-Randomness: only `rand()` in changeColours (1555), reached via `recolour` flag (set by key handler outside range). No srand in gource.cpp (grep); seeding, if any, is elsewhere (main.cpp/settings, verify). gStringHashSeed default 31 (gource_settings.cpp:489), settable via CLI (:1066); hash seed drives colourize results (SIM-visible colours).
+Randomness (CORRECTED): `rand()` appears in changeColours (gource.cpp:1555) AND in sim code: user.cpp:106 and :128, dirnode.cpp:625 (overlap resolution, `normalise(vec2(rand()%100-50, rand()%100-50))`). The ONLY `srand` in src is gource_settings.cpp:1319 (`srand(time(0))` when `--start-position random`, followed by one rand()). Otherwise libc rand() is unseeded (default seed 1), so runs are repeatable per libc but a Rust port must reproduce libc's rand() stream and call order to match. gStringHashSeed default 31 (gource_settings.cpp:489), settable via CLI (:1066); hash seed drives colourize results (SIM-visible colours).
 System time: `SDL_GetTicks()` only for debug timers (1426,1448,2066-2112,2414,2439,2465,2473,2485-2521); no sim effect. `localtime()` (1465) for date display (TZ dependent). `runtime` (loadingScreen dots) comes from the app.
 
 ## 9. Error messages / exit paths
@@ -516,6 +516,192 @@ System time: `SDL_GetTicks()` only for debug timers (1426,1448,2066-2112,2414,24
 4. Per-frame order: removed files deleted (1736) -> commits -> captions -> updateBounds -> interactUsers -> updateUsers -> interactDirs -> updateDirs -> updateCamera -> updateTime. Rotation (from previous frame's updateCamera) applied at the start (1655) before all of these.
 5. Rotation uses sinf/cosf float; rotates dir tree and user positions.
 6. Containers: users/files `std::map<string,..>` (name-sorted), `gGourceDirMap` std::map (path-sorted; quadtree insertion order), `gGourceRemovedFiles` vector, captions deque, active_captions list. Quadtree query results in `std::set<QuadItem*>` ordered by pointer: picking is nondeterministic when overlapping; quadtree rebuilt every frame so force results may depend on insertion order and max_depth (1 vs 6 switching at area 10000).
-7. `calcEdges()` runs in draw path (2118) regardless of hide_tree; `updateBloomVBO/updateFilesVBO(dt)` run from draw path (2287, 2293) and are skipped when hide_bloom/hide_files; check in rdirnode.cpp whether they mutate sim state (they take dt). `checkFrustum`/`calcScreenPos` set visibility flags in draw path.
+7. VERIFIED render-only (Tick 2): `calcEdges()` (spline update from projected pos), `updateBloomVBO`/`updateFilesVBO` (read-only `const`-style VBO fills; dt unused; dirnode.cpp:1034-1075), `checkFrustum` (writes `in_frustum` only), `calcScreenPos` (writes projected_pos/spos, screenpos). `in_frustum` is read only by draw/VBO code. No sim effect.
 8. Draw/logic coupling: mouse picking (in draw) sets selection which drives camera tracking in logic.
-9. changeColours uses libc rand() (platform-dependent); seed range 1..10000.
+9. changeColours uses libc rand() (platform-dependent); seed range 1..10000. Sim overlap resolution (user.cpp:106,128; dirnode.cpp:625) also consumes rand() (see Tick 2 T2.9).
+
+---
+
+## Tick 2 additions
+
+All cites are src/gource.cpp unless prefixed. Verified by reading all of gource.h and gource.cpp (1-2776) plus dirnode.cpp:875-1080 and core/sdlapp.cpp:341-480. Parts 1-2 were spot-checked and corrected in place (marked CORRECTED): zoom_multi is a float, not double; paused-path speculation removed; follow-user lives in updateUsers; rand() IS used by sim code; calcEdges/updateBloomVBO/updateFilesVBO are render-only; updateTime cast precedence.
+
+### T2.1 Per-frame driver (SDLApp::run, core/sdlapp.cpp:422-460)
+| Step | Detail |
+|---|---|
+| frame gate | `buffer_msec += delta`; if `< min_delta_msec` (8, sdlapp.cpp:317) `SDL_Delay(1); continue` (no frame). Else `dt = buffer_msec/1000.0f` (f32), `t = total_msec/1000.0f` |
+| events | ALL pending SDL events handled first, THEN `update(t,dt)`. Mouse x/y/xrel/yrel multiplied by `display.viewport_dpi_ratio` before mouseMove/mouseClick (sdlapp.cpp:352-358, 385-389); key events pass straight to keyPress |
+| update | Gource::update (cpp:246): `scaled_dt=min(dt,max_tick_rate)` (exporter: fixed `max_tick_rate`), `*= time_scale`, `runtime += scaled_dt` unless paused, then `logic(runtime,scaled_dt)`, `draw(runtime,scaled_dt)`. Arg `t` is ignored. One sim step per rendered frame; deterministic only with an exporter (fixed dt), else wall-clock dependent |
+
+### T2.2 Input bindings (complete; mouse cpp:338-499, keys 655-875, polled arrows 1613-1652)
+Gates: keyPress returns if `disable_input` (656) or KEYUP (658); everything except Esc also needs `commitlog!=0` (692). mouseMove/mouseClick need `commitlog`, `!disable_input`, `!hide_mouse`; mouseWheel needs only `!disable_input`. Keys are independent `if`s (not else-if); letters match `keysym.sym` (lowercase SDLK_x).
+
+| Input | Line | Effect | Class |
+|---|---|---|---|
+| Esc | 688 | `quit()` = empty (243) | none |
+| F12 | 694 | take_screenshot (executed end of draw, 2762) | UI |
+| Q / W | 698 / 702 | debug / trace_debug toggle | UI |
+| M | 706 | toggle cursor hidden + `settings.hide_mouse`, only if not (mousedragged or mouseclicked or LMB down). hide_mouse gates ALL mouse input and picking | UI |
+| N | 721 | `idle_time = auto_skip_seconds` (3.0 default; -1 if disabled) -> auto-skip at next commit-loop pass | SIM |
+| Y | 725 | quadtree debug draw | UI |
+| T / G | 729 / 733 | hide_tree / hide_users toggle (sim still runs) | render |
+| U | 737 | cycle on (hide_usernames, highlight_all_users): (hidden,!hl) -> (shown,hl); (hl,shown) -> (shown,!hl); else -> (hidden,!hl). highlight_all_users flags only users created afterwards (1258) plus name draw | render |
+| D | 753 | same cycle on (hide_dirnames, highlight_dirs) | render |
+| F | 770 | (hide_filenames,!ext) -> hide=false; (!hide,ext) -> ext=false,hide=true; else ext=true,hide=false | render |
+| R / K | 783 / 787 | hide_root / show_key toggle | render |
+| C | 791 | splash=15.0f | UI |
+| V | 795 | toggleCameraMode = setCameraMode(!track_users) | CAM |
+| P | 799 | `ffp` toggle iff `GLEW_VERSION_2_0 && bloom_shader` | render |
+| Z | 805 | gGourceGravity toggle | SIM |
+| S | 809 | recolour=true -> changeColours (rand) next logic | SIM colours |
+| Tab | 813 | selectNextUser (tag-id order) | CAM |
+| Space | 817 | paused toggle | SIM |
+| = or + | 821 | days_per_second: >=1.0 -> `min(30, floorf(d)+1)`; else `min(1, d*2)` (f32) | SIM |
+| - | 829 | >1.0 -> `max(0, floorf(d)-1)`; else `max(0, d*0.5)`. 1.0 -> 0.5 (but + from 1.0 -> 2.0); 1.5 -> 0 | SIM |
+| KP- / KP+ | 837 / 841 | zoom(true) / zoom(false) | CAM |
+| [ / ] | 845 / 849 | gGourceForceGravity `/=1.1` / `*=1.1` (double op narrowed to f32) | SIM |
+| . | 853 | time_scale: >=1.0 -> `min(4, floorf(t)+1)`; else `min(1, t*2)` | SIM |
+| , | 862 | >1.0 -> `max(0, floorf(t)-1)`; else `max(0.25, t*0.5)`. 1.5 -> 0.0 (next press clamps to 0.25) | SIM |
+| / | 871 | time_scale=1.0 | SIM |
+| Arrows (polled in logic every frame, also paused) | 1613-1652 | right: cursor_move.x=+10; left: x=-10; up: y=-10; down: y=+10 (assignment; left beats right, down beats up); each sets manual_camera=true | CAM |
+| Wheel (SDL2) | 422 | y>0 zoom in; y<0 zoom out | CAM |
+| LMB down | 487-496 | mouseclicked=true (consumed in mousetrace during draw); if canSeek and `slider.click(mousepos,&pos)` -> seekTo(pos) | selection / SIM (seek) |
+| LMB up | 446 | mousedragged=false; if no button still held grabMouse(false) | UI |
+| RMB down / up | 482 / 452 | grabMouse(true) / release when no buttons held | UI |
+| MMB down | 476 | toggleCameraMode | CAM |
+| Motion, no drag | 386-396 | mousepos=(x,y), mousemoved=true, slider hover caption | UI |
+| Motion while mousedragged (LMB on background) | 379 | `cursor_move += (xrel,yrel)` accumulates between frames | CAM |
+| Motion while RMB held | 366-377 | manual_rotate=true; dominant axis of (xrel,yrel) -> `rotate_angle = min(1,abs(d)/10)*5*DEGREES_TO_RADIANS`, signed; REPLACES (not accumulates) rotate_angle; returns | SIM |
+| Click on empty background | 545-557 (called from mousetrace 1984) | if LMB down: selectUser(0), manual_camera=true, mousedragged=true, grabMouse(true) | CAM |
+
+Zoom (cpp:400): `distance=-camera.getDest().z`; in `/=1.1f`, out `*=1.1f`, clamp `[camera_zoom_min, camera_zoom_max]`; `camera.setDistance`; manual_zoom=true stops auto-zoom in `camera.adjust`.
+
+### T2.3 Frame flow: logic() order (1568-1878) and the tail functions
+| # | Line | What |
+|---|---|---|
+| 1 | 1570 | shutdown && logmill finished -> appFinished, return |
+| 2 | 1575 | `message_timer`, `splash` -= dt |
+| 3 | 1579 | init: wait for logmill; errors; `start_position>0` -> seekTo |
+| 4 | 1609 | file_key.logic, slider.logic |
+| 5 | 1613 | polled arrows -> cursor_move |
+| 6 | 1655 | apply `rotate_angle` (sinf/cosf; rotates dir tree and every user), set 0 |
+| 7 | 1687 | recolour -> changeColours |
+| 8 | 1693 | `paused`: updateBounds, interactUsers, interactDirs, updateCamera, RETURN. interactUsers/Dirs only build quadtrees and apply user-user force + `applyForceToActions`; updateUsers/updateDirs do NOT run (no motion integration, no idle_time, no deletes, no follow-select) |
+| 9 | 1702 | `commitqueue.empty()` -> readLog() |
+| 10 | 1707 | loop restart (`loop && queue.empty() && seekable && idle_time>=loop_delay_seconds`) |
+| 11 | 1715 | `currtime==0 && !queue.empty()` -> `currtime=lasttime=queue[0].timestamp`, subseconds=0, loadCaptions |
+| 12 | 1722 | clock: `time_inc=(dt*86400.0*days_per_second)` stored to float; `seconds=(int)time_inc`; `subseconds += time_inc-(float)seconds`; if `subseconds>=1.0` {currtime+=(int)subseconds; subseconds-=(int)subseconds}; `currtime+=seconds` |
+| 13 | 1736 | deleteFile for each gGourceRemovedFiles (vector order), clear |
+| 14 | 1744 | commit loop (T2.4) |
+| 15 | 1776-1860 | captions (UI; keyed on currtime) |
+| 16 | 1867 | updateBounds |
+| 17 | 1869 | interactUsers; updateUsers(t,dt) |
+| 18 | 1872 | interactDirs; updateDirs(dt) |
+| 19 | 1875 | updateCamera(dt) |
+| 20 | 1877 | updateTime(`queue.empty()? lasttime : currtime`) |
+
+The clock advances (12) BEFORE removed files are deleted (13) and commits processed (14). readLog (9) is called only when the queue is EMPTY at frame start (readLog then reads ahead itself).
+
+updateUsers (1365-1416), users in name-sorted map order: `u->logic(t,dt)`; if `isFading() && selectedUser==u` -> selectUser(0) (1377); `isInactive()` -> push to inactive list; `isIdle()` -> idle_users++, else (nothing selected and no file selected) for each non-empty follow_users entry equal to the name -> selectUser(u) (1384-1398). After loop: `users.empty() && stop_position_reached` -> appFinished (1401); `idle_users==users.size()` -> `idle_time+=dt` else `idle_time=0` (0 users counts as all idle); then deleteUser on each inactive (erase from users+tagusermap, clear hover/selection). Deletion is after the loop.
+
+updateBounds (1335): every user `updateQuadItemBounds()`; user_bounds over all, active_user_bounds over `!isIdle()`; dir_bounds only over `isVisible()` nodes (gGourceDirMap path-sorted), which also get `updateQuadItemBounds()`. interactUsers (1292) and interactDirs (1418): see Part 1 sec 10 / Part 2 sec 1; quadtree bounds = bounds +/-(1,1); max_depth 1, or 6 iff `dir_bounds.area()>10000.0`; dir tree adds only non-`empty()` nodes. updateDirs (1451): `root->applyForces(*dirNodeTree)` (rand() in dir overlap, dirnode.cpp:625) then `root->logic(dt)` (dirnode.cpp:895: move, spline point, node normal, files' logic, children, colour, tickers).
+
+### T2.4 Commit consumption and non-monotonic timestamps
+| Mechanism | Line | Behaviour |
+|---|---|---|
+| read side | 1137 | readLog enqueues the next commit if the queue is empty, or while `back().timestamp <= currtime` and size<100. Commits are appended in the order the RCommitLog yields them; NO sorting in gource.cpp |
+| consume | 1744-1774 | loop on `queue.front()` only: `if(commit.timestamp > currtime) break;` else processCommit. A commit OLDER than currtime is processed immediately in the same frame; never dropped |
+| head-of-line blocking | 1757 | a future-dated head blocks later queue entries even if they are older than currtime |
+| auto-skip | 1749 | evaluated each iteration BEFORE the future check: `auto_skip_seconds>=0 && idle_time>=auto_skip_seconds && !stop_position_reached` -> `currtime=lasttime=front.timestamp; idle_time=0` (works backwards too) |
+| default time travel | 1763-1769 | after processing: `if(lasttime > commit.timestamp) currtime = commit.timestamp;` then `lasttime = commit.timestamp`. So an out-of-order older commit PULLS currtime BACK to its timestamp and lasttime tracks the LAST processed commit (not the max). Later commits then wait while currtime climbs again at days_per_second |
+| `no_time_travel` | 1759-1762 | `if(ts>lasttime) lasttime=ts`; currtime never pulled back |
+| subseconds | 1771 | zeroed after every processed commit |
+| display | 1877 | lasttime when queue empty, else currtime |
+| read-ahead interplay | 1137 | currtime dropping can make `back().timestamp <= currtime` false and pause read-ahead until currtime recovers |
+| seek | 1067 | reset() zeroes currtime; step 11 reseeds from the first queued commit |
+| stop_timestamp | 1148 | commit with ts > stop_timestamp is discarded and stops reading (sticky) |
+
+Not covered here: whether RCommitLog (logmill/seeklog/formats) sorts or merges commits; `time_t` is a 64-bit int on the target (currtime arithmetic uses int `seconds`).
+
+processCommit(commit,t) (1188) and addFileAction (1244): see Part 1 sec 6. Confirmed: files iterate in `commit.files` list order; directory-delete order = `root->findDirs` list then `getFilesRecursive`; user is created lazily at first surviving file action (so max_files exhausted => no user); `t` given to Action ctors is `runtime` and only stored (action.cpp:21); `cf.colour` used only by ModifyAction; `commit_seq++` is dead state.
+
+### T2.5 Camera (updateCamera 1475-1550)
+| Behaviour | Detail |
+|---|---|
+| auto_rotate flag | `!manual_rotate && !settings.disable_auto_rotate`; forced false in a frame where a manual pan was applied |
+| manual branch | `if(manual_camera)`: acts only if `length2(cursor_move)>0`: `cam_rate=-camera.getPos().z/5000.0f; pos.xy += cursor_move*cam_rate*10.0f; camera.setPos(pos,true); camera.stop(); cursor_move=0`. NO `camera.adjust` while manual_camera is set (cleared by V, MMB, setCameraMode, reset) |
+| auto branch | cambounds = (track_users && selection): bounds of selectedUser->getPos() and selectedFile->getAbsolutePos(); else (track_users && idle_time==0): active_user_bounds; else dir_bounds. `camera.adjust(cambounds, !manual_zoom)` |
+| lock-on | selectUser(u): `camera.lockOn(true)` only if track_users; selectUser(0) -> lockOn(false); mousetrace click calls `camera.lockOn(false)` BEFORE select; setCameraMode(b) calls `lockOn(b)` iff a user is selected; selectFile never locks |
+| track users | `track_users` = (camera_mode=="track") (ctor 151); V/MMB toggle it and write settings.camera_mode; overview = dir_bounds only |
+| camera.logic(dt) | every frame including paused (ZoomCamera internals in Part 3) |
+| auto rotate | if auto_rotate: if `rotation_remaining_angle>0`: `angle_rate=max(dt, 1-fabs(rem/90-0.5)*2)*dt`; `rotate_angle=min(rem, 90*angle_rate)`; `rem-=rotate_angle`; `rotate_angle*=DEGREES_TO_RADIANS` (applied NEXT logic step 6 about origin). Else if `!cursor.rightButtonPressed() && dir_bounds.area()>10000`: `aspect=w/h`; `ratio = aspect>1 ? bw/bh : bh/bw`; `ratio<0.67` -> rem=90. If !auto_rotate: rem=0 |
+| manual rotate | RMB drag sets manual_rotate (sticky until camera mode change/reset) and rotation pivots on `camera.getPos().xy` |
+| window dependency | `display.width/height` feeds the rotate trigger, so tree orientation depends on window size/aspect |
+
+### T2.6 Classification of every Gource member (gource.h)
+SIM = affects commit/user/file/dir simulation; CAM = camera or selection (feeds sim only via manual-rotate pivot, rotation trigger); REND = render only; UI = input/overlay only.
+
+| Member (h line) | Class | Note |
+|---|---|---|
+| logfile 53, logmill 57, commitlog 59 | SIM | commit source |
+| frameExporter 55 | SIM-timing | fixes dt |
+| slider 60 | UI | click triggers seekTo |
+| camera 61 | CAM | pos is manual-rotate pivot |
+| file_key 63 | REND | extension legend |
+| debug, trace_debug 65 | UI | |
+| manual_zoom/rotate/camera 67-69 | CAM (manual_rotate also SIM) | |
+| rotation_remaining_angle 71, rotate_angle 87 | SIM | rotate tree + users |
+| cursor 73, grab_mouse 75, mousemoved/clicked/dragged 76-78, cursor_move 80, mousepos 89, mouse_hits 97 | UI (cursor_move CAM) | |
+| recolour 82 | SIM | triggers rand + hash seed |
+| use_selection_bounds 84, selection_bounds 85 | dead | only reset |
+| last_percent 91 | UI + SIM | used in stop_position check (1175) |
+| stop_position_reached 93 | SIM | sticky |
+| tag_seq, commit_seq 95 | SIM (tag ids); commit_seq dead | |
+| hoverFile/hoverUser 99/102 | UI | |
+| selectedFile/selectedUser 100/103 | CAM | selected+fading -> deselect |
+| file_vbo, user_vbo, edge_vbo, action_vbo, bloom_vbo 105-110, selectionDepth 112 | REND | |
+| root 114 | SIM | |
+| displaydate, date_x_offset 116-117 | UI | |
+| bloomtex, beamtex, logotex, backgroundtex, usertex 119-123; shaders 125-127; font_texel_size 129; textbox 131; fonts 133 | REND/UI | |
+| first_read 135, paused 136 | SIM | |
+| reloaded 137, take_screenshot 139 | UI | |
+| max_tick_rate 141, frameskip 142, framecount 143 | SIM-timing / export | |
+| currtime 145, lasttime 146, subseconds 148, runtime 147 | SIM | runtime stored in actions, stop_at_time |
+| splash 150, message 192, message_timer 193 | UI | |
+| idle_time 152 | SIM | auto-skip, loop restart, camera bounds choice |
+| 17 `*_time` Uint32 154-170 | UI | profiling |
+| track_users 172 | CAM | |
+| dir_bounds 174 | SIM | spawn pos (1025), quadtree depth, rotate trigger |
+| user_bounds 175, active_user_bounds 176 | SIM (quadtree bounds) / CAM (active) | |
+| commitqueue_max_size 178 | SIM | const 100 |
+| starting_z 179 | CAM/REND | const -300; fixed_user_size scale |
+| commitqueue 181, users 182, files 183, tagusermap 184 | SIM | |
+| captions 186, active_captions 187 | UI | timeline by currtime, no feedback |
+| dirNodeTree 189, userTree 190 | SIM | rebuilt every frame |
+
+Globals: gGourceForceGravity, gGourceGravity, gGourceRemovedFiles, gGourceDirMap, gStringHashSeed = SIM. Runtime-mutated settings: days_per_second, time_scale, file_idle_time = SIM; hide_*/highlight_*/ffp/camera_mode/show_key = REND/CAM.
+
+### T2.7 Do render-path functions mutate sim state?
+| Function | Sim? | Evidence |
+|---|---|---|
+| calcEdges | No | dirnode.cpp:882-893 only `spline.update(projected_*)` |
+| updateBloomVBO / updateFilesVBO | No | dirnode.cpp:1034-1075 fill VBOs; dt unused; gated by in_frustum |
+| checkFrustum / calcScreenPos | No | write in_frustum, projected_pos/spos, screenpos; read only by draw code |
+| updateVBOs, drawX | No | reads only |
+| mousetrace | Indirect | sets hover flags and calls selectUser/selectFile/selectBackground -> selection -> camera lock/bounds, fade-deselect. Runs only if `!hide_mouse && cursor.isVisible()` (2416) |
+
+Draw consumes no rand(). A headless Rust sim can skip draw entirely except for emulating selection if camera parity is needed.
+
+### T2.8 Randomness (consolidated)
+| Site | Purpose |
+|---|---|
+| gource.cpp:1555 | `gStringHashSeed=(rand()%10000)+1` (key S) |
+| user.cpp:106, 128 | overlap jitter user-user (dist<0.001), user-action (dist<0.001): `normalise(vec2(rand()%100-50, rand()%100-50))` (SIM) |
+| dirnode.cpp:625 | dir-dir overlap (posd<0.00001) (SIM) |
+| gource_settings.cpp:1319-1320 | the only `srand` in src: `--start-position random` -> `srand(time(0))`, then `(rand()%1000)/1000.0f` |
+
+Otherwise rand() is unseeded (libc default seed 1); call order (users in map order, then dirs recursively) fixes the stream. Port must reproduce libc rand() (platform-specific) and call order.
+
+### T2.9 Remaining gaps
+- RCommitLog ordering/dedupe (logmill, seeklog, formats) and the per-class logic (RUser::logic, RFile::logic, RDirNode::move/applyForces, ZoomCamera::adjust) are in other tick docs.
+- Regex::match group indexing in loadCaptions assumed matches[0]=group 1 (as used in gource.cpp).

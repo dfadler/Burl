@@ -449,3 +449,97 @@ Plain config used by the test harness: eight `[gource]` sections (multi-repo), k
 - `parseDateTime` regex/semantics (CS:284-363) reproduced by `src/test/datetime_tests.cpp`; accepted forms listed in comments CS:288-297. Local-time vs UTC: no tz => `mktime` local; `Z`/offset => `mktime_utc` then minus offset. `mktime_utc` in `src/core/timezone.cpp:41`.
 - Regex engine is PCRE2 (`src/core/regex.cpp`); filter semantics (search, unanchored) must be PCRE2-compatible (look-around used by git-branch regex).
 - Unverified (not read): `data/gource.1` man page text; README lines 330-end beyond ppm option block; consumer-side semantics of settings fields (other subtasks).
+
+## Tick 2 additions
+
+Cites: M=src/main.cpp, GS=src/gource_settings.cpp, CS=src/core/settings.cpp, CF=src/core/conffile.cpp, SH=src/gource_shell.cpp.
+
+### T2.1 Multi-section config sequencing
+
+**Storage (CF).** `ConfFile` = `map<name, list<ConfSection*>>`; `addSection` appends (file order preserved per name). `ConfSection` = `map<key, list<ConfEntry*>>`. `getSection(name)` = FIRST of the list; `getSections(name)` = whole list or NULL. `ConfFile::load` (CF:507-570): `clear()`, each `[name]` header closes the previous section and starts a new one (a repeated `[gource]` header makes another list element, no merge); `key=value` before any header goes to an unnamed `""` section (never imported); `#` only at column 0 is a comment; blank lines skipped; any other line throws `ConfFileException` "could not parse line"; values right-trimmed. `ConfSection::addEntry` appends (multi-value); `setEntry` deletes ALL entries of that key then inserts one (CF:293-310). `getEntry` = first entry of the key.
+
+**Load order in main (M:40-130).**
+
+| Step | Behaviour |
+|---|---|
+| 1 | `parseArgs(argc,argv,conf,&files)` into an EMPTY conf: bare tokens -> `files`; `command-line` keys (help, extended-help, log-command, *-log-command, load-config, save-config, output-custom-log, log-level) are handled immediately and never stored (CS:255, GS:239-251) |
+| 2 | If no `--load-config` and `files` non-empty: first file ending `.conf`/`.cfg`/`.ini` (name longer than ext) that loads without `ConfFileException` becomes `load_config` and is erased from `files` (M:44-76) |
+| 3 | If `load_config`: `conf.clear(); conf.load(file); parseArgs(argc,argv,conf)` again (no files vec) - CLI re-applied OVER the file (M:~86-92) |
+| 4 | If `files` non-empty: LAST file is `path`; `setEntry("path",path)` on EVERY `[gource]` section (M:98-103); no `[gource]` section -> `conf.setEntry("gource","path",..)` creates one |
+| 5 | `importDisplaySettings(conf)` (first `[display]` only; defaults reset; returns early if absent, CS:365-371), then `importGourceSettings(conf)` with section = `getSection("gource")`, auto-adding an empty `[gource]` if none (GS:615-619). Only the FIRST `[gource]` is validated here |
+| 6 | `--save-config`: `conf.save()` then `exit(0)`; `--output-custom-log` with non-empty path: write log then `exit(0)` |
+
+**Routing of keys to sections.** `GourceSettings::default_section_name = "gource"` (GS:219). Keys routed to `[display]`: viewport, windowed, fullscreen, frameless, screen, window-position, multi-sampling, output-ppm-stream, output-framerate, transparent, no-vsync, high-dpi (CS:31-43). A `-WxH` token writes `display.viewport` via `setEntry` (CS:208-229). Everything else -> `[gource]`. Display settings are global: imported once, window created once.
+
+**CLI override semantics per section (CS:262-280).** A CLI option is applied to EVERY section of its target name: `multi-value` types (e.g. follow-user, highlight-user, filters) use `addEntry` (appended to each `[gource]`, in addition to the file's own entries); all other types use `setEntry` (replaces the key in each `[gource]`). Bools are stored as the string `"true"`. So CLI always beats the file for scalar keys in every section; for multi-value keys CLI adds to each section's list. If the target section does not exist it is created. Pass 1 (into the empty conf) is discarded by `conf.clear()` when a config is loaded; otherwise it is the conf used.
+
+**Unknown keys.** `ConfFile::unknownOptionException` exists but is never called, so unknown or misspelled keys in a config file are silently ignored. Unknown CLI options throw `unknown option X` (CS:238). Value errors use `entryException` (file + line number).
+
+**Runtime iteration (SH).** Ctor: iterator = `getSections("gource")->begin()`, `gGourceSettings.repo_count = countSection("gource")` (SH:34-36). `repo_count` other uses: slider shown only if ==1 (gource.cpp:168); Enter advances only if >1 (SH:177). `update()` calls `getNext()` when there is no Gource or `isFinished()`. `getNext()` (SH:205-253):
+
+1. delete current Gource, `transition_interval=1.0` (1 s cross-fade of the captured last frame);
+2. return NULL (app finishes) if `shutdown` or iterator at end;
+3. `importGourceSettings(*conf, *it)` runs `setGourceDefaults()` FIRST (GS:613): every gource-section setting (filters, hide flags, follow/highlight users, path, fonts, colours, hash seed, git-branch, etc.) is reset to defaults and rebuilt ONLY from that section's entries. Nothing per-repo leaks to the next section. Persisting across sections: `repo_count`, `log_level`, `shutdown`, `load_config`/`save_config`/`output_custom_filename`, all display settings, and the CLI overrides (because they were written into every section);
+4. exporter present and not (`dont_stop` || `loop` || path=="-") -> `stop_at_end=true`;
+5. `repo_count>1` and `stop_at_time<=0` and `stop_position<=0` -> `stop_at_time=60.0`;
+6. `++it`; at end: if `repo_count>1 && exporter==0` wrap to `begin()` (cycles forever interactively); with an exporter, or a single repo, the run ends after the last section;
+7. `new Gource(exporter)`.
+ESC sets `shutdown`. Enter (without Alt) sets `next=true` (SH:177) -> current Gource deleted and next started.
+
+**Gotchas.** (a) Sections after the first are validated lazily in `getNext()`; a `ConfFileException` there is not caught by main's run block, which catches only `ResourceException` and `SDLAppException` (M:210-226; `ConfFileException : std::exception`, conffile.h:30) -> uncaught -> `std::terminate`, after earlier repos already played. Port must pick: abort the same way, or validate all sections up front (behaviour change). (b) `path` existence is checked per section at import (GS:1629+).
+
+**tests/test.conf** (no reference found in Makefile.am/configure.ac/.github; presumably manual or external harness). Eight `[gource]` sections, each with `title` and `stop-at-time` (10,10,5,5,5,5,5,5), plus: `file-idle-time=0.0`, `path=` (logs/*.log) on 1,2,6,7, `user-filter=Andrew`, `file-filter=\.cpp`, `file-show-filter=\.cpp`, `caption-file`+`user-image-dir` (section 8, with `path=logs/utf8.log`). Sections 3-5 have no `path` -> default `.` after the reset. It exercises: per-section reset (filters must not leak), relative paths resolved from CWD, multi-repo wrap (repo_count=8). Suggested port test: run each section, assert filters absent in the following one.
+
+### T2.2 Help (-h/-H) vs man page vs README
+
+Method: set diff of `--long` tokens (help = GS:42-209; man = data/gource.1 with `\-` unescaped; README), plus `arg_types` keys.
+
+| Option | -h/-H | man | README |
+|---|---|---|---|
+| `--disable-auto-skip` | yes | NO | NO |
+| `--dont-stop` | yes | NO | NO |
+| `-f` / `--fullscreen` | `-f, --fullscreen` | `-f` only | `-f, --fullscreen` |
+| `-w, --windowed` | NO | NO | yes (alias `w` exists, CS:47) |
+| `--path PATH` | yes | yes | yes |
+| `--ffp`, `--stop-on-idle`, `--hide-<elem>` (bloom,date,dirnames,files,filenames,mouse,progress,root,tree,users,usernames), `--disable-bloom`, `--disable-progress`, `--log-level`, `--extended-help`, `--git/svn/hg/bzr/cvs2cl/cvs-exp-command` | NO | NO | NO |
+
+Every other long option in help appears in both man and README. Man-only tokens `--chrono --stdout --xml` are the cvs2cl example, not options. `-H`: documented in `-h` line ("'-H' for extended help") of man/README.
+
+Wording and default mismatches:
+
+| Item | help | man / README | Code truth |
+|---|---|---|---|
+| `--dir-name-position` range | "between 0.0 and 1.0" | "0.1 and 1.0" | rejects outside 0.1-1.0 (GS:1625) - help wrong |
+| `--user-friction` | "(default: 0.67)" | no default | stored as `1/value` (GS:1421); internal default 1.0 (GS:472) |
+| `--filename-time` | "default: 4.0" | "(>= 2.0)" | default 4.0 (GS:487); error if <2.0 (GS:947) |
+| `--default-user-image` | "Default user image file" | man ".jpg"; README ".jpg or .png" | either accepted |
+| `--max-file-lag` | no -1 note | "Use -1 for no limit." | default 5.0 |
+| `--auto-skip-seconds` | "(default: 3)" | no default | 3.0 (GS:409) |
+| `--seconds-per-day` | "(default: 10)" | no default | days_per_second=0.1 (GS:410) |
+| `--loop-delay-seconds` | "(default: 3)" | no default; README omits SECONDS arg | 3.0 (GS:416), must be >0 |
+| `--time-scale` | "(default: 1.0)" | no range | rejects <=0 or >4.0 (GS:1266), undocumented |
+| `--stop-date` | - | man "Stop at the last entry prior to"; README "Stop after..." | wording only |
+| `--output-framerate` | "(25,30,60)" | same | enforced, CS:464-466 |
+| `--high-dpi` | omitted from help on _WIN32 (GS:57) | documented always | |
+| bloom/padding/caption-duration defaults | in help (0.75/1.0/1.1/10.0) | absent | match code |
+| README typos | | custom log `type`: "initial for the update type" (man: "Single character"); caption: "ISO 8601 or A unix timestamp" | text only |
+
+### T2.3 README lines 300-end (previously uncaptured)
+
+- No ffmpeg/PPM pipeline recipe in README; only a link to the wiki Videos page. Port needs only `--output-ppm-stream`/`-r` semantics (auto-hides progress, implies stop-at-end).
+- Custom log: pipe-delimited `timestamp|username|type|file|colour`, type A/M/D, timestamp ISO 8601 or unix, colour optional hex. Caption log: `timestamp|caption`.
+- cvs2cl recipe: `cvs2cl --chrono --stdout --xml -g-q`. `--log-command svn > f.log; gource f.log` round trip implies format auto-detection of saved logs.
+- Mouse: middle button toggles camera mode, left-drag pans, right-drag rotates; SPACE pause/resume (mouse inspection while paused); TAB cycles users.
+- Keys: V camera mode, C logo, K ext key, M mouse, N next log entry, S randomize colours, D/F/U name display modes, G users, T tree edges, R root edges, `<`/`>` time scale, `+`/`-` sim speed, keypad +/- zoom, TAB, F12 screenshot, Alt+Enter fullscreen, ESC quit. In code but not README: F11 toggles window frame (SH:160), Enter = next repo in multi-section.
+- No environment variables are documented in README or man.
+
+### T2.4 Environment variables and SDL hints (grep of src/)
+
+| Name | Where | Effect |
+|---|---|---|
+| `TZ` | src/core/timezone.cpp:13-35; src/formats/svn.cpp:121-141 | read and saved, set to `TZ=UTC` via `putenv` during date parsing, then restored/unset (`TZ=` if none). Port: do UTC arithmetic directly, no env mutation |
+| `TERM` | src/core/sdlapp.cpp:70 (Windows `initConsole` only) | presence => treat as existing console |
+| `SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS="0"` | src/main.cpp:174 (SDL2) | hint set before window creation |
+| others | - | no other getenv/setenv; no GOURCE_* vars; tests set only `TZ` (src/test/datetime_tests.cpp:27,31). Child VCS commands inherit the environment |
+
+Gaps after tick 2: `ConfFile::save` output format (key/section order) not traced; behaviour of the unnamed `""` section beyond "ignored" not verified; test.conf harness not located.

@@ -68,7 +68,7 @@ No graphics: after config import `Gource::writeCustomLog(path, file)` then `exit
 | Clear | `background_colour` default vec3(0.1,0.1,0.1) (#1A1A1A), alpha 1.0 (0.0 if `--transparent`); `glClear(COLOR|DEPTH)` once per frame in `drawBackground` | src/gource_settings.cpp:439, 1087-1100; src/gource.cpp:2025-2031; src/core/display.cpp:683-686 |
 | Background image | `--background-image` via `grabFile`, no mipmaps, centred at native size, SRC_ALPHA/ONE_MINUS_SRC_ALPHA, white | src/gource.cpp:102-105, 2033-2059 |
 | 2D mode | `glOrtho(0,w,h,0,-1,1)` (y down), identity modelview | src/core/display.cpp:696-702 |
-| 3D scene | `gluPerspective(fov=90, w/h, znear=0.1, zfar=max+1)` + `gluLookAt(pos,target,up)`; start z=-300 | src/zoomcamera.cpp:23-26, 54, 75-82; src/gource.cpp:138 |
+| 3D scene | `gluPerspective(fov=90, w/h, znear=0.1, zfar=max+1)` + `gluLookAt(pos,target,up)`; start z=-300 | src/zoomcamera.cpp:23-26, 54, 75-82; src/gource.cpp:140 |
 | Screen projection | `gluProject` of dir/file/user positions, y flipped by viewport height; used for 2D edges and text | src/dirnode.cpp:945-975; src/gource.cpp:2452-2476 |
 | Depth test | never enabled in draw code; painter's order only | src/gource.cpp:2025-2780 |
 | HiDPI | width/height = drawable size; mouse scaled by viewport_dpi_ratio; default font scale from dpi ratio or `1 + max(0, height/threshold)` | src/gource.cpp:39-47 |
@@ -238,3 +238,122 @@ Not a shader asset: data/shaders contains exactly these six files (no README).
 - Mouse cursor drawing (src/core/mousecursor.cpp), not exported.
 - Pawn/file/user colour, size, alpha formulas (simulation fan-out; src/pawn.cpp).
 - `--ffp` immediate-mode path only referenced; recommended to drop.
+
+## Tick 2 additions
+
+### T2.a Shader uniform plumbing (src/core/shader_common.cpp, src/core/shader.cpp)
+
+- Declaration: uniforms are parsed from GLSL source by regex `^\s*uniform\s+(\w+)\s+(\w+)(?:\[(\d+)\])?\s*;\s*(?://\s*(.+))?$` (shader_common.cpp:14), typed by GLSL type (int, float, bool, sampler1D/2D/3D, vec2-4, mat3/4, arrays); trailing `// comment` kept as hint.
+- Per-call flow: `setFloat/setSampler2D/...(name, v)` stores the value in the named `ShaderUniform` (shader_common.cpp:1293-1373); `use()` (shader_common.cpp:1190-1208) = optional dynamic recompile, `glUseProgram`, then `applyUniforms()` -> `Shader::applyUniform` (shader.cpp:317-374), a `glUniform*` switch by type; location looked up lazily by name (-1 silently skipped). Values are re-uploaded on every `use()`.
+- Rust port: no plumbing needed; three small uniform structs.
+
+| Program | Files (data/shaders) | Uniforms (value; set at) | Notes |
+|---|---|---|---|
+| shadow | shadow.vert/frag | `tex` sampler2D=0; `shadow_strength`=0.5 (gource.cpp:2146-2147 files, 2307-2308 and 2333-2334 users). Frag: `rgba = (0,0,0, gl_Color.a * tex.a * shadow_strength)`. Modelview translate: files (2,2) (gource.cpp:2150-2154); users `(2,2)*user_scale` (2312) | vertex: `ftransform`, passes `gl_Color`, texcoord0 |
+| text | text.vert/frag | `tex`=0; `shadow_strength`=0.7 (hard-coded, 2524); `texel_size`=1/min(512, GL_MAX_TEXTURE_SIZE) (computed once gource.cpp:89-92, set 2525); drawn by `fontmanager.drawBuffer()` (2527) | same vertex stage |
+| bloom | bloom.vert/frag | NONE. Vertex: `pos = gl_Vertex.xyz - gl_MultiTexCoord0.yzw` (node centre carried in texcoord yzw), `texcoord0.x` = radius scale. Drawn with `glBlendFunc(GL_ONE,GL_ONE)`, `bloom_shader->use(); bloom_vbo.draw()` (gource.cpp:2200-2207) | varying `vec3 pos`, `gl_Color` |
+
+Matrix and colour are fixed-function state (`ftransform`, `gl_Color`): a port needs one view-proj uniform plus per-vertex colour.
+
+### T2.b Font metrics, atlas, drawing (src/core/fxfont.cpp, gource.cpp)
+
+| Item | Value | Cite |
+|---|---|---|
+| Font file | FreeSans.ttf (data/fonts); `--font-file` overrides | gource_settings.cpp:35-36,446 |
+| FT load | dpi 72, `FT_LOAD_DEFAULT` (hinted), `FT_Set_Char_Size(face,64*size,64*size,dpi,dpi)`, `FT_RENDER_MODE_NORMAL` 8-bit AA | fxfont.h:261; fxfont.cpp:243,81 |
+| Advance | integer px: `adv>>6` of hinted metrics; NO kerning; `getWidth` = sum of advances, per byte via FTUnicodeStringItr | fxfont.cpp:87,332-345 |
+| Quad | size `(bmp.w+2, bmp.rows+2)`; offset `(bmp.left, -bmp.top)+(0.5,-0.5)` from pen; pen y = baseline | fxfont.cpp:85-86 |
+| Heights | glyph height `ceil(metrics.height/64)`; `getMaxHeight` = running max of loaded glyphs; `getHeight()` = `ceil(ascender+descender)` (descender negative) | fxfont.cpp:79,306,324-330,514 |
+| Precache | `0-9a-zA-Z;:'",<.>/?-_=+!@#$%^&*()\ ` and space; others lazily (max height can grow) | fxfont.cpp:249 |
+| Tab | pen += advance('M')*4 in draw only (not in getWidth) | fxfont.cpp:215,384 |
+| Atlas | page = square `min(512, GL_MAX_TEXTURE_SIZE)`, GL_ALPHA 8-bit, CLAMP_TO_EDGE, LINEAR/LINEAR, no mipmaps. Shelf pack: cursor (1,1), pad 3; wrap if `x+w+3>W` -> x=1, y+=max_h+3 (max_h starts 1, never reset per row); new page if `y+rows+3>H`. UVs `u0=(x-0.5)/W, v0=(y-0.5)/H, u1=(x+w+1.5)/W, v1=(y+rows+1.5)/H` | fxfont.cpp:153-195,295; texture.cpp:167-182 |
+| draw() order | `align_right: x-=width`; `align_top: y+=getHeight()`; `round: x,y=roundf`; y then = baseline. Defaults: shadow off, shadow_strength 0.7, offset (1,1), round false, align_top true, white | fxfont.cpp:559-580,447 |
+| Shadow (FFP path) | extra black pass at +(1,1), alpha = a*0.7 | fxfont.cpp:559+ |
+| Shadow (shader buffer) | text.frag: `colour_a=tex(uv).a; shadow_a=tex(uv-texel_size).a*0.7; comb=1-(1-shadow_a)*(1-colour_a); if(comb>0) colour_a/=comb; out=gl_Color*vec4(vec3(colour_a),comb)`; 1px down-right, applies to every glyph in the buffer regardless of dropShadow flag | data/shaders/text.frag |
+
+Font sizes (px at 72dpi). F = font_scale = `viewport_dpi_ratio.x` if >1 else `1 + display.height/1600` (int div), only when default_font_scale (gource.cpp:40-47); `scaled_X = clamp((int)(X*F),1,100)` (gource_settings.cpp:522-527).
+
+| Font | Size | Flags | Cite |
+|---|---|---|---|
+| fontlarge | 42*F | shadow, round, alignTop | gource.cpp:50 |
+| fontmedium | 16*F | date/title | :54 |
+| fontcaption | 16 (unscaled `caption_size`) | alignTop false | :58 |
+| font (HUD) | 14*F | round | :63 |
+| fontdirname | 14*F | alignTop, round forced false at draw (2494) | :67 |
+| user name | 14*F; selected 18 unscaled | alignTop false | user.cpp:305-313 |
+| file name | 14*F; selected 18 unscaled, colour selection (1,1,0.3) | alignTop true | file.cpp:54-65 |
+| key / slider / textbox | 16*F / 16*F / 18*F | | key.cpp:166, slider.cpp:28, gource.cpp:142 |
+
+Text positions (gource.cpp):
+
+| Element | Position | Cite |
+|---|---|---|
+| Date | x = `width/2 - date_x_offset` (`(int)getWidth*0.5`, refreshed only if changed by >5px), y=20 (top-aligned) | 1470-1472, 2646 |
+| Title | alignTop false, `(10, height-10)` baseline | 2652-2656 |
+| Logo | "Gource" centred, y = `h/2 - 30*F`; tagline `h/2+10*F`; copyright `h/2+30*F` | 2618-2641 |
+| Caption y | `canSeek ? slider.min.y-35 : height - fontmedium.maxH - 20`; with title `min(.., height-20-maxH)`; floor; stacked upward by `fontcaption.getMaxHeight()` until unique | 1778-1846 |
+| Caption x | offset 0: `(int)(w/2 - width/2)`; <0: `w + off - width`; >0: off | 1793-1842 |
+| Caption alpha | `fade_in=min(2,dur/3)`; `min(1, min(elapsed, max(0,dur-elapsed))/fade_in)`; dur default 10 | caption.cpp:49-53 |
+| Pass order | dir names -> unselected users -> unselected files into one buffer, drawn with text shader (shadow 0.7); then selected user and selected file via FFP CPU shadow; date/title/captions/HUD FFP | 2491-2539 |
+
+### T2.c Label placement and culling
+
+| Label | Formula | Cite |
+|---|---|---|
+| Name fade (all pawns) | `done = nametime - name_interval`; done<1: a=done; <nametime-1: 1; else nametime-done. nametime 5 (user name_interval init 5.0; file `filename_time`). visible = `!((!selected && name_interval<0) || hidden)` | pawn.cpp:112-127; user.cpp:43; file.cpp:36 |
+| User name | anchor world `(pos.x, pos.y - dims.y*0.5)` -> gluProject, y flipped; `x = sx - namewidth*0.5; y = sy - font.getMaxHeight()` (baseline, alignTop false, no rounding). Drawn only if highlight_all/highlighted/selected/alpha>0. alpha = (selected\|\|highlighted\|\|highlight_all) ? user getAlpha : fade. Colour selected=selection, highlighted=highlight_colour, else white | user.cpp:370-395,330 |
+| File name | anchor `absPos + (5.5, selected ? -2 : -1)` projected, y flipped; alignTop true. unselected: extension only if `file_extensions` else name; selected: name, 18px, alpha 1. Skip if `!selected && alpha<=0.01` | file.cpp:262-291 |
+| File cull | dir in frustum, !hide_filenames, !hide_files | dirnode.cpp:983-990 |
+| Dir name skip | root; hide_dirnames; `dir_name_depth>0 && dir_name_depth < depth-1` (root depth 1); `!highlight_dirs && since_last_node_change>5`; not visible | dirnode.cpp:930-943,231-233 |
+| Dir name alpha/text | `highlight_dirs ? 1 : max(0,5-since_change)/5`; text = last path component; colour dir_colour; left edge at label_pos (no centring), alignTop true | dirnode.cpp:930-943, spline.cpp:60-69 |
+| label_pos | `pos=dir_name_position` (default 0.5, valid 0.1-1.0); `s=0.5-abs(pos-0.5); p=1-s; label = pos1*(p*(1-pos)) + pos2*(p*pos) + spos*s` (pos1 parent projected, pos2 own, spos spline mid); default weights 0.25/0.25/0.5 | spline.cpp; gource_settings.cpp:458,1622 |
+| dir_name_depth | default 0 = unlimited; must be >0 if given | gource_settings.cpp:457,1611 |
+
+### T2.d UI geometry (screen px, origin top-left, blend SRC_ALPHA/ONE_MINUS_SRC_ALPHA, no texture on boxes)
+
+| Widget | Geometry / colour / alpha | Cite |
+|---|---|---|
+| FileKey entry | width `90*F`, height `scaled_font_size+4`, left_margin `scaled_font_size+4`, shadow offset (3,3). Pos x = `alpha*left_margin`, y = pos_y. Shadow quad black, alpha `a*0.333`. Main quad gradient along x: left edge colour `col*0.5`, right edge `col`, alpha a. Ext text at `((int)x+2,(int)y+3)` white, no shadow; count at `((int)x+width+4,(int)y+3)` with shadow. Ext truncated char by char until `getWidth <= width-15*F`, then "..." appended | key.cpp:14-40,115-158 |
+| FileKey layout | rebuilt every `update_interval`=1.0 s (gource.cpp:146); sort count desc then ext asc; max visible `max(0,(int)((height-150)/20))`; row y = `n*(scaled_font_size+6)` starting at `scaled_font_size+6`; entry slides src_y->dest_y linearly over 1.0 s (first placement snaps); alpha ramps +/-dt (1 s fade); removed when count<=0 && alpha<=0. Colour = colourHash(ext), white if ext empty | key.cpp:50-110,215-290 |
+| Slider | bounds min `(35, height-70)`, max `(width-35, height-35)` drawn as 2px line-strip rectangle; marker 2px vertical line at `x=min.x+(max.x-min.x)*percent` spanning min.y..max.y. Shadow copy offset (2,2), black alpha `0.7*alpha`; main white (slidercol) alpha. alpha ramps +/-dt, hold `fade_time`=1.0 after mouse leaves. Caption (date) at `x=clamp(mouseover - w/2, 1, width-w-1)`, `y = bounds.min.y - 25*F`, font 16*F with shadow | slider.cpp:28-60,90-170 |
+| TextBox (hover) | font 18*F; `rect_width = max(getWidth(line)+6)`, `rect_height = 2 + n*(fontsize+4)`; shadow (3,3) black `alpha*0.333`; fill = hovered pawn colour * brightness 0.5 (gource.cpp:143), alpha 1; text white at `((int)x+2, (int)y+3 + i*(fontsize+4))`. setPos(mouse, adjust): `y -= rect_height`; if `x+w>display.w`: `x -= w` when `x-w-fontheight>0` else `x = display.w - w`; if y<0: `y += rect_height + fontheight`; if `y+h>display.h`: `y -= rect_height`. Max 1024 chars/line. Lines: file name then path without leading '/'; or user name | textbox.cpp:20-155; gource.cpp:142-144,2674-2692 |
+
+### T2.e Pawn / file / user colour, size, alpha
+
+| Quantity | Formula | Cite |
+|---|---|---|
+| Base alpha | `min(elapsed/fadetime,1)`, fadetime 1.0 | pawn.h:93 |
+| Quad | centred on pos; w=`size`, h=`size*graphic_ratio` (graphic h/w); UV (0,0)-(1,1); colour `(col, alpha)` | pawn.cpp:150-167 |
+| Shadow quad | pos + shadowOffset (2,2) (users `(2,2)*user_scale`); colour `(0,0,0, alpha*0.5)` (gGourceShadowStrength) | pawn.cpp:20,125-148; user.cpp:31 |
+| File size | `gGourceFileDiameter*1.05` = 8.0*1.05 | file.cpp:20,29 |
+| File colour | selected: white; else lerp(touch_colour, file_colour) with lc=elapsed-last_action while <1 | file.cpp:152-162 |
+| File alpha | base; if fade_start>0: `1 - clamp(elapsed-fade_start,0,1)`; fade_start set when idle > file_idle_time | file.cpp:164-205 |
+| User size | `20 * user_scale` | user.cpp:29 |
+| User colour | `colourHash(name)` or white when a user image is used and !colour_user_images; then `c = c*0.6 + 0.4; c *= 0.9`; selected = white | user.cpp:174-217,333 |
+| User alpha | base; after `user_idle_time` (3.0) idle: `1 - min(elapsed-last_action-idle, 1)` | user.cpp:343-349 |
+| Name colour | user: selected -> selection (1,1,0.3), highlighted -> highlight_colour, else white; file: selected -> selection, else white | user.cpp:330; file.cpp:141 |
+
+### T2.f Display / DPI / frameless mapping
+
+- SDL2 window flags: OPENGL|SHOWN; `frameless` -> BORDERLESS; `resizable && !frameless` -> RESIZABLE; fullscreen -> FULLSCREEN; ALLOW_HIGHDPI only if `--high-dpi` and not Windows (display.cpp:82-92). Default `high_dpi_aware=false` (display.cpp:47), so macOS gets a 1x backbuffer unless `--high-dpi`.
+- Windows branch: with `--high-dpi`, call `SetProcessDpiAwareness(PER_MONITOR=2)` (SHCORE, 8.1+) else `SetProcessDPIAware()` before window creation (display.cpp:549-593), needed to get real 4K pixels. winit is DPI-aware by default: request `PhysicalSize` and ignore scale factor unless `--high-dpi`.
+- Viewport: on resize `width/height = SDL_GL_GetDrawableSize` (pixels), `glViewport(0,0,w,h)`; `viewport_dpi_ratio = drawable/window size` (display.cpp:173-181,520-545). Only consumer: font_scale (T2.b). Port: drawable = `inner_size()` physical px; ratio = scale_factor only when high-dpi requested, else 1.
+- Frameless toggle (windowed only, display.cpp:405-470): SetWindowBordered(false), restore size/position (SDL bug 2791 workaround), then recreate video mode to drop RESIZABLE; Windows also uses GetWindowRect so the borderless window keeps outer framed size. winit: `set_decorations(false)`.
+- Fullscreen toggle uses FULLSCREEN_DESKTOP, saves/restores windowed size (display.cpp:360-400). Export path bypasses all of this (offscreen target).
+- Clear colour (0,0,0,1) default; `enable_alpha` makes clear alpha 0 (display.cpp:40-62).
+
+### T2.g Textures (src/core/texture.cpp, src/user.cpp)
+
+| Item | Detail | Cite |
+|---|---|---|
+| Loader | SDL_image `IMG_Load`; 8-bit palette converted to RGBA32; only 3/4 bytes-per-pixel accepted (RGB/RGBA/BGR/BGRA by mask), others throw TextureException | texture.cpp:258-305 |
+| Upload | internal format RGBA (ALPHA/LUMINANCE only for fonts); mipmaps via `gluBuild2DMipmaps` (GLU rescales non-POT to POT) else `glTexImage2D`; straight alpha | texture.cpp:216-236 |
+| Filtering | mipmapped: min LINEAR_MIPMAP_LINEAR (trilinear default true, texture.cpp:37), mag LINEAR; else LINEAR/LINEAR. Wrap CLAMP_TO_EDGE for file/user textures; beam.png default REPEAT | texture.cpp:167-182; gource.cpp:36,77-78 |
+| Default images | file.png 256x256 RGBA; user.png 384x512 RGBA (graphic_ratio 4/3); beam.png 128x1 RGBA; bloom.tga 512x512 RGB RLE; bloom_alpha.tga 512x512 RGBA RLE | gource.cpp:36,76-78 |
+| User image lookup | `--user-image-dir`: scans `.jpg/.jpeg/.png` (ext case-insensitive); key = filename without ext (macOS NFC-normalised); exact author-name match; image colour not tinted (usercol white) unless `--colour-images`. Missing -> `--default-user-image`, else data `user.png`. Loaded with `grabFile(mipmap=true, CLAMP_TO_EDGE)`; aspect via graphic_ratio | gource_settings.cpp:800-860; user.cpp:183-217 |
+| Logo / background | `grabFile(logo, mipmap_logo)`, `grabFile(background_image)` | gource.cpp:99,104 |
+
+Port notes: use `image` crate plus own mip chain and trilinear clamp-to-edge sampler; exact GLU POT resampling is a sharpness-only difference.
+
+### T2 gaps
+- GLU rounding rule for 384-wide user.png not verified; Bounds2D line width on HiDPI; where `--high-dpi` calls `enableHighDPIAwareness` not traced; file_scale effect on file size not re-derived.

@@ -32,7 +32,7 @@ All paths relative to repo root. Line cites are `file:line` in `src/` unless not
 | `PI` | `#define PI 3.14159265` (f64 literal, 9 sig. digits, NOT std PI) | core/pi.h:31 |
 | `normalise(v)` | `l=length(v); l>0 ? v/l : v` (zero vector stays zero) | core/vectors.cpp:7-23 |
 | `stringHash(s)` | `val=0; for i<n: val += s[i] * (gStringHashSeed ^ (n-i))`; **`^` is XOR not power**; `s[i]` is signed `char` (UTF-8 bytes >=128 negative); `int` arithmetic, signed overflow wraps in practice; `if(val<0) val=-val`; `n=str.size()` | core/stringhash.cpp:32-46 |
-| `gStringHashSeed` | int, default 31 (re-set to 31 at settings load gource_settings.cpp:490; changed by recolour) | core/stringhash.cpp:30 |
+| `gStringHashSeed` | int, default 31 (re-set to 31 at settings load gource_settings.cpp:489; changed by recolour) | core/stringhash.cpp:30 |
 | `vec2Hash(s)` | `h=stringHash; x=((h/7)%255)-127; y=((h/3)%255)-127; normalise(vec2(x,y))` (ints, then to f32) | stringhash.cpp:48-57 |
 | `colourHash(s)` | `h=stringHash; if(h==0) h++; r=(h/7)%255; g=(h/3)%255; b=h%255; normalise(vec3(r,g,b))` | stringhash.cpp:71-83 |
 | `Bounds2D::overlaps` | inclusive: false iff `max.y<b.min.y \|\| min.y>b.max.y \|\| max.x<b.min.x \|\| min.x>b.max.x` | core/bounds.h:117-125 |
@@ -331,7 +331,7 @@ Constants (user.cpp:20-22): `gGourceBeamDist=100.0`, `gGourceActionDist=50.0`, `
 | 500, 5.0, 3.0, 1.0, 1.0 | defaults: max_user_speed, max_file_lag, user_idle_time, user_friction, user_scale | gource_settings.cpp:468-473 |
 | 0.0, 4.0, 0.0, 0.75, 1.0 | defaults: elasticity, filename_time, file_idle_time, bloom_intensity, bloom_multiplier | gource_settings.cpp:460,487,411,437,436 |
 | 0.1, 3.0 | defaults: days_per_second, auto_skip_seconds | gource_settings.cpp:410,409 |
-| 1/60 | max tick | gource.cpp:156 |
+| 1/60 | max interactive tick (exporter path uses 1/gource_fps instead; see timing.md) | gource.cpp:156 |
 | 31 | default `gStringHashSeed`; recolour sets `rand()%10000+1` | stringhash.cpp:30; gource.cpp:1555 |
 
 ## 9. Randomness and time
@@ -355,7 +355,7 @@ Constants (user.cpp:20-22): `gGourceBeamDist=100.0`, `gGourceActionDist=50.0`, `
 7. Uninitialised in C++: `RUser::accel`, `RFile::dest`, `RFile::touch_colour`, `RDirNode::in_frustum`, `node_count`. Treat as zero/false.
 8. Fade/expire use `> 0.0f` tests (section 4 quirk).
 9. Untouched files keep `elapsed=0`, `hidden=true`, and are not counted in `visible_count`/`dir_area`.
-10. Time: dt is clamped to 1/60 s; for repeatable simulation use fixed 1/60 (the frame-exporter path already does this).
+10. Time: interactive dt is clamped to 1/60 s and scaled by time_scale; the exporter path uses a fixed 1/gource_fps step (gource_fps = smallest multiple of output_framerate >= 60), NOT 1/60. timing.md is authoritative.
 
 ## 11. Rendering-relevant rules (visual equivalence only)
 

@@ -464,10 +464,10 @@ Cites: M=src/main.cpp, GS=src/gource_settings.cpp, CS=src/core/settings.cpp, CF=
 |---|---|
 | 1 | `parseArgs(argc,argv,conf,&files)` into an EMPTY conf: bare tokens -> `files`; `command-line` keys (help, extended-help, log-command, *-log-command, load-config, save-config, output-custom-log, log-level) are handled immediately and never stored (CS:255, GS:239-251) |
 | 2 | If no `--load-config` and `files` non-empty: first file ending `.conf`/`.cfg`/`.ini` (name longer than ext) that loads without `ConfFileException` becomes `load_config` and is erased from `files` (M:44-76) |
-| 3 | If `load_config`: `conf.clear(); conf.load(file); parseArgs(argc,argv,conf)` again (no files vec) - CLI re-applied OVER the file (M:~86-92) |
-| 4 | If `files` non-empty: LAST file is `path`; `setEntry("path",path)` on EVERY `[gource]` section (M:98-103); no `[gource]` section -> `conf.setEntry("gource","path",..)` creates one |
+| 3 | If `load_config`: `conf.clear(); conf.load(file); parseArgs(argc,argv,conf)` again (no files vec) - CLI re-applied OVER the file (M:84-90, `conf.clear()` at 86; corrected tick 4) |
+| 4 | If `files` non-empty: LAST file is `path`; `setEntry("path",path)` on EVERY `[gource]` section (M:93-107, `setEntry` at 101; corrected tick 4); no `[gource]` section -> `conf.setEntry("gource","path",..)` creates one |
 | 5 | `importDisplaySettings(conf)` (first `[display]` only; defaults reset; returns early if absent, CS:365-371), then `importGourceSettings(conf)` with section = `getSection("gource")`, auto-adding an empty `[gource]` if none (GS:615-619). Only the FIRST `[gource]` is validated here |
-| 6 | `--save-config`: `conf.save()` then `exit(0)`; `--output-custom-log` with non-empty path: write log then `exit(0)` |
+| 6 | `--save-config`: `conf.save()` then `exit(0)` (M:113-116; output = sections in std::map order, i.e. alphabetical by section name, list order within a name, per `ConfFile::save` CF:457-487; added tick 4); `--output-custom-log` with non-empty path: write log then `exit(0)` |
 
 **Routing of keys to sections.** `GourceSettings::default_section_name = "gource"` (GS:219). Keys routed to `[display]`: viewport, windowed, fullscreen, frameless, screen, window-position, multi-sampling, output-ppm-stream, output-framerate, transparent, no-vsync, high-dpi (CS:31-43). A `-WxH` token writes `display.viewport` via `setEntry` (CS:208-229). Everything else -> `[gource]`. Display settings are global: imported once, window created once.
 
@@ -509,7 +509,7 @@ Wording and default mismatches:
 
 | Item | help | man / README | Code truth |
 |---|---|---|---|
-| `--dir-name-position` range | "between 0.0 and 1.0" | "0.1 and 1.0" | rejects outside 0.1-1.0 (GS:1625) - help wrong |
+| `--dir-name-position` range | "between 0.0 and 1.0" | "0.1 and 1.0" | rejects outside 0.1-1.0 (GS:1624-1625); golden help-long.txt:128-129 confirms help text says 0.0 - help wrong |
 | `--user-friction` | "(default: 0.67)" | no default | stored as `1/value` (GS:1421); internal default 1.0 (GS:472) |
 | `--filename-time` | "default: 4.0" | "(>= 2.0)" | default 4.0 (GS:487); error if <2.0 (GS:947) |
 | `--default-user-image` | "Default user image file" | man ".jpg"; README ".jpg or .png" | either accepted |
@@ -520,7 +520,7 @@ Wording and default mismatches:
 | `--time-scale` | "(default: 1.0)" | no range | rejects <=0 or >4.0 (GS:1266), undocumented |
 | `--stop-date` | - | man "Stop at the last entry prior to"; README "Stop after..." | wording only |
 | `--output-framerate` | "(25,30,60)" | same | enforced, CS:464-466 |
-| `--high-dpi` | omitted from help on _WIN32 (GS:57) | documented always | |
+| `--high-dpi` | omitted from help on _WIN32 (`#ifndef _WIN32` at GS:59; corrected tick 4: was 57); present in golden help-long.txt | documented always | |
 | bloom/padding/caption-duration defaults | in help (0.75/1.0/1.1/10.0) | absent | match code |
 | README typos | | custom log `type`: "initial for the update type" (man: "Single character"); caption: "ISO 8601 or A unix timestamp" | text only |
 
@@ -543,3 +543,8 @@ Wording and default mismatches:
 | others | - | no other getenv/setenv; no GOURCE_* vars; tests set only `TZ` (src/test/datetime_tests.cpp:27,31). Child VCS commands inherit the environment |
 
 Gaps after tick 2: `ConfFile::save` output format (key/section order) not traced; behaviour of the unnamed `""` section beyond "ignored" not verified; test.conf harness not located.
+
+## Verification (tick 4)
+
+Sampled 28 claims. Confirmed exactly: ConfFile storage/load semantics (multi-section list, repeated header, unnamed section, column-0 `#`, setEntry deleting all, CF:285-312, 507-570), main.cpp load order, section routing table (CS:31-43), CLI add/set per section (CS:262-280), `-WxH` alias, unknownOptionException never called (def CF:752 only), GourceShell ctor/getNext/Enter logic, ConfFileException:std::exception and main's catch list, tests/test.conf contents (8 sections, filters/paths as stated), env list (TZ timezone.cpp:13-35, svn.cpp:121-141; TERM sdlapp.cpp:70; hint main.cpp:174; no other getenv), help-vs-man-vs-README table (re-derived by token diff against golden/help-long.txt and an unescaped gource.1; all rows held, man lacks --disable-auto-skip/--dont-stop/--windowed, man has `-f` only, dir-name-position 0.0 vs 0.1 drift real, defaults 3/10/3/4.0/0.67 match help text). Corrections: main.cpp line cites for steps 3/4, GS:57 -> 59 for the WIN32 guard, GS:1624-1625 range check.
+Added: ConfFile::save order (answers the prior gap). Remaining gaps: unnamed `""` section effects beyond being skipped; whether any CI harness runs tests/test.conf.

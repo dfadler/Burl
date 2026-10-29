@@ -6,7 +6,7 @@ Scope: build system, packaging, platforms, C++ deps and Rust crate candidates. C
 
 | Item | Value | Source |
 |---|---|---|
-| Version string | `0.57` (single source: `#define GOURCE_VERSION "0.57"`, printed by `--version` as `Gource v%s`) | src/gource_settings.h:21, src/gource_settings.cpp:50 |
+| Version string | `0.57` (single source: `#define GOURCE_VERSION "0.57"`, printed as `Gource v%s` on the first line of `-h`/`-H`; there is NO `--version` option, it exits 1 with "unknown option" (golden/exit-codes.txt) (corrected tick 4)) | src/gource_settings.h:21, src/gource_settings.cpp:50 |
 | Also duplicated in | `AC_INIT(Gource, 0.57, ...)`; `dev/bin/build_tar.pl` and `build_win64.pl` regex-scrape the header; build_tar dies if configure.ac/ChangeLog lack the version | configure.ac:6, dev/bin/build_tar.pl:15-22,87-94, dev/bin/build_win64.pl:17-22 |
 | Latest ChangeLog entry | 0.57: "Handle loading indexed colour images"; 0.56 added `--author-time`, Boost 1.69 floor, compat GL profile | ChangeLog:1-9 |
 | History | ~928 commits on this branch; ChangeLog back to older releases | `git log` |
@@ -224,7 +224,7 @@ Source for every row: `https://crates.io/api/v1/crates/<name>` (fields `max_stab
 5. **Windows**: HWND-level hacks (alt-key beep, frame-size math, console handling) have no direct winit equivalent; need `windows-sys`/winit extensions or accept minor differences.
 6. **VCS invocation by shell string** (system() + temp file, commitlog.cpp:94) - Rust should reproduce exact commands (hg/bzr/svn/git/cvs flags in formats/*.cpp) and quoting, including `--date` ranges from `--start-date/--stop-date`.
 7. **Missing CI** - nothing to port; define new.
-8. **Version string** must stay `0.57` (or the next release) and print `Gource v0.57` for `--version`/help header (gource_settings.cpp:50).
+8. **Version string** must stay `0.57` (or the next release) and print `Gource v0.57` as the help header; do not add a `--version` option unless parity with the C++ "unknown option" exit is deliberately dropped (corrected tick 4) (gource_settings.cpp:50).
 
 ## 9. Gaps
 - (Resolved in tick 2) Per-crate license strings now verified, see 8.1. Transitive-dependency licenses still unchecked.

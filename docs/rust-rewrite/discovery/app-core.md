@@ -705,3 +705,7 @@ Otherwise rand() is unseeded (libc default seed 1); call order (users in map ord
 ### T2.9 Remaining gaps
 - RCommitLog ordering/dedupe (logmill, seeklog, formats) and the per-class logic (RUser::logic, RFile::logic, RDirNode::move/applyForces, ZoomCamera::adjust) are in other tick docs.
 - Regex::match group indexing in loadCaptions assumed matches[0]=group 1 (as used in gource.cpp).
+
+## Verification (tick 4)
+Checked against source, Tick 2 additions (no "Tick 3 corrections" section exists in this doc): all 40+ input rows of T2.2 (mouse 338-557, keys 655-875, arrows 1613-1652, zoom 400-419); T2.3 logic order lines (1693, 1702-1740, 1867-1877) and updateUsers 1365-1402; T2.4 commit loop 1744-1774, readLog 1137/1148, N-key/auto_skip (settings 409, 717); T2.5 updateCamera 1475-1550 (verbatim); T2.6 every gource.h member line 53-193 (all match, 17 `*_time` = 154-170); T2.7/T2.8 dirnode.cpp function starts (882, 1034, 1056), rand() sites (dirnode 625, user 106/128, gource 1555, settings 1319-1320), render gate 2416; T2.1 sdlapp.cpp 317, 352-358, 422-460; use_selection_bounds/commit_seq/starting_z/commitqueue_max_size dead/const claims.
+Result: about 75 cites/claims confirmed, 0 wrong. Unconfirmed: dirnode.cpp:895 logic-body ordering and the Part 1 sec 6/10 cross references (outside the sampled range); gource.cpp:1984 selectBackground call site not re-read (only 545-557 body confirmed).

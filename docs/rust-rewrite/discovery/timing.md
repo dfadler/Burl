@@ -23,9 +23,9 @@ SDLApp::run()                                              sdlapp.cpp:405
     dt = delta_msec / 1000.0f      (f32)                   :442
     fps_updater += delta_msec; if >=1000: updateFramerate  :444-448  (fps display only)
     while SDL_PollEvent: handleEvent (keys/mouse/quit)     :452-455
-    update(t, dt)  -> GourceShell::update                  :458
-    display.update()   (swap; vsync via main.cpp:144)      :461
-    frame_count++                                          :462
+    update(t, dt)  -> GourceShell::update                  :457 (corrected tick 4: was :458)
+    display.update()   (swap; vsync via main.cpp:144)      :460 (corrected tick 4: was :461)
+    frame_count++                                          :461 (corrected tick 4: was :462)  (SDLApp fps counter, not Gource::framecount)
 
 GourceShell::update(t, dt)                                 gource_shell.cpp:283
   if gource==0 || gource->isFinished():                    :285
@@ -52,7 +52,7 @@ Gource::update(t, dt)                                      gource.cpp:246
   framecount++                                             :284
 ```
 
-`runtime` is not reset by `reset()`/seek, and advances (and `framecount` increments) while the log is still loading (`commitlog==0`, logic returns early at :1579-1581) and while paused (only the `runtime +=` is skipped when paused, :259).
+`runtime` is only assigned in the Gource ctor (gource.cpp:157; grep shows no other assignment), so it is not reset by `reset()`/seek (verified tick 4). `seekTo` also un-pauses (`paused=false`, gource.cpp:1073), (verified tick 4) and advances (and `framecount` increments) while the log is still loading (`commitlog==0`, logic returns early at :1579-1581) and while paused (only the `runtime +=` is skipped when paused, :259).
 
 Gource::logic(t=runtime, dt=scaled_dt), time-relevant part (gource.cpp:1568):
 
@@ -61,7 +61,7 @@ Gource::logic(t=runtime, dt=scaled_dt), time-relevant part (gource.cpp:1568):
 1575  message_timer -= dt; splash -= dt
 1579  if commitlog==0: if !logmill finished return; take log (throw on error); seekTo(start_position) if >0   :1604
 1609  file_key.logic(dt); slider.logic(dt)    (run even when paused)
-1693  if paused: updateBounds; interactUsers; interactDirs; updateCamera(dt); return   // no commits, no updateUsers/updateDirs, idle_time frozen, no appFinished check
+1693  if paused: updateBounds; interactUsers; interactDirs; updateCamera(dt); return   // no commits, no updateUsers/updateDirs, idle_time frozen, no commit/appFinished-from-users check (the `shutdown` check at :1570 still runs before this) (verified tick 4)
 1702  if commitqueue.empty(): readLog()
 1707  if loop && commitqueue.empty() && commitlog->isSeekable() && idle_time >= loop_delay_seconds:
           first_read=true; seekTo(0.0); readLog()
@@ -102,7 +102,7 @@ updateUsers tail: if users.empty() && stop_position_reached: appFinished=true   
 | `--loop` | false (:415) | - | bool | gource.cpp:1707; gource_shell.cpp:224 |
 | `--loop-delay-seconds S` | 3.0 (:416) | sim seconds idle | `S<=0` -> invalid (:734) | gource.cpp:1708 |
 | `--start-position F` | 0.0 (:393) | fraction | `random` -> `srand(time(0))`, `(rand()%1000)/1000.0f` (:1319-1320); else `F<=0 || F>=1` -> error (:1324) | seekTo, gource.cpp:1604 |
-| `--start-date / --stop-date` | 0 (:387,390) | local-time date -> time_t | parseDateTime; stop date rounded to next day boundary (:1294-1306) | logmill.cpp:85-109 (start), gource.cpp:1148 (stop_timestamp: first commit with ts > stop -> stop_position_reached) |
+| `--start-date / --stop-date` | 0 (:387,390) | local-time date -> time_t | parseDateTime; stop date rounded to next day boundary (:1294-1306) (corrected tick 4: the rounding `stop_timestamp_rounded` only feeds the `stop_date` display string, :1299-1307; `stop_timestamp` used by readLog stays the raw parsed value) | logmill.cpp:83-93 (start; corrected tick 4: was 85-109, the start-timestamp skip loop is lines 83-93), gource.cpp:1148 (stop_timestamp: first commit with ts > stop -> stop_position_reached) |
 | `--no-time-travel` | false (:399) | - | bool | gource.cpp:1758 |
 | `-i, --file-idle-time S` | 0 (:411) | integer seconds (`atoi`) | `<0` or non-"0" parse-to-0 -> invalid (:1230) | file.cpp:201 vs `elapsed` (pawn.cpp:75, += scaled dt) |
 | `--file-idle-time-at-end S` | 0 (:412) | integer seconds (`atoi`) | same (:1243) | copied into file_idle_time when `is_finished||stop_position_reached` (gource.cpp:1180-1182, mutates the global) |
@@ -114,7 +114,7 @@ updateUsers tail: if users.empty() && stop_position_reached: appFinished=true   
 | commitqueue_max_size | 100 (gource.cpp:919) | commits | internal | readLog look-ahead, :1137 |
 | `max_tick_rate` | 1/60 | s | internal | gource.cpp:156, 519 |
 
-Multi-repo (`repo_count > 1`, from gource_shell.cpp:228-234): if `stop_at_time<=0 && stop_position<=0` then `stop_at_time = 60.0f`. Settings re-imported per repo (:218) so keys that mutated `gGourceSettings` (time_scale, days_per_second, file_idle_time) are reset by the re-import only for options present in that section's config.
+Multi-repo (`repo_count > 1`, from gource_shell.cpp:228-234): if `stop_at_time<=0 && stop_position<=0` then `stop_at_time = 60.0f`. Settings re-imported per repo (:218) so keys that mutated `gGourceSettings` (time_scale, days_per_second, file_idle_time) are reset on every re-import: importGourceSettings calls setGourceDefaults first (gource_settings.cpp:368-520), so each per-repo option returns to its default before the section's keys apply; misc-traces.md lists the keys that are NOT reset (corrected tick 4).
 
 ## 3. Exporter (fixed-dt) vs interactive, side by side
 
@@ -165,7 +165,7 @@ Edge: stopping at time `T` does not mean the last frame is at `runtime == T`; th
 | gource_settings.cpp:1319 `srand(time(0))` | seeds libc RNG only for `--start-position random` | YES (start position and the global `rand()` stream); otherwise `rand()` is never seeded (default seed 1) |
 | gource.cpp:1555 `rand()` | `gStringHashSeed` | indirectly; also user.cpp:106,128, dirnode.cpp:625 |
 | formats/*.cpp `mktime`/`timegm` (cvs2cl:128, apache:81, cvs-exp:82, bzr:117, svn:239/241) | commit timestamp parsing from log text | YES (timestamp values; TZ dependent for non-UTC parsers) |
-| `fps` (sdlapp.cpp:321) | measured fps, copied to `gource->fps` (gource_shell.cpp:291) | display only |
+| `fps` (sdlapp.cpp:322, updateFramerate :319-327; corrected tick 4: was :321) | measured fps, copied to `gource->fps` (gource_shell.cpp:291) | display only |
 
 ## 6. Contradictions in the four docs and the correct statement
 
@@ -178,3 +178,11 @@ Edge: stopping at time `T` does not mean the last frame is at `runtime == T`; th
 7. app-core.md :299 states `=`/`+` caps days_per_second at 30 and `-` floors at 0; verified correct (gource.cpp:821-835). app-core.md :361/:304: time_scale key cap is 4, and `,` uses `max(0, floor-1)` for values >1 so 1.5 -> 0 (not 0.25); verified (:864-868). Note settings validation (0 < S <= 4, :1266) does not apply to key edits.
 8. scene-model.md :344 and app-core.md :498 say `SDL_GetTicks` is used "only for debug timing" in gource.cpp: true for gource.cpp, but the frame dt itself comes from `SDL_GetTicks` in sdlapp.cpp (interactive sim depends on it). scene-model.md :344 states this correctly in the second column; app-core.md :498 omits it.
 9. Missing from all four: (a) frames during log load advance `runtime`/`framecount` (nondeterministic in exporter mode, section 3); (b) `--realtime` overrides `--seconds-per-day` and `--disable-auto-skip` is overridden by `-a` (order of processing in gource_settings.cpp:716, 1211, 1360); (c) `file_idle_time` / `file_idle_time_at_end` are `atoi` integers, not floats (gource_settings.cpp:1228,1241); (d) `--stop-on-idle` is a no-op (:1376); (e) `dont_stop` only has an effect in `GourceShell::getNext` (gource_shell.cpp:224).
+
+## Verification (tick 4)
+
+Checked against sdlapp.cpp, gource_shell.cpp, gource.cpp, gource_settings.cpp, plus core/settings.cpp, main.cpp, display.cpp, logmill.cpp, user/file/pawn/dirnode cites (spot-checked).
+
+- Confirmed (verified tick 4): min_delta_msec 16 override (gource_shell.cpp:29) vs default 8 (sdlapp.cpp:317); whole accumulated buffer becomes dt, no remainder (sdlapp.cpp:435-436); exporter `scaled_dt = max_tick_rate` with `max_tick_rate = 1.0f/gource_fps` (gource.cpp:519), gource_fps loop `while(<60) += F` and frameskip (505-522; 60->skip0, 30->60/skip1, 25->75/skip2); output_framerate default 60 and 25/30/60 validation (core/settings.cpp:89,464-466); dump condition and phase (gource.cpp:272-276), framecount reset at setFrameExporter (:510) and incremented every update including log-loading frames; `runtime` advances while commitlog==0 and `logic` returns at :1579-1581; appFinished conditions (:1401, :1570, gource_shell.cpp:286); pause semantics (:259, :1693-1699, updateUsers idle_time :1406-1410); all time-setting defaults (gource_settings.cpp:387-416, 469, 471) and validations (:1203, 1217, 1230, 1243, 1254, 1266, 1319-1324, 1336, 1347, 1360, 1376, 1406, 734); key handlers (gource.cpp:821-873); max_tick_rate is f64 literal narrowed to `float` member (gource.h:141).
+- Cites: about 110 path:line cites checked; about 105 correct; 6 corrected (sdlapp.cpp :457/:460/:461 shifts, sdlapp.cpp:322, logmill.cpp range) plus 1 wrong statement (stop-date rounding affects only the display string).
+- Not confirmed: formats/*.cpp cites (cvs2cl:128, apache:81, cvs-exp:82, bzr:117, svn:239/241) confirmed by grep only, not read in context; gource.cpp:2414-2545 and the 11 hidden SDL_GetTicks matches not individually opened; keys block start lines 853/873 inferred from a contiguous read (not line-numbered).

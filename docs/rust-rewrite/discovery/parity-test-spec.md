@@ -40,7 +40,7 @@ Pin one small public repo per VCS at a recorded commit. Generate the input with 
 | svn | `svn log -r 1:HEAD --xml --verbose --quiet > svn.log` (LF:144) | `svn` |
 | hg | `hg log -r 0:tip --style '<resource_dir>gource.style' -R <dir> > hg.log` (LF:156) | `hg` |
 | bzr | `bzr log --verbose -r 1..-1 --short -n0 --forward <dir> > bzr.log` (LF:169) | `bzr` |
-Cross-check the commands themselves: `$G --git-log-command`, `--svn-log-command`, `--hg-log-command`, `--bzr-log-command` print the string (TGS 6(1)); diff that output between binaries. Then directory mode (binary generates the log itself): `$G --output-custom-log - <repo_dir>` must be byte-identical between binaries (needs the VCS tools; CI-optional job).
+Cross-check the commands themselves: `$G --git-log-command`, `--svn-log-command`, `--hg-log-command`, `--bzr-log-command` (corrected tick 4: documented form is `--log-command VCS`, help-long.txt:49; the per-VCS spellings exist only as undocumented aliases, gource_settings.cpp:242-246) print the string (TGS 6(1)); diff that output between binaries. Then directory mode (binary generates the log itself): `$G --output-custom-log - <repo_dir>` must be byte-identical between binaries (needs the VCS tools; CI-optional job).
 Date filter variants: `--start-date 2021-11-01 --stop-date 2021-11-02` on each (VCS filtering is date-granular, exact timestamp filtering happens in logmill/readLog, LF:41).
 
 ### 1.5 Unit vectors (cargo test, no binary)
@@ -62,7 +62,7 @@ $G tests/logs/<fixture>.log --log-format <fmt> -1280x720 -r 60 -o /dev/null \
 - `--hash-seed 31` (default; gource_settings.cpp:1062-1066); second set uses `--hash-seed 7`.
 - `--disable-auto-rotate` removes the window-size dependence of the rotate trigger (AC T2.5). A second set runs without it at fixed 1280x720.
 - `--file-idle-time 0` (never fade); a second set uses `--file-idle-time 2 --file-idle-time-at-end 1` (integers via `atoi`, T 2).
-- `TZ=UTC`. No mouse, `--hide-mouse`: `selectedUser/File` stay 0 and `cursor_move` is 0.
+- `TZ=UTC`. No mouse, `--hide mouse` (corrected tick 4: there is no `--hide-mouse`; `--hide` takes a list incl. `mouse`, help-long.txt:95): `selectedUser/File` stay 0 and `cursor_move` is 0.
 
 ### 2.2 File format
 JSON Lines, UTF-8, one object per line, `\n` terminated, fixed key order. Written when `framecount % N == 0` (`--debug-dump-every N`, default 1), plus always the first loaded frame and the final frame (the one where `appFinished` is set, which is still drawn/dumped, T 4). f32 values are printed with `%.9g` (round-trip exact); the comparator parses them as f32. Arrays are sorted: dirs by `abspath`, files by `fullpath`, users by `name` (sorted-key maps, SM 10.4), actions by queue position (queued first, then active).
@@ -126,7 +126,7 @@ All `rand()` sites route through one function: user.cpp:106, user.cpp:128, dirno
 - Call order = force-application order: users in name order against quadtree visit order, then dirs recursively (SM 9, 10.4). `rand_calls`/`first_rand_frame` in every record expose order divergence even when positions still agree.
 
 ### 2.5 Minimal C++ patch (reference side)
-1. `src/gource_settings.cpp/.h`: options `--debug-dump-state FILE`, `--debug-dump-every N`, `--debug-dump-max-frames N`, `--rand-script FILE` (near other debug options; hidden from `-h`/`-H` so help goldens do not change).
+1. `src/gource_settings.cpp/.h`: options `--debug-dump-state FILE`, `--debug-dump-every N`, `--debug-dump-max-frames N`, `--rand-script FILE` (proposed, not in C++; near other debug options; hidden from `-h`/`-H` so help goldens do not change).
 2. `src/gource.cpp`, `Gource::update`: after `logic(runtime, scaled_dt)` (gource.cpp:265) and before `draw` (:269) call `if (dump) dumpState();`. This runs on every update (paused, loading, final), before `framecount++` (:284). Do not hook inside `logic`: it returns early at :1570, :1579-1581 and :1693.
 3. `Gource::dumpState()` (new, about 120 lines): read-only iteration of `gGourceDirMap`, `files`, `users` (sorted maps) and the SIM members in the schema (AC T2.6). Add `void dumpJson(FILE*) const` to RDirNode, RFile, RUser (avoids friend access to private fields). Do not call `isVisible()` (mutates `visible`, SM 10.5); read the stored flag.
 4. New `src/core/dumprand.cpp`: `unsigned long long g_rand_calls; int g_rand_last; int gource_rand(){ g_rand_calls++; return g_rand_last = script_or_rand(); }`; replace the four `rand()` calls; wrap the `srand` site so script mode ignores it.
@@ -160,7 +160,7 @@ apt-get install -y xvfb mesa-utils libgl1-mesa-dri imagemagick ffmpeg
 xvfb-run -a -s "-screen 0 1280x720x24" env LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
   gource tests/logs/file-removal.log --log-format custom -1280x720 -r 30 \
   --seconds-per-day 1 --stop-at-time 10 --hash-seed 31 --disable-auto-skip --disable-auto-rotate \
-  --hide-mouse --bloom-intensity 0 -o ref.ppm
+  --hide mouse --bloom-intensity 0 -o ref.ppm
 ffmpeg -f image2pipe -c:v ppm -i ref.ppm -vsync 0 ref/f%04d.png
 ```
 Structural set additionally hides text and overlays: `--hide date,filenames,usernames,dirnames,progress,mouse,key` (`unverified` spelling: check `golden/help-long.txt` before committing the script). SDL needs a real GL context (compatibility profile, core/display.cpp:219-256; the `dummy` video driver fails, BG). The Rust binary runs the same command under wgpu with a software adapter (`WGPU_BACKEND=vulkan` + Mesa lavapipe, or `gl` + llvmpipe) and writes `rust.ppm` with the same P6 framing (core/ppm.cpp:175-186), so one splitter serves both.
@@ -225,3 +225,8 @@ Fixtures in `tests/logs/`. Existing goldens: `docs/rust-rewrite/discovery/golden
 - Multi-repo (`[gource]` sections, default `stop_at_time = 60`, T 2) is not in the matrix; sequencing is untraced (TGS gaps).
 - Captions are not in the dump schema yet.
 - When the comparator exists, run a sabotage check (for example drop `idle_time += dt` in Rust and confirm the dump diff fails).
+
+## Verification (tick 4)
+- Every `--option` grepped against golden/help-long.txt. Present: all real options used (bloom-intensity, caption-file, file-idle-time, hide, stop-at-time, etc.). Not in help: `--hide-mouse` (wrong; fixed to `--hide mouse`), `--user-idle-time` (real in source, undocumented), per-VCS `--*-log-command` (undocumented aliases of `--log-command`). `--debug-dump-state/-every/-max-frames` and `--rand-script` are NEW (proposed, not in C++). `--version` is intentionally the bad-option case.
+- Other `--` hits (`--reverse --raw --encoding --no-renames --pretty --xml --verbose --quiet --style --short --forward --no-show-signature`) are VCS CLI flags, not Gource options.
+- Paths: all `tests/logs/*.log` fixtures, `tests/test.conf`, `tests/images/` and every `golden/*` file cited exist. `tests/golden/{edge,real,sim,vis}/...` do not exist: they are explicitly planned outputs (section 4 preamble), not current files.

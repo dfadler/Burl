@@ -51,3 +51,6 @@ Quirk: the test does putenv TZ=UTC for the first row, then TZ=Pacific/Auckland (
 | `2021-11-01T12:01:59.123+5:30` | Pacific/Auckland | 1635748319 |
 
 Observations: fractional seconds are accepted and ignored; a space before the offset is allowed; space or `T` separates date and time; date-only, HH:MM and HH:MM:SS all work. No negative offsets, invalid input, or DST-gap cases are tested.
+
+## Verification (tick 4)
+All 28 parseDateTime rows checked programmatically against src/test/datetime_tests.cpp (regex-extracted inputs and expected epochs, in order): 28/28 inputs and epochs match verbatim. Source has 28 parseDateTime calls and 28 timestamp checks. Note: `2021-11-01T12:01:59.123` also appears twice (rows 15 and 22), besides the `+13` duplicate already noted. No corrections needed.

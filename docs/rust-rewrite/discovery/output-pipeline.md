@@ -268,7 +268,7 @@ Matrix and colour are fixed-function state (`ftransform`, `gl_Color`): a port ne
 | Tab | pen += advance('M')*4 in draw only (not in getWidth) | fxfont.cpp:215,384 |
 | Atlas | page = square `min(512, GL_MAX_TEXTURE_SIZE)`, GL_ALPHA 8-bit, CLAMP_TO_EDGE, LINEAR/LINEAR, no mipmaps. Shelf pack: cursor (1,1), pad 3; wrap if `x+w+3>W` -> x=1, y+=max_h+3 (max_h starts 1, never reset per row); new page if `y+rows+3>H`. UVs `u0=(x-0.5)/W, v0=(y-0.5)/H, u1=(x+w+1.5)/W, v1=(y+rows+1.5)/H` | fxfont.cpp:153-195,295; texture.cpp:167-182 |
 | draw() order | `align_right: x-=width`; `align_top: y+=getHeight()`; `round: x,y=roundf`; y then = baseline. Defaults: shadow off, shadow_strength 0.7, offset (1,1), round false, align_top true, white | fxfont.cpp:559-580,447 |
-| Shadow (FFP path) | extra black pass at +(1,1), alpha = a*0.7 | fxfont.cpp:559+ |
+| Shadow (FFP path) | extra black pass at +(1,1), alpha = a*0.7, only when `shadow && !fontmanager.use_vbo` (corrected tick 4: condition added); VBO/shader path does the shadow in text.frag | fxfont.cpp:559-579 |
 | Shadow (shader buffer) | text.frag: `colour_a=tex(uv).a; shadow_a=tex(uv-texel_size).a*0.7; comb=1-(1-shadow_a)*(1-colour_a); if(comb>0) colour_a/=comb; out=gl_Color*vec4(vec3(colour_a),comb)`; 1px down-right, applies to every glyph in the buffer regardless of dropShadow flag | data/shaders/text.frag |
 
 Font sizes (px at 72dpi). F = font_scale = `viewport_dpi_ratio.x` if >1 else `1 + display.height/1600` (int div), only when default_font_scale (gource.cpp:40-47); `scaled_X = clamp((int)(X*F),1,100)` (gource_settings.cpp:522-527).
@@ -276,12 +276,12 @@ Font sizes (px at 72dpi). F = font_scale = `viewport_dpi_ratio.x` if >1 else `1 
 | Font | Size | Flags | Cite |
 |---|---|---|---|
 | fontlarge | 42*F | shadow, round, alignTop | gource.cpp:50 |
-| fontmedium | 16*F | date/title | :54 |
+| fontmedium | `scaled_font_size` (= clamp(16*F,1,100)) | date/title; dropShadow on, round off (corrected tick 4: size is the scaled setting, not literal 16*F) | :54 |
 | fontcaption | 16 (unscaled `caption_size`) | alignTop false | :58 |
 | font (HUD) | 14*F | round | :63 |
-| fontdirname | 14*F | alignTop, round forced false at draw (2494) | :67 |
-| user name | 14*F; selected 18 unscaled | alignTop false | user.cpp:305-313 |
-| file name | 14*F; selected 18 unscaled, colour selection (1,1,0.3) | alignTop true | file.cpp:54-65 |
+| fontdirname | `scaled_dirname_font_size` (default 14*F) | alignTop, round forced false at draw (2494, verified) | :67 |
+| user name | `scaled_user_font_size` (default 14*F, `--user-font-size`); selected 18 unscaled (corrected tick 4: setting-driven) | alignTop false | user.cpp:305-313 |
+| file name | `scaled_filename_font_size` (default 14*F); selected 18 unscaled, colour selection (1,1,0.3) | alignTop true | file.cpp:54-65 |
 | key / slider / textbox | 16*F / 16*F / 18*F | | key.cpp:166, slider.cpp:28, gource.cpp:142 |
 
 Text positions (gource.cpp):
@@ -300,7 +300,7 @@ Text positions (gource.cpp):
 
 | Label | Formula | Cite |
 |---|---|---|
-| Name fade (all pawns) | `done = nametime - name_interval`; done<1: a=done; <nametime-1: 1; else nametime-done. nametime 5 (user name_interval init 5.0; file `filename_time`). visible = `!((!selected && name_interval<0) || hidden)` | pawn.cpp:112-127; user.cpp:43; file.cpp:36 |
+| Name fade (all pawns) | `done = nametime - name_interval`; done<1: a=done; 1<done<nametime-1: 1; else nametime-done (corrected tick 4: the middle branch is strict `done>1.0`, so done==1.0 exactly falls to the last branch giving nametime-1=4; port with the same ordering or clamp to 1). nametime 5 (user name_interval init 5.0; file `filename_time`). visible = `!((!selected && name_interval<0) || hidden)` | pawn.cpp:112-127; user.cpp:43; file.cpp:36 |
 | User name | anchor world `(pos.x, pos.y - dims.y*0.5)` -> gluProject, y flipped; `x = sx - namewidth*0.5; y = sy - font.getMaxHeight()` (baseline, alignTop false, no rounding). Drawn only if highlight_all/highlighted/selected/alpha>0. alpha = (selected\|\|highlighted\|\|highlight_all) ? user getAlpha : fade. Colour selected=selection, highlighted=highlight_colour, else white | user.cpp:370-395,330 |
 | File name | anchor `absPos + (5.5, selected ? -2 : -1)` projected, y flipped; alignTop true. unselected: extension only if `file_extensions` else name; selected: name, 18px, alpha 1. Skip if `!selected && alpha<=0.01` | file.cpp:262-291 |
 | File cull | dir in frustum, !hide_filenames, !hide_files | dirnode.cpp:983-990 |
@@ -323,15 +323,15 @@ Text positions (gource.cpp):
 | Quantity | Formula | Cite |
 |---|---|---|
 | Base alpha | `min(elapsed/fadetime,1)`, fadetime 1.0 | pawn.h:93 |
-| Quad | centred on pos; w=`size`, h=`size*graphic_ratio` (graphic h/w); UV (0,0)-(1,1); colour `(col, alpha)` | pawn.cpp:150-167 |
-| Shadow quad | pos + shadowOffset (2,2) (users `(2,2)*user_scale`); colour `(0,0,0, alpha*0.5)` (gGourceShadowStrength) | pawn.cpp:20,125-148; user.cpp:31 |
+| Quad | centred on pos; w=`size`, h=`size*graphic_ratio` (graphic h/w); UV (0,0)-(1,1); colour `(col, alpha)` | pawn.cpp:154-190 (corrected tick 4: was 150-167) |
+| Shadow quad | pos + shadowOffset (2,2) (users `(2,2)*user_scale`); colour `(0,0,0, alpha*0.5)` (gGourceShadowStrength) | pawn.cpp:20,130-152 (corrected tick 4: was 125-148); user.cpp:31 |
 | File size | `gGourceFileDiameter*1.05` = 8.0*1.05 | file.cpp:20,29 |
 | File colour | selected: white; else lerp(touch_colour, file_colour) with lc=elapsed-last_action while <1 | file.cpp:152-162 |
 | File alpha | base; if fade_start>0: `1 - clamp(elapsed-fade_start,0,1)`; fade_start set when idle > file_idle_time | file.cpp:164-205 |
 | User size | `20 * user_scale` | user.cpp:29 |
-| User colour | `colourHash(name)` or white when a user image is used and !colour_user_images; then `c = c*0.6 + 0.4; c *= 0.9`; selected = white | user.cpp:174-217,333 |
+| User colour | `colourHash(name)` or white when a user image is used and !colour_user_images; then `c = c*0.6 + 0.4; c *= 0.9`; selected = white | user.cpp:174-220,333 (corrected tick 4: the `*0.6+0.4` / `*0.9` tint is at user.cpp:219-220, after assignUserImage's image selection) |
 | User alpha | base; after `user_idle_time` (3.0) idle: `1 - min(elapsed-last_action-idle, 1)` | user.cpp:343-349 |
-| Name colour | user: selected -> selection (1,1,0.3), highlighted -> highlight_colour, else white; file: selected -> selection, else white | user.cpp:330; file.cpp:141 |
+| Name colour | user: selected -> selection (1,1,0.3), highlighted -> highlight_colour, else `namecol` (white, pawn.cpp:41); file: selected -> selection; unselected file text is drawn with `file_font` colour = `filename_colour` setting (file.cpp:54-65), not hard white (corrected tick 4: `namecol` is white but the file name draw ignores it) | user.cpp:330; file.cpp:141 |
 
 ### T2.f Display / DPI / frameless mapping
 
@@ -357,3 +357,8 @@ Port notes: use `image` crate plus own mip chain and trilinear clamp-to-edge sam
 
 ### T2 gaps
 - GLU rounding rule for 384-wide user.png not verified; Bounds2D line width on HiDPI; where `--high-dpi` calls `enableHighDPIAwareness` not traced; file_scale effect on file size not re-derived.
+
+## Verification (tick 4)
+
+Sampled 36 claims against source: shader regex/use()/applyUniform and every uniform value and drawing site (gource.cpp 2146-2334, 2200-2207, 2522-2528, text.frag), FT load/advance/quad/atlas pack and UV formulas, draw() order, tab, precache, font construction and scaled sizes, text positions (date/title/logo/caption), name-fade, user/file label anchors, dir-name skip/alpha/label_pos (dirnode.cpp, spline.cpp:63-69), FileKey/Slider/TextBox geometry, pawn/file/user colour+alpha, texture loader/upload/filter and default image names, user-image lookup. Most were exact (shader and atlas values, UI geometry, label formulas all confirmed). Corrections made inline above: shifted pawn.cpp shadow/quad lines, user-colour tint line range, file-name colour (filename_colour, not white), setting-driven font sizes, FFP shadow condition, name-fade boundary case at done==1.0.
+Not re-verified: Windows DPI branch (display.cpp:549-593), frameless toggle details, caption stacking (gource.cpp:1778-1846), GLU resampling. Confirmed atlas `max_glyph_height` initialised once per page (fxfont.cpp:139) and never reset per row.

@@ -38,6 +38,8 @@ Legend: `[x]` verified against source or a binary, `[~]` catalogued from a child
 | Tick | Spent | Remaining | Notes |
 |------|-------|-----------|-------|
 | 1 | 10 | 90 | 8 first-wave children (app-core used 3, the rest 1 each). All returned. |
+| 4 | 5 | 71 | Final verification pass (from the 15-agent reserve), started 18:04Z, done 18:18Z: ~300 claims/cites checked across timing.md, all Tick 2 additions, misc-traces, unit-tests, parity spec, architecture map. No structural errors; line shifts and a handful of wrong statements corrected in place with "(corrected tick 4)" markers. |
+| total | 29 | 71 | Loop stopped 2026-10-29T18:20Z after 4 ticks (1h22m of the 5h window). Stop rule met; 71 agents unspent. |
 | 3 | 5 | 76 | 5 children, started 17:45Z, done 18:00Z: scene verification 1, misc traces 1, unit tests 1, parity spec 1, architecture map 1. |
 | 2 | 9 | 81 | 8 children, started early at 17:14Z, done 17:40Z. Verifier 1, timing 1, build+goldens 1 (resumed once), gource.cpp finish 1, core gaps 1, config sequencing 1, rendering gaps 2, crate verification 1. |
 
@@ -55,7 +57,7 @@ Legend: `[x]` verified against source or a binary, `[~]` catalogued from a child
 - [x] Build/packaging/platform specifics noted — deps-and-rust-mapping.md, settings-cli.md, build-and-goldens.md
 - [x] Test fixtures understood; golden-output strategy written — tests-and-golden-strategy.md + parity-test-spec.md; parser, help, exit-code and unit-test goldens captured. utf8-caption.log is a --caption-file fixture (test.conf:39). No render golden on this machine (needs a real GL window; SDL dummy driver has no GL); Linux Xvfb + llvmpipe recipe written
 - [x] Exit codes and error messages catalogued — settings-cli.md, app-core.md; golden/exit-codes.txt from the binary
-- [~] Citation-verifier pass over every doc — tick 2 covered the eight tick-1 docs; tick 3 covered the sim formulas. Not yet verified: timing.md, the Tick 2 additions sections, misc-traces.md, parity-test-spec.md option spellings, rust-architecture-map.md consistency with the docs
+- [x] Citation-verifier pass over every doc — tick 2 (eight tick-1 docs), tick 3 (sim formulas re-derived), tick 4 (timing.md, every Tick 2 additions section, misc-traces, unit-tests, parity spec option spellings, architecture map cross-check). Every doc now ends with a Verification section naming what was and was not checked.
 - [x] Authoritative timing section — timing.md (min_delta_msec is 16 in Gource; exporter step 1/gource_fps; frame-dump phase depends on log load time; contradictions in other docs patched)
 - [x] Build attempt — succeeded without autotools (clang++ -arch x86_64, Rosetta); goldens captured; build-and-goldens.md
 
@@ -83,10 +85,30 @@ Legend: `[x]` verified against source or a binary, `[~]` catalogued from a child
 - Accept --ffp and use the shader path anyway (C++ switches to fixed-function). Rendering-only.
 - Both deviations should be behind flags or recorded as intentional differences in the parity spec.
 
-## Open gaps (for tick 4, final verification pass; reserve 15)
+## Stop rule: MET (tick 4)
 
-1. Verify timing.md citations and pseudocode against sdlapp.cpp / gource.cpp / gource_shell.cpp.
-2. Verify the "Tick 2 additions" sections of app-core.md, core-lib.md, output-pipeline.md, settings-cli.md (sample 6-8 cites each).
-3. Verify misc-traces.md and unit-tests.md claims (sample), and that parity-test-spec.md option spellings exist in golden/help-long.txt; fix spellings in place.
-4. Cross-check rust-architecture-map.md against the docs it cites: every claimed fact must appear in the cited doc; fix in place.
-5. Mechanical: re-run the source-file coverage check; confirm every doc in the Documents table exists; no leftover TODO/TBD markers.
+Every checklist item is `[x]`; a citation-verifier pass has covered every doc; the build produced goldens.
+Mechanical check: every `.cpp` under src/ (excluding vendored tinyxml) is named in a doc except src/core/ui/*.cpp, which Makefile.am does not build (confirmed in core-lib.md and rust-architecture-map.md).
+
+## Residual, known-unverified items (not blockers; listed so the rewrite does not treat them as settled)
+
+- glibc `rand()` TYPE_3 first outputs were reproduced from a Python model, not run against a real glibc; macOS Park-Miller was confirmed by a compiled test here. Windows MSVC `rand()` not researched.
+- `vec2(rand()%100-50, rand()%100-50)` argument evaluation order is unspecified in C++; clang left-to-right assumed. Pin it in the parity spec when the reference binary is chosen.
+- stdin log behaviour (partial-line loss, empty-stdin startup, `--stop-at-end` never firing) is read from source, not exercised.
+- PPM pipe / SIGPIPE behaviour not exercised.
+- No render golden exists; SDL's dummy driver has no GL on macOS and opening a real window was avoided. Use the Xvfb + llvmpipe recipe in parity-test-spec.md on Linux.
+- Windows-only paths (DPI awareness, console, HWND subclass, frameless) are catalogued from source only.
+- Crate maintenance judged from release dates; transitive licenses unchecked.
+- tests/test.conf is referenced by nothing in the build; it is a manual scenario file.
+
+## Decisions for the user before implementation starts
+
+1. D1: validate every [gource] section up front (C++ validates only the first and terminates mid-run on a later bad section). Parity vs robustness.
+2. D2: block on log load in export mode so the frame-dump phase is deterministic (C++ lets runtime/framecount advance during load). Parity vs determinism.
+3. PRNG default: documented Rust PRNG (xorshift) with optional glibc/macOS-compatible modes, or glibc TYPE_3 as the default for closest Linux parity.
+4. `--ffp`: accept and ignore (always shader path) or reject.
+5. Whether to keep known C++ bugs for parity: `--log-format cvs-exp` unmatched, `--stop-on-idle` no-op, help text user-friction 0.67 vs code 1.0, dir-name-position help range 0.0 vs enforced 0.1.
+
+## Reading order for the rewrite
+
+1. rust-architecture-map.md (start here), 2. parity-test-spec.md, 3. timing.md, 4. settings-cli.md + golden/help-*.txt, 5. log-formats.md + golden/custom-log/, 6. scene-model.md + verification-tick3-scene.md, 7. app-core.md, 8. core-lib.md, 9. output-pipeline.md, 10. deps-and-rust-mapping.md, 11. build-and-goldens.md + unit-tests.md, 12. misc-traces.md.

@@ -349,3 +349,6 @@ UTF-8 passes through unchanged), svn-dir-delete (svn log, date => `1263976518`).
 `/` (e.g. `path/to/file.1`) and the goldens show it added (`/path/to/file.1`) — confirms the ctor prepend.
 `utf8-caption.txt` is empty with stderr `gource: unsupported log format ...`: that file is a caption file (`ts|text`), not a
 commit log; the golden records the error path (exit code in exit-codes.txt). Stderr goldens are otherwise empty.
+
+## Verification (tick 4)
+Sampled against source: ppm.cpp:45-61 (rowstride, 3 buffers, SDL_CreateThread "frame_exporter"), 139-140 (row flip), 175 (P6 header), 186 (header write); commitlog.cpp:238-242 (isFinished = seekable && logf->isFinished()); gource_shell.cpp:225 (stop_at_end) and 232 (60.0f); gource_settings.cpp:368/613 and gource.cpp:223 (setGourceDefaults); conffile.cpp save() map iteration and conffile.h:96,143 (std::map => alphabetical); gource.cpp:545/560/590/1880 (selectBackground/User/File, mousetrace), :1080 caption regex (loadCaptions itself starts at :1082, minor), :171/207 (writeCustomLog, fprintf format); display.cpp:90,118,180; main.cpp:150-163 (high_dpi logic). All confirmed; no corrections needed (loadCaptions starts at 1082 not 1080; range cite is acceptable).

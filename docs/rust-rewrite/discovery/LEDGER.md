@@ -4,7 +4,12 @@ Goal: gather everything needed to rewrite Gource in Rust with the same CLI/confi
 API and the same parsing + simulation state (rendering visually equivalent, not pixel-identical).
 
 Loop: 5-minute ticks, Fable orchestrator, Sonnet (medium) children, depth 3, budget 100 total.
-Started: 2026-10-29 (see scratchpad loop-start). Hard stop: 5 hours after start.
+Started: 2026-10-29T16:58:47Z. Hard stop: 2026-10-29T21:58:47Z (5 hours).
+Budget reserve: the last 15 agents are reserved for a final verification-only pass; gap ticks may not spend below 15 remaining.
+
+Stop rule: the checklist counts as complete only when every item is `[x]` AND at least one citation-verifier pass has
+covered every doc AND the build attempt either produced goldens or recorded exactly which dependency blocked it.
+Legend: `[x]` verified against source or a binary, `[~]` catalogued from a child's report but not independently verified, `[ ]` not started.
 
 ## Documents
 
@@ -28,17 +33,20 @@ Started: 2026-10-29 (see scratchpad loop-start). Hard stop: 5 hours after start.
 ## Done criterion (checklist)
 
 - [~] Every file in src/ catalogued — app-core.md + scene-model.md. gource.cpp sections written by sub-agents are unverified; input handlers and updateUsers after line 1400 only partly covered.
-- [x] Every file in src/formats/ catalogued with exact parse rules and regexes — log-formats.md
-- [~] Every file in src/core/ catalogued — core-lib.md; gaps in sdlapp dt loop, vectors normalise, quadtree query callers, utf8 semantics
-- [x] Every CLI flag enumerated with source line, default, validation, error text — settings-cli.md (help text not golden-tested against a binary)
+- [~] Every file in src/formats/ catalogued with exact parse rules and regexes — log-formats.md (regexes not yet re-checked against source)
+- [~] Every file in src/core/ catalogued — core-lib.md; gaps in sdlapp dt loop, vectors normalise, quadtree query callers, utf8 semantics. Mechanical check (tick 1): every .cpp under src/ is named in some doc; unmentioned files are .h companions, vendored utf8/*.h, and src/core/ui/* (reported as not built by Makefile.am; verify).
+- [~] Every CLI flag enumerated with source line, default, validation, error text — settings-cli.md (help text transcribed from source, not golden-tested against a binary)
 - [~] Every config-file key and section enumerated, incl. precedence — settings-cli.md; multi-section sequencing path not traced
-- [x] Custom log format fully specified — log-formats.md
-- [~] Simulation/layout algorithms captured — scene-model.md; out-of-order timestamps, quadtree std::set pointer-order effect, VBO/calcEdges state mutation unchecked
-- [x] Output pipeline captured — output-pipeline.md
-- [~] Each C++ dependency mapped to Rust crates — deps-and-rust-mapping.md; crate license strings and some claims unverified
-- [x] Build/packaging/platform specifics noted — deps-and-rust-mapping.md, settings-cli.md
-- [x] Test fixtures understood; golden-output strategy written — tests-and-golden-strategy.md
-- [x] Exit codes and error messages catalogued — settings-cli.md, app-core.md (logmill errors)
+- [~] Custom log format fully specified — log-formats.md (regex not re-checked)
+- [~] Simulation/layout algorithms captured — scene-model.md; out-of-order timestamps, quadtree std::set pointer-order effect, VBO/calcEdges state mutation unchecked; dt claims across four docs need one reconciled timing section
+- [~] Output pipeline captured — output-pipeline.md
+- [~] Each C++ dependency mapped to Rust crates — deps-and-rust-mapping.md; crate license strings and some claims from memory, unverified
+- [~] Build/packaging/platform specifics noted — deps-and-rust-mapping.md, settings-cli.md
+- [~] Test fixtures understood; golden-output strategy written — tests-and-golden-strategy.md (no goldens captured yet)
+- [~] Exit codes and error messages catalogued — settings-cli.md, app-core.md (logmill errors)
+- [ ] Citation-verifier pass over every doc (sample 25-30 path:line cites per pass, report false/shifted ones)
+- [ ] Authoritative timing section reconciling: min(dt,1/60)*time_scale, >=8ms accumulated delta, fixed 1/gource_fps when exporting, stop_at_time forcing
+- [ ] Build attempt with installed deps only; goldens for -h, -H, --output-custom-log on tests/logs/* under docs/rust-rewrite/discovery/golden/, or the exact blocking dependency recorded
 
 ## Key cross-cutting findings (tick 1)
 

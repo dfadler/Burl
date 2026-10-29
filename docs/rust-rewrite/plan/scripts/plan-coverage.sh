@@ -12,10 +12,16 @@ DISC="$REPO/docs/rust-rewrite/discovery"
 cd "$REPO" || exit 2
 
 methods() {
-  # Out-of-line member definitions `Type Class::method(` at column 0; dedupe overloads.
-  grep -hE '^[A-Za-z_][A-Za-z0-9_:<>*&, ]*[ *&]([A-Za-z_][A-Za-z0-9_]*)::(~?[A-Za-z_][A-Za-z0-9_]*|operator[^ (]*)\s*\(' "$1" \
-    | sed -E 's/^.*[ *&]([A-Za-z_][A-Za-z0-9_]*::(~?[A-Za-z_][A-Za-z0-9_]*|operator[^ (]*))\s*\(.*$/\1/' \
-    | sort -u
+  # Column-0 definitions: members `[Type ]Class::method(` (ctors/dtors have no return type)
+  # and free functions `Type name(` (a qualified name before the paren is a member; keywords excluded).
+  {
+    grep -hE '^([A-Za-z_][A-Za-z0-9_:<>*&, ]*[ *&])?([A-Za-z_][A-Za-z0-9_]*)::(~?[A-Za-z_][A-Za-z0-9_]*|operator[^ (]*)\s*\(' "$1" \
+      | sed -E 's/^([A-Za-z_][A-Za-z0-9_:<>*&, ]*[ *&])?([A-Za-z_][A-Za-z0-9_]*::(~?[A-Za-z_][A-Za-z0-9_]*|operator[^ (]*))\s*\(.*$/\2/'
+    grep -hE '^[A-Za-z_][A-Za-z0-9_:<>*&, ]*[ *&]([A-Za-z_][A-Za-z0-9_]*)\s*\([^;]*$' "$1" \
+      | grep -vE '::~?[A-Za-z_][A-Za-z0-9_]*\s*\(|^(if|while|for|switch|return|else|static_assert|typedef)\b' \
+      | sed -E 's/^.*[ *&]([A-Za-z_][A-Za-z0-9_]*)\s*\(.*$/\1/' \
+      | grep -vE '^(if|while|for|switch|return|sizeof|defined)$'
+  } | sort -u
 }
 
 case "${1:-}" in
@@ -41,10 +47,13 @@ STATE_FILES="src/gource.cpp src/gource_shell.cpp src/dirnode.cpp src/file.cpp sr
 for f in $STATE_FILES; do
   [ -f "$f" ] || { gap "state file missing in checkout: $f (core submodule not checked out?)"; continue; }
   doc="$PLAN/functions/$(basename "$f" .cpp).md"
+  n=$(methods "$f" | wc -l | tr -d ' ')
   if [ ! -f "$doc" ]; then
-    n=$(methods "$f" | wc -l | tr -d ' ')
     gap "no functions doc for $f ($n methods)"
     continue
+  fi
+  if [ "$n" -eq 0 ] && ! grep -qE '^methods: manual' "$doc"; then
+    gap "$(basename "$doc"): the script finds no methods in $f; list them by hand under a 'methods: manual' line"
   fi
   missing=0
   while IFS= read -r m; do
@@ -129,9 +138,11 @@ for f in "$PLAN"/*.md "$PLAN"/*/*.md; do
   v=$(grep -oE '^verified: [0-9a-f]{7,40}' "$f" | tail -1 | awk '{print $2}')
   if [ -z "$v" ]; then gap "$rel has no verified: line"; continue; fi
   last=$(git log -1 --format=%H -- "$rel" 2>/dev/null)
-  # the verified commit must be the last commit that touched the file, or come after it
-  if [ -n "$last" ] && ! git merge-base --is-ancestor "$last" "$v" 2>/dev/null; then
-    gap "$rel changed after its verified: line ($v)"
+  # content changes after the verified commit are a gap; the verified: line itself is not
+  if [ -n "$last" ] && [ "$last" != "$v" ] && ! git merge-base --is-ancestor "$last" "$v" 2>/dev/null; then
+    if git diff "$v" "$last" -- "$rel" | grep -E '^[+-][^+-]' | grep -vqE '^[+-]verified:'; then
+      gap "$rel changed after its verified: line ($v)"
+    fi
   fi
   git diff --quiet -- "$rel" 2>/dev/null || gap "$rel has uncommitted changes after verification"
 done

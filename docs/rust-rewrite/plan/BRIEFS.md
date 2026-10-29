@@ -128,9 +128,10 @@ answer each inside the brief, and repeat until the list is empty.
 
 ```
 You are implementing phase <N> of the Rust rewrite of Gource from its plan. You may
-read ONLY files under docs/rust-rewrite/plan/ and under crates/ (the existing Rust
-code). You may not open anything under src/, docs/rust-rewrite/discovery/, or the
-web. If the plan does not tell you something you need, do not guess and do not look
+read ONLY files under docs/rust-rewrite/plan/, under crates/ (the existing Rust
+code), and the data directories docs/rust-rewrite/discovery/golden/ and tests/logs/
+(goldens and fixtures the gate compares against). You may not open anything else
+under src/ or docs/rust-rewrite/discovery/ (the prose docs), nor the web. If the plan does not tell you something you need, do not guess and do not look
 elsewhere: write the question down and continue with an explicit assumption.
 Work in a scratch copy: `cp -r Cargo.toml Cargo.lock crates <scratchpad>/dryrun-<N>/`
 and build there, never in the repository. Produce, for this phase, every public

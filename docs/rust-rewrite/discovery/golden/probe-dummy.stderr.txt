@@ -1,0 +1,3 @@
+gource: SDL initialization failed - OpenGL support is either not configured in SDL or not available in current SDL video driver (dummy) or platform
+Try 'gource --help' for more information.
+

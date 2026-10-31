@@ -12,7 +12,7 @@ Loop: dynamic ticks, orchestrator = the model running `LOOP.md`, children = Sonn
 Budget: 150 agents total. Reserve: the last 20 are for the final verification pass; no
 gap tick may spend below 20 remaining. Window: 8 hours from the first tick.
 Started: (first tick writes this). Hard stop: (started + 8 h).
-Shared notes folder for hand-over notes: `/Users/dfadler/Library/Application Support/Claude/side-session-notes/local_c9233751-8a25-46a8-a947-0cb83e33d185`.
+Shared notes folder for hand-over notes: the Claude desktop app's per-session `side-session-notes` folder (outside the repository; the path is given in the session's environment).
 
 Legend: `[x]` holds and was checked this tick by the script or a verifier, `[~]` written
 but unverified, `[ ]` not started.

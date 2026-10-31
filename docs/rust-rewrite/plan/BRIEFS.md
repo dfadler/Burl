@@ -7,7 +7,7 @@ table in `LOOP.md` says otherwise.
 ## Common header (verbatim in every brief)
 
 ```
-Repository: /Users/dfadler/Development/Burl/.claude/worktrees/hungry-kilby-78e776
+Repository: the working directory of the session (a checkout of this repository on branch `claude/hungry-kilby-78e776` or its successor)
 (branch claude/hungry-kilby-78e776). Work only inside it; never cd to the main checkout.
 Scratch files go in: <scratchpad path>.
 Invariants: never install anything (cargo fetch/build of crates is fine; cargo install,

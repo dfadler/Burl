@@ -1,0 +1,10 @@
+[package]
+name = "gource-formats"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Gource rewrite: commit-log readers and the nine log-format parsers"
+
+[dependencies]
+gource-util.workspace = true
+roxmltree.workspace = true

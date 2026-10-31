@@ -1,0 +1,15 @@
+[package]
+name = "burl"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Burl: the application binary (build session 1: --output-custom-log only)"
+
+[[bin]]
+name = "burl"
+path = "src/main.rs"
+
+[dependencies]
+gource-util.workspace = true
+gource-conf.workspace = true
+gource-formats.workspace = true

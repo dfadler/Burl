@@ -1,0 +1,17 @@
+[package]
+name = "gource-util"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Gource rewrite: pure helpers (regex wrapper, string hash, utf8 filter, date parsing)"
+
+[features]
+default = []
+# Real PCRE2 for user-supplied patterns (--file-filter, --user-filter, --git-branch) that may
+# use look-around or backreferences. Internal parser patterns never need it.
+pcre2 = ["dep:pcre2"]
+
+[dependencies]
+regex.workspace = true
+chrono.workspace = true
+pcre2 = { workspace = true, optional = true }

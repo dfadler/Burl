@@ -1,0 +1,8 @@
+[package]
+name = "gource-conf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Gource rewrite: CLI option tables, config model and help text"
+
+[dependencies]

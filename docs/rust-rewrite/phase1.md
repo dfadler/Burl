@@ -65,3 +65,10 @@ cvs-exp file works. Kept for parity, covered by a test. D1-D4 do not reach the l
 - **PCRE2 in CI**: `cargo test` with default features never exercises the PCRE2 engine; run
   `cargo test -p gource-util --features pcre2` as well, and turn the feature on in phase 2
   when the filters are imported.
+
+## Rename to burl (2026-10-31)
+
+The binary crate was renamed from `gource` to `burl` (`crates/burl`, binary `burl`) after this
+document was written; references above to the `gource` binary mean that crate. The help text now
+says Burl, and `crates/burl/tests/golden.rs` compares output with the Gource goldens through a
+narrow program-name normalisation (see `docs/rust-rewrite/discovery/LEDGER.md`, Decisions).

@@ -1,5 +1,5 @@
-Gource v0.57
-Usage: gource [options] [path]
+Burl v0.57
+Usage: burl [options] [path]
 
 Options:
   -h, --help                       Help
@@ -55,8 +55,8 @@ Options:
   -o, --output-ppm-stream FILE    Output PPM stream to a file ('-' for STDOUT)
   -r, --output-framerate  FPS     Framerate of output (25,30,60)
 
-PATH may be a supported version control directory, a log file, a gource config
-file, or '-' to read STDIN. If omitted, gource will attempt to generate a log
+PATH may be a supported version control directory, a log file, a burl config
+file, or '-' to read STDIN. If omitted, burl will attempt to generate a log
 from the current directory.
 
 To see the full command line options use '-H'

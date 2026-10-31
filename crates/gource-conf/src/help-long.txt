@@ -1,5 +1,5 @@
-Gource v0.57
-Usage: gource [options] [path]
+Burl v0.57
+Usage: burl [options] [path]
 
 Options:
   -h, --help                       Help
@@ -140,7 +140,7 @@ Extended Options:
 
   --path PATH
 
-PATH may be a supported version control directory, a log file, a gource config
-file, or '-' to read STDIN. If omitted, gource will attempt to generate a log
+PATH may be a supported version control directory, a log file, a burl config
+file, or '-' to read STDIN. If omitted, burl will attempt to generate a log
 from the current directory.
 

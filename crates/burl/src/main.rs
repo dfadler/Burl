@@ -14,7 +14,7 @@ use gource_util::regex::Regex;
 use std::io::Write;
 use std::sync::{Arc, LazyLock};
 
-const EXEC: &str = "gource";
+const EXEC: &str = "burl";
 
 static VIEWPORT_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"^([0-9.]+)x([0-9.]+)(!)?$"));
 

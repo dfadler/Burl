@@ -22,7 +22,7 @@ struct Run {
 }
 
 fn run_with(args: &[&str], stdin: Option<&[u8]>, envs: &[(&str, &str)]) -> Run {
-    let mut cmd = Command::new(env!("CARGO_BIN_EXE_gource"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_burl"));
     cmd.args(args).current_dir(repo_root());
     for (k, v) in envs {
         cmd.env(k, v);
@@ -56,6 +56,59 @@ fn assert_bytes(what: &str, got: &[u8], want: &[u8]) {
     );
 }
 
+/// The goldens come from the C++ original, which calls itself gource; this program is burl.
+/// The program name is normalised on BOTH sides, and only at the anchored phrases below
+/// (decision recorded in docs/rust-rewrite/discovery/LEDGER.md). Any other difference, including
+/// the name anywhere else, still fails. `{n}` is the lowercase name and `{N}` the capitalised one.
+const NAME_TEMPLATES: [&str; 5] = [
+    "{N} v0.57",                              // first help line
+    "Usage: {n} [options] [path]",            // usage line
+    "a {n} config",                           // help prose
+    "If omitted, {n} will attempt",           // help prose
+    "Try '{n} --help' for more information.", // error trailer
+];
+
+fn replace_all(hay: &[u8], needle: &[u8], rep: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(hay.len());
+    let mut i = 0;
+    while i < hay.len() {
+        if hay[i..].starts_with(needle) {
+            out.extend_from_slice(rep);
+            i += needle.len();
+        } else {
+            out.push(hay[i]);
+            i += 1;
+        }
+    }
+    out
+}
+
+fn normalise_name(text: &[u8], n: &str, cap: &str) -> Vec<u8> {
+    let mut out = text.to_vec();
+    for t in NAME_TEMPLATES {
+        let from = t.replace("{n}", n).replace("{N}", cap);
+        let to = t.replace("{n}", "@name@").replace("{N}", "@Name@");
+        out = replace_all(&out, from.as_bytes(), to.as_bytes());
+    }
+    // error prefix: only a line that starts with "<name>: "
+    let prefix = format!("{n}: ");
+    let mut res = Vec::with_capacity(out.len());
+    for line in out.split_inclusive(|b| *b == b'\n') {
+        if line.starts_with(prefix.as_bytes()) {
+            res.extend_from_slice(b"@name@: ");
+            res.extend_from_slice(&line[prefix.len()..]);
+        } else {
+            res.extend_from_slice(line);
+        }
+    }
+    res
+}
+
+/// `got` is this program's output (named burl), `want` a golden captured from gource.
+fn assert_named(what: &str, got: &[u8], want: &[u8]) {
+    assert_bytes(what, &normalise_name(got, "burl", "Burl"), &normalise_name(want, "gource", "Gource"));
+}
+
 /// `rc=N  name  (gource args...)` rows; the probe needs SDL and is C++-only.
 #[test]
 fn exit_codes_txt_rows() {
@@ -83,8 +136,12 @@ fn exit_codes_txt_rows() {
         };
         let stem = name.trim_end_matches(".txt");
         assert_eq!(out.code, rc.parse::<i32>().unwrap(), "{line}");
-        assert_bytes(&format!("{name} stdout"), &out.stdout, &read(&dir.join(name)));
-        assert_bytes(&format!("{name} stderr"), &out.stderr, &read(&dir.join(format!("{stem}.stderr.txt"))));
+        if name.starts_with("help-") {
+            assert_named(&format!("{name} stdout"), &out.stdout, &read(&dir.join(name)));
+        } else {
+            assert_bytes(&format!("{name} stdout"), &out.stdout, &read(&dir.join(name)));
+        }
+        assert_named(&format!("{name} stderr"), &out.stderr, &read(&dir.join(format!("{stem}.stderr.txt"))));
         checked += 1;
     }
     // every row except the SDL probe (.bin) was replayed
@@ -121,7 +178,7 @@ fn stdin_requires_log_format() {
     assert_bytes(
         "stderr",
         &out.stderr,
-        b"gource: log-format required when reading from STDIN\nTry 'gource --help' for more information.\n\n",
+        b"burl: log-format required when reading from STDIN\nTry 'burl --help' for more information.\n\n",
     );
 }
 
@@ -148,7 +205,7 @@ fn auto_detect_matches_explicit_format() {
 
 #[test]
 fn error_shapes() {
-    let try_line = "Try 'gource --help' for more information.\n\n";
+    let try_line = "Try 'burl --help' for more information.\n\n";
     let cases: [(&[&str], &str); 8] = [
         (&["--version"], "unknown option version"),
         (&["--", "x"], "unknown option -"),
@@ -164,7 +221,7 @@ fn error_shapes() {
         let out = run(args);
         assert_eq!(out.code, 1, "{args:?}");
         assert!(out.stdout.is_empty(), "{args:?}");
-        assert_bytes(&format!("{args:?}"), &out.stderr, format!("gource: {msg}\n{try_line}").as_bytes());
+        assert_bytes(&format!("{args:?}"), &out.stderr, format!("burl: {msg}\n{try_line}").as_bytes());
     }
     // a directory with no repository above it (tests/logs sits inside this git checkout,
     // so detection would walk up and find .git), with and without a format
@@ -173,14 +230,14 @@ fn error_shapes() {
     let dir_s = dir.to_str().unwrap();
     let out = run(&["--output-custom-log", "-", dir_s]);
     assert_eq!(out.code, 1);
-    assert_bytes("dir", &out.stderr, format!("gource: directory not supported\n{try_line}").as_bytes());
+    assert_bytes("dir", &out.stderr, format!("burl: directory not supported\n{try_line}").as_bytes());
     let out = run(&["--log-format", "custom", "--output-custom-log", "-", &format!("{dir_s}/")]);
-    assert_bytes("dir+fmt", &out.stderr, format!("gource: failed to generate log file\n{try_line}").as_bytes());
+    assert_bytes("dir+fmt", &out.stderr, format!("burl: failed to generate log file\n{try_line}").as_bytes());
     let _ = std::fs::remove_dir_all(&dir);
     // value-taking options swallow the next token even if it starts with '-'
     let out = run(&["--seconds-per-day", "--output-custom-log", "-", "--log-format", "custom", "tests/logs/utf8.log"]);
     assert_eq!(out.code, 1);
-    assert!(out.stderr.starts_with(b"gource: phase 1 build"), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(out.stderr.starts_with(b"burl: phase 1 build"), "{}", String::from_utf8_lossy(&out.stderr));
 }
 
 #[test]
@@ -225,7 +282,7 @@ fn help_text_matches_golden() {
     for (flag, file) in [("-h", "help-short.txt"), ("-H", "help-long.txt"), ("--help", "help-short.txt"), ("-?", "help-short.txt")] {
         let out = run(&[flag]);
         assert_eq!(out.code, 0);
-        assert_bytes(flag, &out.stdout, &read(&golden_dir().join(file)));
+        assert_named(flag, &out.stdout, &read(&golden_dir().join(file)));
         assert!(out.stderr.is_empty());
     }
 }

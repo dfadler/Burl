@@ -1,0 +1,88 @@
+Running 2 test cases...
+Entering test module "Gource Test Suite"
+src/test/datetime_tests.cpp:23: Entering test case "parse_date_time_tests"
+src/test/datetime_tests.cpp:27: info: check putenv((char*)"TZ=UTC") == 0 has passed
+src/test/datetime_tests.cpp:28: info: check SDLAppSettings::parseDateTime("2021-11-01", timestamp) has passed
+src/test/datetime_tests.cpp:29: info: check timestamp == 1635724800 has passed
+src/test/datetime_tests.cpp:31: info: check putenv((char*)"TZ=Pacific/Auckland") == 0 has passed
+src/test/datetime_tests.cpp:32: info: check SDLAppSettings::parseDateTime("2021-11-01", timestamp) has passed
+src/test/datetime_tests.cpp:33: info: check timestamp == 1635678000 has passed
+src/test/datetime_tests.cpp:35: info: check SDLAppSettings::parseDateTime("2021-11-01Z", timestamp) has passed
+src/test/datetime_tests.cpp:36: info: check timestamp == 1635724800 has passed
+src/test/datetime_tests.cpp:38: info: check SDLAppSettings::parseDateTime("2021-11-01+0", timestamp) has passed
+src/test/datetime_tests.cpp:39: info: check timestamp == 1635724800 has passed
+src/test/datetime_tests.cpp:41: info: check SDLAppSettings::parseDateTime("2021-11-01+13", timestamp) has passed
+src/test/datetime_tests.cpp:42: info: check timestamp == 1635678000 has passed
+src/test/datetime_tests.cpp:44: info: check SDLAppSettings::parseDateTime("2021-11-01 +13", timestamp) has passed
+src/test/datetime_tests.cpp:45: info: check timestamp == 1635678000 has passed
+src/test/datetime_tests.cpp:47: info: check SDLAppSettings::parseDateTime("2021-11-01+5:30", timestamp) has passed
+src/test/datetime_tests.cpp:48: info: check timestamp == 1635705000 has passed
+src/test/datetime_tests.cpp:50: info: check SDLAppSettings::parseDateTime("2021-11-01 12:01", timestamp) has passed
+src/test/datetime_tests.cpp:51: info: check timestamp == 1635721260 has passed
+src/test/datetime_tests.cpp:53: info: check SDLAppSettings::parseDateTime("2021-11-01 12:01Z", timestamp) has passed
+src/test/datetime_tests.cpp:54: info: check timestamp == 1635768060 has passed
+src/test/datetime_tests.cpp:56: info: check SDLAppSettings::parseDateTime("2021-11-01 12:01+0", timestamp) has passed
+src/test/datetime_tests.cpp:57: info: check timestamp == 1635768060 has passed
+src/test/datetime_tests.cpp:59: info: check SDLAppSettings::parseDateTime("2021-11-01 12:01+13", timestamp) has passed
+src/test/datetime_tests.cpp:60: info: check timestamp == 1635721260 has passed
+src/test/datetime_tests.cpp:62: info: check SDLAppSettings::parseDateTime("2021-11-01 12:01 +13", timestamp) has passed
+src/test/datetime_tests.cpp:63: info: check timestamp == 1635721260 has passed
+src/test/datetime_tests.cpp:65: info: check SDLAppSettings::parseDateTime("2021-11-01 12:01+5:30", timestamp) has passed
+src/test/datetime_tests.cpp:66: info: check timestamp == 1635748260 has passed
+src/test/datetime_tests.cpp:68: info: check SDLAppSettings::parseDateTime("2021-11-01 12:01:59", timestamp) has passed
+src/test/datetime_tests.cpp:69: info: check timestamp == 1635721319 has passed
+src/test/datetime_tests.cpp:71: info: check SDLAppSettings::parseDateTime("2021-11-01T12:01:59.123", timestamp) has passed
+src/test/datetime_tests.cpp:72: info: check timestamp == 1635721319 has passed
+src/test/datetime_tests.cpp:74: info: check SDLAppSettings::parseDateTime("2021-11-01 12:01:59Z", timestamp) has passed
+src/test/datetime_tests.cpp:75: info: check timestamp == 1635768119 has passed
+src/test/datetime_tests.cpp:77: info: check SDLAppSettings::parseDateTime("2021-11-01 12:01:59+0", timestamp) has passed
+src/test/datetime_tests.cpp:78: info: check timestamp == 1635768119 has passed
+src/test/datetime_tests.cpp:80: info: check SDLAppSettings::parseDateTime("2021-11-01 12:01:59+13", timestamp) has passed
+src/test/datetime_tests.cpp:81: info: check timestamp == 1635721319 has passed
+src/test/datetime_tests.cpp:83: info: check SDLAppSettings::parseDateTime("2021-11-01 12:01:59 +13", timestamp) has passed
+src/test/datetime_tests.cpp:84: info: check timestamp == 1635721319 has passed
+src/test/datetime_tests.cpp:86: info: check SDLAppSettings::parseDateTime("2021-11-01 12:01:59+5:30", timestamp) has passed
+src/test/datetime_tests.cpp:87: info: check timestamp == 1635748319 has passed
+src/test/datetime_tests.cpp:89: info: check SDLAppSettings::parseDateTime("2021-11-01T12:01:59", timestamp) has passed
+src/test/datetime_tests.cpp:90: info: check timestamp == 1635721319 has passed
+src/test/datetime_tests.cpp:92: info: check SDLAppSettings::parseDateTime("2021-11-01T12:01:59.123", timestamp) has passed
+src/test/datetime_tests.cpp:93: info: check timestamp == 1635721319 has passed
+src/test/datetime_tests.cpp:95: info: check SDLAppSettings::parseDateTime("2021-11-01T12:01:59Z", timestamp) has passed
+src/test/datetime_tests.cpp:96: info: check timestamp == 1635768119 has passed
+src/test/datetime_tests.cpp:98: info: check SDLAppSettings::parseDateTime("2021-11-01T12:01:59+0", timestamp) has passed
+src/test/datetime_tests.cpp:99: info: check timestamp == 1635768119 has passed
+src/test/datetime_tests.cpp:101: info: check SDLAppSettings::parseDateTime("2021-11-01T12:01:59+13", timestamp) has passed
+src/test/datetime_tests.cpp:102: info: check timestamp == 1635721319 has passed
+src/test/datetime_tests.cpp:104: info: check SDLAppSettings::parseDateTime("2021-11-01T12:01:59+13", timestamp) has passed
+src/test/datetime_tests.cpp:105: info: check timestamp == 1635721319 has passed
+src/test/datetime_tests.cpp:107: info: check SDLAppSettings::parseDateTime("2021-11-01T12:01:59+5:30", timestamp) has passed
+src/test/datetime_tests.cpp:108: info: check timestamp == 1635748319 has passed
+src/test/datetime_tests.cpp:110: info: check SDLAppSettings::parseDateTime("2021-11-01T12:01:59.123+5:30", timestamp) has passed
+src/test/datetime_tests.cpp:111: info: check timestamp == 1635748319 has passed
+src/test/datetime_tests.cpp:23: Leaving test case "parse_date_time_tests"; testing time: 24040us
+src/test/regex_tests.cpp:22: Entering test case "regex_tests"
+src/test/regex_tests.cpp:25: info: check regex.isValid() has passed
+src/test/regex_tests.cpp:27: info: check regex.match("ABC") has passed
+src/test/regex_tests.cpp:28: info: check regex.match("abc") == false has passed
+src/test/regex_tests.cpp:29: info: check regex.match("ABC123") == false has passed
+src/test/regex_tests.cpp:32: info: check regex_copy.isValid() has passed
+src/test/regex_tests.cpp:33: info: check regex_copy.match("ABC") has passed
+src/test/regex_tests.cpp:35: info: check 'exception "RegexCompilationException" raised as expected' has passed
+src/test/regex_tests.cpp:38: info: check test_regex.isValid() == false has passed
+src/test/regex_tests.cpp:42: info: check capture_regex.match("ABC123", &matches) has passed
+src/test/regex_tests.cpp:43: info: check matches.size() == 1 has passed
+src/test/regex_tests.cpp:44: info: check matches[0] == "123" has passed
+src/test/regex_tests.cpp:22: Leaving test case "regex_tests"; testing time: 2235us
+Leaving test module "Gource Test Suite"; testing time: 26334us
+
+Test module "Gource Test Suite" has passed with:
+  2 test cases out of 2 passed
+  69 assertions out of 69 passed
+
+  Test case "parse_date_time_tests" has passed with:
+    58 assertions out of 58 passed
+
+  Test case "regex_tests" has passed with:
+    11 assertions out of 11 passed
+
+rc=0

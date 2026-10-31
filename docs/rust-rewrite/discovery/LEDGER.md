@@ -120,7 +120,7 @@ Decided by the user (2026-10-30; all nine questions answered):
 
 Decided 2026-10-31 (naming): Burl is the name of the project and its program (the Rust rewrite and what it grows into). Gource means only the original C++ program (0.57) that Burl was derived from and is checked against. Burl is our fork and will become a whole rewrite; it is never submitted back to Gource, and nothing is proposed upstream. The code stays GPL-3.0-or-later (COPYING), so Gource's copyright and licence notices are preserved. The glossary is in /CONTEXT.md.
 
-Awaiting the user (recommendation only): the program's binary name. During parity the help header, error prefix and usage text must match the goldens byte for byte ("Gource v0.57", "gource: <msg>"), so the crate and binary are currently named `gource`. Recommendation: keep `gource` while parity goldens run, keep the program name in one constant, and rename to `burl` as the first deliberate break after parity.
+Decided 2026-10-31 (binary name, option 3): the program is named `burl` from now on. The golden harness normalises only the program name, at the anchored positions where it appears in the goldens (help line 1, the usage line, the error prefix, the Try line, and the saved command lines), to a placeholder on both sides and compares everything else byte for byte; the expected-diff file stays reserved for deliberate behaviour changes. Open detail: the version number printed in the help header (default: keep 0.57 until Burl's first release). Not yet implemented: PR #3 still names the crate and binary `gource`.
 
 ## Reading order for the rewrite
 

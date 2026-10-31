@@ -101,13 +101,24 @@ Mechanical check: every `.cpp` under src/ (excluding vendored tinyxml) is named 
 - Crate maintenance judged from release dates; transitive licenses unchecked.
 - tests/test.conf is referenced by nothing in the build; it is a manual scenario file.
 
-## Decisions for the user before implementation starts
+## Decisions
 
-1. D1: validate every [gource] section up front (C++ validates only the first and terminates mid-run on a later bad section). Parity vs robustness.
-2. D2: block on log load in export mode so the frame-dump phase is deterministic (C++ lets runtime/framecount advance during load). Parity vs determinism.
-3. PRNG default: documented Rust PRNG (xorshift) with optional glibc/macOS-compatible modes, or glibc TYPE_3 as the default for closest Linux parity.
-4. `--ffp`: accept and ignore (always shader path) or reject.
-5. Whether to keep known C++ bugs for parity: `--log-format cvs-exp` unmatched, `--stop-on-idle` no-op, help text user-friction 0.67 vs code 1.0, dir-name-position help range 0.0 vs enforced 0.1.
+Decided by the user (2026-10-30; all nine questions answered):
+
+- Parity: same parsed commits and simulation state; rendering visually equivalent (see /CONTEXT.md).
+- Rust workspace lives in this repo beside the C++, which stays until parity is proven.
+- First release targets macOS and Linux. Windows users run it in Docker, headless frame export only.
+- Delivery: two PRs against master, docs first, then phase 1 code.
+- D1: validate every [gource] section up front.
+- D2: export mode waits for the log to load first (keep a flag for the old behaviour).
+- D3: documented Rust PRNG by default, with glibc and macOS compatibility modes for parity tests.
+- D4: `--ffp` is accepted and ignored.
+- D5: fix all four known C++ bugs now. Interpretation to confirm: the two help-text mismatches (user-friction, dir-name-position) are fixed by correcting the help text to match the code, because changing the code would change simulation state and break parity. `--log-format cvs-exp` is made to work. `--stop-on-idle` needs a call: implement it or drop it from the help. The help-text goldens in golden/ will therefore differ from the Rust output on those lines; record the expected diff.
+
+- Renderer stack: `winit` + `glutin` + `glow` (chosen over the recommended `sdl2` + `glow`). Consequences: input, IME, clipboard, cursor and high-DPI semantics differ from SDL, so the parity spec needs explicit input and DPI tests; `glutin` (last release 2025-04-30) and `glutin-winit` (2024-06-08) are slow-moving, so pin exact versions and keep the window and GL context behind the renderer trait so a swap stays cheap. No C SDL2 library is needed.
+- D6: fork the C++ sources (chosen over the recommended patch file). Consequence: the original program is no longer the only oracle. Keep the untouched C++ build as the oracle for every byte-exact golden (help text, exit codes, custom-log), and use the fork only to emit the per-frame state dump. Guard: the fork must reproduce the same custom-log and help goldens as the original before its state dump is trusted. Location and name of the fork directory are still to be chosen.
+
+D5 default pending confirmation: `--stop-on-idle` is undocumented in the help, README and man page, so there is no documented behaviour to implement. Default is to keep accepting it, mark it in the docs as accepted with no effect, and not invent new semantics.
 
 ## Reading order for the rewrite
 

@@ -25,8 +25,10 @@ Outcome: autotools path BLOCKED (autoconf/automake/libtool missing). Direct clan
 
 The repo has no pre-generated `configure` (only autogen.sh and configure.ac), so autotools are required.
 
-## Needed to proceed (user installs)
-`brew install autoconf automake lib## Direct build (no autotools) - worked
+## Autotools route (not needed)
+Running `./autogen.sh` would need `brew install autoconf automake libtool`. This route was not taken: the direct build below worked without installing anything.
+
+## Direct build (no autotools) - worked
 Key finding: Homebrew under /usr/local is x86_64 (pkg-config, SDL2, boost dylibs are all x86_64) while the shell is arm64. Without `-arch x86_64`, SDL.h pulls in x86 intrinsics and every file fails with `raointintrin.h: use of undeclared identifier '__builtin_ia32_aadd32'`. Rosetta works (`arch -x86_64 /usr/bin/true`). Fixed by `-arch x86_64`.
 
 Build copy of src/ and data/ in a temp directory; the reproducible scripts are `golden/scripts/build.sh`, `link.sh`, `gold.sh`, `tbuild.sh` (see `golden/scripts/README.md`; they take `BUILD=` and default `REPO` to this checkout). The original session-scoped build directory is gone.

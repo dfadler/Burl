@@ -62,7 +62,7 @@ for f in tests/logs/*.log; do gource-rs --output-custom-log - "$f" | diff -u "te
 - Port the section 1 date vectors straight into `cargo test` (set TZ per case).
 
 ### (2) Simulation-state equivalence
-Add `--debug-dump-state FILE` to the C++ reference and to Rust, writing JSON lines at the end of `Gource::logic` (called at gource.cpp:265) every N frames (0, 30, 60, ...): frame, runtime, current log time/commit cursor, counts of users/files/dirs, then entities sorted by path or name: file {path, pos, dest, vel, alpha, colour, removing}, user {name, pos, vel, action count}, dir {path, pos, parent angle, radius}, camera {pos, zoom}. Print floats `%.4f`.
+Add `--debug-dump-state FILE` to the C++ reference fork (`reference/gource-cpp-dump/`, does not exist yet; the untouched oracle stays the source of byte-exact goldens) and to Rust, writing JSON lines at the end of `Gource::logic` (called at gource.cpp:265) every N frames (0, 30, 60, ...): frame, runtime, current log time/commit cursor, counts of users/files/dirs, then entities sorted by path or name: file {path, pos, dest, vel, alpha, colour, removing}, user {name, pos, vel, action count}, dir {path, pos, parent angle, radius}, camera {pos, zoom}. Print floats `%.4f`.
 ```
 gource tests/logs/file-removal.log -o /dev/null -r 60 --seconds-per-day 1 --stop-at-time 10 --hash-seed 31 --disable-auto-rotate --debug-dump-state out.jsonl
 ```
@@ -75,7 +75,7 @@ xvfb-run -a -s "-screen 0 1280x720x24" env LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVE
   --hash-seed 31 --disable-auto-rotate -o ref.ppm
 # split the P6 stream into PNG frames (e.g. ffmpeg -f image2pipe -c:v ppm -i ref.ppm f%04d.png)
 ```
-Run the Rust build the same way (wgpu with a Mesa lavapipe or other software adapter). Compare every 30th frame with ImageMagick `compare -metric SSIM` (pass at >= ~0.9, tune), plus the section 2 dump as the primary gate. Reduce noise by disabling bloom/shadows when checking structure, and use the bundled font data/fonts/FreeSans.ttf. macOS has no llvmpipe, so use the dump as the gate there.
+Run the Rust build the same way (glutin + glow on Mesa llvmpipe, `LIBGL_ALWAYS_SOFTWARE=1`; wgpu is not the stack). Compare every 30th frame with ImageMagick `compare -metric SSIM` (pass at >= ~0.9, tune), plus the section 2 dump as the primary gate. Reduce noise by disabling bloom/shadows when checking structure, and use the bundled font data/fonts/FreeSans.ttf. macOS has no llvmpipe, so use the dump as the gate there.
 
 ## Gaps
 - Sequencing of multiple `[gource]` sections: src/main.cpp:73-105, src/gource_settings.cpp:618, src/core/conffile.cpp (not traced).

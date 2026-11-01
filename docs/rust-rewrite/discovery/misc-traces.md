@@ -315,7 +315,7 @@ geometry is drawn in the doubled pixel space with unchanged world-to-screen scal
   `SetProcessDpiAwareness(PER_MONITOR)` or falls back to `SetProcessDPIAware()` from USER32/SHCORE.
   After window creation, `SDL_GL_GetDrawableSize` provides `display.width/height` and `updateViewportDPIRatio()`
   records the ratio (display.cpp:383-385, 530-532).
-Rust/winit: request a HiDPI-capable surface by default, use physical (drawable) pixels for `width/height`, keep the
+Rust/winit (requirement): request a HiDPI-capable surface by default, use physical (drawable) pixels for `width/height`, keep the
 logical->physical ratio for mouse input, and disable HiDPI when an explicit viewport is given without `--high-dpi` (macOS/Linux).
 
 ---

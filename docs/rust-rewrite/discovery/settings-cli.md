@@ -209,7 +209,7 @@ Defaults from `setGourceDefaults` (GS:368-520). "Req value" = empty value raises
 | `--no-time-travel` | bool | `no-time-travel` | `no_time_travel` | false | | 1364 |
 | `--author-time` | bool | `author-time` | `author_time` | false | | 1385 |
 | `--key` | bool | `key` | `show_key` | false | | 1352 |
-| `--ffp` | bool | `ffp` | `ffp` (fixed-function pipeline) | false | undocumented; forced true at runtime if no GLEW 2.0 (gource.cpp:33) | 1356 |
+| `--ffp` | bool | `ffp` | `ffp` (fixed-function pipeline) | false | undocumented; forced true at runtime if no GLEW 2.0 (gource.cpp:33). Rust: accepted and ignored (D4) | 1356 |
 | `--disable-auto-rotate` | bool | `disable-auto-rotate` | `disable_auto_rotate` | false | | 712 |
 | `--disable-input` | bool | `disable-input` | `disable_input` | false | | 720 |
 | `--camera-mode` | string | `camera-mode` | `camera_mode` | `overview` | req `specify camera-mode (overview,track)`; else invalid | 1455 |
@@ -430,6 +430,7 @@ Takes one value: everything else in sections 4-5, plus `load-config, save-config
 |---|---|---|
 | Default window height | 640 on macOS (`__APPLE__`), 768 elsewhere (width 1024) | CS:69-73 |
 | `--high-dpi` | omitted from `-h` on Windows; main forces high-DPI awareness on Windows, on others only disables it when a viewport is given without `--high-dpi` (MacOS pixel doubling) | GS:59, M:151-163 |
+| (Scope, decided 2026-10-30: the Windows rows here, including `--high-dpi` on Windows, are moot for Rust: Windows is Docker headless export only.) |  |  |
 | Windows console | `initConsole`, console resize to height 1040 for help, `showConsole`, "Press Enter" prompts after help/info/error if console is not pre-existing; console hidden when log level OFF | M:31-33,77-82, GS:44-47,201-206, SA:49-153 |
 | Exe path | only passed to `SDLAppInit` on non-Windows (resource dir relative to exe if `SDLAPP_RESOURCE_DIR` missing) | M:22-27, SA:178-256 |
 | `user-image-dir` | Windows: UTF-16 filename -> UTF-8; macOS: NFC normalisation of the avatar name | GS:834-858 |
@@ -486,7 +487,7 @@ Cites: M=src/main.cpp, GS=src/gource_settings.cpp, CS=src/core/settings.cpp, CF=
 7. `new Gource(exporter)`.
 ESC sets `shutdown`. Enter (without Alt) sets `next=true` (SH:177) -> current Gource deleted and next started.
 
-**Gotchas.** (a) Sections after the first are validated lazily in `getNext()`; a `ConfFileException` there is not caught by main's run block, which catches only `ResourceException` and `SDLAppException` (M:210-226; `ConfFileException : std::exception`, conffile.h:30) -> uncaught -> `std::terminate`, after earlier repos already played. Port must pick: abort the same way, or validate all sections up front (behaviour change). (b) `path` existence is checked per section at import (GS:1629+).
+**Gotchas.** (a) Sections after the first are validated lazily in `getNext()`; a `ConfFileException` there is not caught by main's run block, which catches only `ResourceException` and `SDLAppException` (M:210-226; `ConfFileException : std::exception`, conffile.h:30) -> uncaught -> `std::terminate`, after earlier repos already played. Port must pick: abort the same way, or validate all sections up front (behaviour change). **Decided 2026-10-31: Rust validates all sections up front (D1), no flag.** (b) `path` existence is checked per section at import (GS:1629+).
 
 **tests/test.conf** (no reference found in Makefile.am/configure.ac/.github; presumably manual or external harness). Eight `[gource]` sections, each with `title` and `stop-at-time` (10,10,5,5,5,5,5,5), plus: `file-idle-time=0.0`, `path=` (logs/*.log) on 1,2,6,7, `user-filter=Andrew`, `file-filter=\.cpp`, `file-show-filter=\.cpp`, `caption-file`+`user-image-dir` (section 8, with `path=logs/utf8.log`). Sections 3-5 have no `path` -> default `.` after the reset. It exercises: per-section reset (filters must not leak), relative paths resolved from CWD, multi-repo wrap (repo_count=8). Suggested port test: run each section, assert filters absent in the following one.
 

@@ -1,10 +1,12 @@
 # Planning ledger
 
+Updated 2026-10-31 for the final decisions; no planning tick has been run (Stop rule: NOT MET).
+
 Goal: a plan for the Rust rewrite of Gource complete enough that a fresh implementer,
 given only `docs/rust-rewrite/plan/` and one phase brief, builds that phase and passes
 its parity gate without opening the C++ and without asking a question. Inputs: the
 discovery pass (`../discovery/`, closed 2026-10-29), the phase-1 code and report
-(`../phase1.md`, branch `claude/hungry-kilby-78e776`), the C++ sources (read only),
+(`../phase1.md`; PRs #2 docs and #3 code are both merged), the C++ sources (read only),
 crate documentation at pinned versions.
 
 Loop: dynamic ticks, orchestrator = the model running `LOOP.md`, children = Sonnet
@@ -74,13 +76,13 @@ but unverified, `[ ]` not started.
 | C++ function-level pass: `core/{display,shader,shader_common,texture,fxfont,vbo,ppm,png_writer,frustum,plane,resource,sdlapp,logger,mousecursor}.cpp`, `bloom.cpp` | `functions/<file>.md` (render tier: signatures and behaviour, pseudocode only where state is produced) | [ ] |
 | Rust: f32 determinism (FMA, `-C target-feature`, `mul_add`, libm variance), with compiled evidence | `rust/handbook.md` sec. 1 | [ ] |
 | Rust: arena and index patterns, borrow-safe read-before-write, no `unsafe` | `rust/handbook.md` sec. 2 | [ ] |
-| Rust: `sdl2` + `glow` GL 3.2 core on macOS and Linux, `freetype-rs`, `image`, `png` APIs the plan relies on, compile-checked | `rust/crates.md`, `rust/snippets/` | [ ] |
+| Rust: `winit` + `glutin` + `glutin-winit` + `glow` GL 3.2 core on macOS and Linux (window and context behind the renderer trait, exact pins), `freetype-rs`, `image`, `png` APIs the plan relies on, compile-checked | `rust/crates.md`, `rust/snippets/` | [ ] |
 | Rust: `pcre2`, `regex`, `chrono`, `roxmltree` claims already used by phase 1, re-cited at versions | `rust/crates.md` | [ ] |
 | Rust: testing and golden harness idioms (`CARGO_BIN_EXE_*`, insta or hand-rolled, `trycmd`), sabotage checks in CI | `rust/handbook.md` sec. 3 | [ ] |
-| Rust: CI matrix for Linux/macOS/Windows with Xvfb + llvmpipe on Linux, `cargo deny` for transitive licences, MSRV policy, clippy gates | `rust/handbook.md` sec. 4 | [ ] |
+| Rust: CI matrix Linux/macOS + Windows via Docker (headless export) with Xvfb + llvmpipe on Linux, `cargo deny` for transitive licences, MSRV policy, clippy gates | `rust/handbook.md` sec. 4 | [ ] |
 | Rust: packaging (resources, `include_bytes!` vs install dir, NSIS replacement, `cargo dist` or not) | `rust/handbook.md` sec. 5 | [ ] |
 | Parity: goldens each phase needs, which exist, which need the C++ binary, which need Linux; generator scripts; comparator design | `parity/infra.md`, `parity/matrix.md` | [ ] |
-| Parity: the state-dump schema as adopted for Rust, and how the C++ side is produced given decision D6 | `parity/infra.md` | [ ] |
+| Parity: the state-dump schema as adopted for Rust, and how the C++ side is produced (decision D6: the fork at `reference/gource-cpp-dump/`; the untouched C++ build stays the oracle) | `parity/infra.md` | [ ] |
 | Phase briefs 1, 3, 4, 5, 6, 7 | `phases/phase-N.md` | [ ] |
 | Dry-runs 1, 3, 4, 5, 6, 7 | `dry-runs/phase-N.md` | [ ] |
 
@@ -96,16 +98,16 @@ but unverified, `[ ]` not started.
 | --- | --- | --- | --- | --- |
 | 0 | 0 | 150 | kit written by hand, no agents | (first tick fills) |
 
-## Decisions for the user (defaults taken; the loop never blocks on these)
+## Decisions (all decided 2026-10-30/31; recorded from the user's answers)
 
-| # | Question | Default taken | Restoring flag | Status |
+| # | Question | Decided value | Flag | Status |
 | --- | --- | --- | --- | --- |
-| D1 | validate every `[gource]` section up front vs C++ lazy | up front | `--strict-lazy-sections` (proposed name) | open |
-| D2 | block on log load in export mode vs C++ load-time-dependent frames | block | `--legacy-log-load` (proposed name) | open |
-| D3 | PRNG default | documented Rust PRNG; glibc / Park / Script selectable | `GOURCE_RS_PRNG` | open |
-| D4 | `--ffp` | accept, shader path | none | open |
-| D5 | keep known C++ bugs (`cvs-exp` unmatched, `--stop-on-idle` no-op, help friction 0.67 vs 1.0, dir-name-position range) | keep during the port | none | open |
-| D6 | how the C++ state-dump reference is produced without modifying `src/` on this branch: a separate never-merged instrumentation branch, a patch file applied only in the golden-capture script, or hand-derived vectors | patch file under `parity/`, applied by the capture script to a scratch checkout, never committed to `src/` | none | open |
+| D1 | validate every `[gource]` section up front vs C++ lazy | up front | none | decided |
+| D2 | block on log load in export mode vs C++ load-time-dependent frames | block | optional old-behaviour flag, not requested; add only if the comparator needs it | decided |
+| D3 | PRNG default | documented Rust PRNG; glibc / Park / Script selectable | `GOURCE_RS_PRNG` (selection mechanism for the compatibility modes) | decided |
+| D4 | `--ffp` | accept and ignore | none | decided |
+| D5 | the four known C++ bugs (`cvs-exp` unmatched, `--stop-on-idle` no-op, help friction 0.67 vs 1.0, dir-name-position range) | fix: explicit `cvs-exp` works; `--stop-on-idle` stays accepted, documented as no effect; help text corrected to the code (friction 1.0, dir-name-position from 0.1); goldens never edited, expected diff under `discovery/golden/expected-diffs/` (does not exist yet) | none | decided |
+| D6 | how the C++ state-dump reference is produced | fork the C++ sources into `reference/gource-cpp-dump/` (does not exist yet), outside `src/`; the untouched build stays the oracle for byte-exact goldens; the fork must first reproduce the oracle's help and custom-log goldens | none | decided |
 
 ## Corrections to discovery docs found by this loop
 

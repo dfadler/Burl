@@ -30,8 +30,8 @@ Legend: `[x]` verified against source or a binary, `[~]` catalogued from a child
 | verification-tick3-scene.md | independently re-derived pseudocode for every sim function (f32/f64 noted) and a 9-row discrepancy table (now patched into scene-model.md / app-core.md) |
 | misc-traces.md | PPM exporter thread, stdin isFinished, multi-repo reset set, --save-config format, hover/follow, captions, HiDPI, custom-log writer |
 | unit-tests.md | Boost tests built and run (69 assertions pass); 28 datetime parse goldens; golden/unit-tests.txt |
-| parity-test-spec.md | executable parity plan: parser goldens, --debug-dump-state JSONL schema, PRNG modes, C++ dump patch, tolerances, visual SSIM recipe, 28-row matrix |
-| rust-architecture-map.md | crate/module layout, arena tree model, threading, renderer trait, hand-rolled CLI, regex strategy, PRNG/timing, 9 phases with parity gates |
+| parity-test-spec.md | executable parity plan: parser goldens, --debug-dump-state JSONL schema, PRNG modes, C++ reference fork (`reference/gource-cpp-dump/`), tolerances, visual SSIM recipe, 28-row matrix |
+| rust-architecture-map.md | crate/module layout, arena tree model, threading, renderer trait, hand-rolled CLI, regex strategy, PRNG/timing, 8 phases (0 to 7) with parity gates |
 
 ## Agent budget (100 total)
 
@@ -53,8 +53,8 @@ Legend: `[x]` verified against source or a binary, `[~]` catalogued from a child
 - [x] Custom log format fully specified — log-formats.md (regex verified); goldens in golden/custom-log/
 - [x] Simulation/layout algorithms captured — scene-model.md + app-core.md, independently re-derived in verification-tick3-scene.md (9 minor discrepancies patched; commits never sorted)
 - [x] Output pipeline captured — output-pipeline.md + tick 2 (uniforms, fonts, labels, UI geometry, pawn formulas, DPI, textures)
-- [x] Each C++ dependency mapped to Rust crates — deps-and-rust-mapping.md; 40 crates verified on crates.io, licenses GPLv3-compatible, GL stack recommendation (sdl2+glow GL 3.2 core), glibc vs macOS rand() documented
-- [x] Build/packaging/platform specifics noted — deps-and-rust-mapping.md, settings-cli.md, build-and-goldens.md
+- [x] Each C++ dependency mapped to Rust crates — deps-and-rust-mapping.md; 40 crates verified on crates.io, licenses GPLv3-compatible, GL stack (originally recommended sdl2+glow; the user chose winit+glutin+glow, GL 3.2 core, see Decisions), glibc vs macOS rand() documented
+- [x] Build/packaging/platform specifics noted (Windows native specifics out of scope for the first release) — deps-and-rust-mapping.md, settings-cli.md, build-and-goldens.md
 - [x] Test fixtures understood; golden-output strategy written — tests-and-golden-strategy.md + parity-test-spec.md; parser, help, exit-code and unit-test goldens captured. utf8-caption.log is a --caption-file fixture (test.conf:39). No render golden on this machine (needs a real GL window; SDL dummy driver has no GL); Linux Xvfb + llvmpipe recipe written
 - [x] Exit codes and error messages catalogued — settings-cli.md, app-core.md; golden/exit-codes.txt from the binary
 - [x] Citation-verifier pass over every doc — tick 2 (eight tick-1 docs), tick 3 (sim formulas re-derived), tick 4 (timing.md, every Tick 2 additions section, misc-traces, unit-tests, parity spec option spellings, architecture map cross-check). Every doc now ends with a Verification section naming what was and was not checked.
@@ -63,11 +63,11 @@ Legend: `[x]` verified against source or a binary, `[~]` catalogued from a child
 
 ## Key cross-cutting findings (tick 1)
 
-- Rendering is legacy fixed-function GL + GLSL 1.10 compat; a Rust backend will be a redraw (wgpu or glow), visual equivalence only.
+- Rendering is legacy fixed-function GL + GLSL 1.10 compat; a Rust backend will be a redraw (glow on GL 3.2 core, decided; see Decisions), visual equivalence only.
 - Regex: PCRE2 byte-mode with look-around in internal patterns and raw user patterns for --file-filter/--user-filter. `regex` crate alone is insufficient; pcre2 or fancy-regex needed for parity.
 - Simulation state depends on: unseeded libc `rand()` (overlap nudges, recolour), sorted-map iteration order, quadtree `std::set` pointer order, wall-clock dt unless exporting (fixed dt = 1/gource_fps). Rust port needs a documented PRNG and fixed-dt mode; bit-exact parity with the C++ binary is only achievable by porting glibc `rand()`.
 - `--output-custom-log` is the only headless path today and is the natural parser golden.
-- Bugs/quirks to preserve or decide on: `--log-format cvs-exp` unmatched in logmill; `--stop-on-idle` no-op; help text says user-friction 0.67 but code default 1.0; RDirNode ctor shadows `parent`.
+- Bugs/quirks (all four decided: fixed in Burl, see Decisions D5): `--log-format cvs-exp` unmatched in logmill; `--stop-on-idle` no-op; help text says user-friction 0.67 but code default 1.0; RDirNode ctor shadows `parent`.
 
 ## Key cross-cutting findings (tick 2)
 
@@ -78,12 +78,12 @@ Legend: `[x]` verified against source or a binary, `[~]` catalogued from a child
 - Config: CLI scalars are applied to every [gource] section; only the first section is validated at startup; a later bad section terminates the process.
 - utf8 replace_invalid (commitlog.cpp:29) is not equivalent to String::from_utf8_lossy; the transcribed algorithm must be ported.
 
-## Decisions flagged (behaviour the architecture map proposes to change vs C++)
+## Decisions flagged (behaviour the architecture map changes vs C++; all decided 2026-10-30/31, see Decisions)
 
-- Validate every [gource] section up front instead of only the first (C++ terminates mid-run on a bad later section). Deviation from parity; decide before implementing.
-- Block on log load in export mode so the PPM frame-dump phase does not depend on load time (C++ advances runtime/framecount during load). Deviation from parity; decide.
-- Accept --ffp and use the shader path anyway (C++ switches to fixed-function). Rendering-only.
-- Both deviations should be behind flags or recorded as intentional differences in the parity spec.
+- Validate every [gource] section up front instead of only the first (C++ terminates mid-run on a bad later section). Deviation from parity; decided (D1): no flag.
+- Block on log load in export mode so the PPM frame-dump phase does not depend on load time (C++ advances runtime/framecount during load). Deviation from parity; decided (D2): an old-behaviour flag is optional and was not requested.
+- Accept --ffp and ignore it (C++ switches to fixed-function). Rendering-only; decided (D4).
+- Both deviations are recorded as intentional differences in the parity spec (decided; no flag for D1, optional for D2).
 
 ## Stop rule: MET (tick 4)
 
@@ -92,12 +92,12 @@ Mechanical check: every `.cpp` under src/ (excluding vendored tinyxml) is named 
 
 ## Residual, known-unverified items (not blockers; listed so the rewrite does not treat them as settled)
 
-- glibc `rand()` TYPE_3 first outputs were reproduced from a Python model, not run against a real glibc; macOS Park-Miller was confirmed by a compiled test here. Windows MSVC `rand()` not researched.
+- glibc `rand()` TYPE_3 first outputs were reproduced from a Python model, not run against a real glibc; macOS Park-Miller was confirmed by a compiled test here. Windows MSVC `rand()` not researched (Windows is out of scope for the first release).
 - `vec2(rand()%100-50, rand()%100-50)` argument evaluation order is unspecified in C++; clang left-to-right assumed. Pin it in the parity spec when the reference binary is chosen.
 - stdin log behaviour: parser path and unterminated-last-line drop were exercised against the built binary (misc-traces.md, last section); empty-stdin startup and `--stop-at-end` with stdin remain read from source only.
 - PPM pipe / SIGPIPE behaviour not exercised.
 - No render golden exists; SDL's dummy driver has no GL on macOS and opening a real window was avoided. Use the Xvfb + llvmpipe recipe in parity-test-spec.md on Linux.
-- Windows-only paths (DPI awareness, console, HWND subclass, frameless) are catalogued from source only.
+- Windows-only paths (DPI awareness, console, HWND subclass, frameless) are catalogued from source only and out of scope for the first release (Windows is Docker headless export only).
 - Crate maintenance judged from release dates; transitive licenses unchecked.
 - tests/test.conf is referenced by nothing in the build; it is a manual scenario file.
 
@@ -108,15 +108,15 @@ Decided by the user (2026-10-30; all nine questions answered):
 - Parity: same parsed commits and simulation state; rendering visually equivalent (see /CONTEXT.md).
 - Rust workspace lives in this repo beside the C++, which stays until parity is proven.
 - First release targets macOS and Linux. Windows users run it in Docker, headless frame export only.
-- Delivery: two PRs against master, docs first, then phase 1 code.
-- D1: validate every [gource] section up front.
-- D2: export mode waits for the log to load first (keep a flag for the old behaviour).
+- Delivery: two PRs against master, docs first, then phase 1 code. PR #2 (docs: discovery and CONTEXT.md) and PR #3 (phase 1 code and the planning kit) are both merged. The C++ tree stays in place, so `Cargo.toml` and `crates/` coexist with the autotools files.
+- D1: validate every [gource] section up front. No flag.
+- D2: export mode waits for the log to load first. An old-behaviour flag is optional and was not specifically requested; keep one only if the parity comparator needs it.
 - D3: documented Rust PRNG by default, with glibc and macOS compatibility modes for parity tests.
 - D4: `--ffp` is accepted and ignored.
 - D5: fix all four known C++ bugs now. Interpretation accepted 2026-10-31: the two help-text mismatches (user-friction, dir-name-position) are fixed by correcting the help text to match the code, because changing the code would change simulation state and break parity. `--log-format cvs-exp` is made to work. `--stop-on-idle` stays an accepted option documented as having no effect, with no new semantics (decided 2026-10-31). The help-text goldens in golden/ will therefore differ from the Rust output on those lines. The expected diff is stored as a unified diff under `docs/rust-rewrite/discovery/golden/expected-diffs/` (does not exist yet; written when the help text is implemented); the golden harness compares Rust output against the golden with that diff applied, and the goldens themselves stay untouched.
 
 - Renderer stack: `winit` + `glutin` + `glow` (chosen over the recommended `sdl2` + `glow`). Consequences: input, IME, clipboard, cursor and high-DPI semantics differ from SDL, so the parity spec needs explicit input and DPI tests; `glutin` (last release 2025-04-30) and `glutin-winit` (2024-06-08) are slow-moving, so pin exact versions and keep the window and GL context behind the renderer trait so a swap stays cheap. No C SDL2 library is needed.
-- D6: fork the C++ sources (chosen over the recommended patch file). Consequence: the original program is no longer the only oracle. Keep the untouched C++ build as the oracle for every byte-exact golden (help text, exit codes, custom-log), and use the fork only to emit the per-frame state dump. Guard: the fork must reproduce the same custom-log and help goldens as the original before its state dump is trusted. Decided 2026-10-31: the directory is `reference/gource-cpp-dump/` (outside src/, so the autotools build and the Rust workspace never see it; does not exist yet). It holds a README naming the commit it was forked from, a copy of the needed sources with the src/core submodule's files copied in (not a nested submodule), and a script proving the fork reproduces the oracle's help and custom-log goldens before its state dump is trusted.
+- D6: fork the C++ sources (chosen over the recommended patch file; decided). Consequence: the original program is no longer the only oracle. Keep the untouched C++ build as the oracle for every byte-exact golden (help text, exit codes, custom-log), and use the fork only to emit the per-frame state dump. Guard: the fork must reproduce the same custom-log and help goldens as the original before its state dump is trusted. Decided 2026-10-31: the directory is `reference/gource-cpp-dump/` (outside src/, so the autotools build and the Rust workspace never see it; does not exist yet). It holds a README naming the commit it was forked from, a copy of the needed sources with the src/core submodule's files copied in (not a nested submodule), and a script proving the fork reproduces the oracle's help and custom-log goldens before its state dump is trusted.
 
 Decided 2026-10-31 (naming): Burl is the name of the project and its program (the Rust rewrite and what it grows into). Gource means only the original C++ program (0.57) that Burl was derived from and is checked against. Burl is our fork and will become a whole rewrite; it is never submitted back to Gource, and nothing is proposed upstream. The code stays GPL-3.0-or-later (COPYING), so Gource's copyright and licence notices are preserved. The glossary is in /CONTEXT.md.
 

@@ -3,7 +3,7 @@
 Status: `cargo build` and `cargo test` pass; every `--output-custom-log` golden in
 `discovery/golden/custom-log/` (five fixtures, the stdin variant and the unterminated-stdin
 case) matches byte for byte, as do `help-short.txt`, `help-long.txt`, the `--version` error
-and every `rc=` row of `golden/exit-codes.txt` except the SDL probe. The 28 `parseDateTime`
+and every `rc=` row of `golden/exit-codes.txt` except the SDL probe. (True of the code at the time of writing, with the program name normalised for Burl. After the D5 help-text fixes the Rust help output deliberately differs from the Gource goldens on the user-friction and dir-name-position lines; the harness then compares against the golden with the expected diff under `discovery/golden/expected-diffs/` applied, which does not exist yet.) The 28 `parseDateTime`
 vectors pass with the zone pinned, and again through the binary with `TZ=Pacific/Auckland`.
 
 ## What is here
@@ -24,9 +24,11 @@ system `libpcre2-8`. `Regex::new_user` picks PCRE2 when the feature is on.
 
 ## Decisions taken (ledger D1-D5)
 
-Only D5 touches this phase: `--log-format cvs-exp` still yields "unsupported log format"
-because `fetchLog` matches the string `cvs`, which settings reject; auto-detection of a
-cvs-exp file works. Kept for parity, covered by a test. D1-D4 do not reach the log layer.
+Only D5 touches this phase. Decided 2026-10-31: the known C++ bug is fixed, so an explicit
+`--log-format cvs-exp` selects the CVS-EXP parser (the code currently still matches `cvs`,
+which settings reject, so it yields "unsupported log format"; the fix and its test are
+pending in the code). Gource still fails it, so this is a documented deviation test.
+D1-D4 do not reach the log layer.
 
 ## Deliberately deferred
 
@@ -69,6 +71,6 @@ cvs-exp file works. Kept for parity, covered by a test. D1-D4 do not reach the l
 ## Rename to burl (2026-10-31)
 
 The binary crate was renamed from `gource` to `burl` (`crates/burl`, binary `burl`) after this
-document was written; references above to the `gource` binary mean that crate. The help text now
+document was written; the `gource` row in the table above and other references to the `gource` binary mean that crate. The help text now
 says Burl, and `crates/burl/tests/golden.rs` compares output with the Gource goldens through a
 narrow program-name normalisation (see `docs/rust-rewrite/discovery/LEDGER.md`, Decisions).

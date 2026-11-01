@@ -75,7 +75,7 @@ No graphics: after config import `Gource::writeCustomLog(path, file)` then `exit
 
 ## 4. Render pass order (`Gource::draw`, src/gource.cpp:2401-2780)
 
-Shader mode (default `ffp=false`) is the reference; `--ffp` does the same via immediate mode (skip in Rust).
+Shader mode (default `ffp=false`) is the reference; `--ffp` does the same via immediate mode (skip in Rust; Rust: accepted and ignored (D4)).
 
 | # | Pass | GL state | Shader / uniforms | Geometry / vertex format | Source |
 |---|---|---|---|---|---|
@@ -215,12 +215,14 @@ Not a shader asset: data/shaders contains exactly these six files (no README).
 | Bloom | `--bloom-multiplier` 1.0, `--bloom-intensity` 0.75 | | gource_settings.cpp:436-437 |
 | Shadow strength | 0.5 (geometry), 0.7 (text) | | pawn.cpp:20; gource.cpp text pass |
 
-## 8. Changes needed for a modern backend (wgpu) and visual-equivalence checklist
+## 8. Changes needed for a modern backend (glow, GL 3.2 core) and visual-equivalence checklist
+
+Decided 2026-10-30: renderer stack is winit + glutin + glow on OpenGL 3.2 core (`#version 150`); wgpu is not used, so wgpu/WGSL-specific items were removed from the list below.
 
 1. No fixed function: replace `ftransform`, `gl_Color`, `gl_TexCoord`, immediate mode, `GL_QUADS`, matrix stack, `gluPerspective/LookAt/Project`. Use a view-proj uniform (vertical fov 90, aspect w/h, near 0.1, far = camera zfar) and replicate `gluProject` maths on CPU (needed for edges, labels). Triangulate quads (0,1,2, 0,2,3).
-2. Port to WGSL: pipelines for textured-tinted, shadow, text, bloom, solid-colour UI. Reproduce bloom hash; clamp output; fix the reversed smoothstep.
+2. Port the shaders to GLSL `#version 150`: programs for textured-tinted, shadow, text, bloom, solid-colour UI. Reproduce bloom hash; clamp output; fix the reversed smoothstep.
 3. Blend: straight alpha with explicit same factors for colour and alpha; bloom One/One.
-4. Framebuffer: offscreen `Rgba8Unorm` (not sRGB) at exact output size; readback with 256-byte row padding; drop alpha for PPM. Clear colour in non-linear space as given.
+4. Framebuffer: offscreen non-sRGB RGBA8 FBO at exact output size; `glReadPixels` with pack alignment 1 (no row padding); drop alpha for PPM. Clear colour in non-linear space as given.
 5. Text: FreeType hinted 72 dpi with integer-rounded origin when `roundCoordinates` is on; `freetype-rs` is closest; fontdue/ab_glyph will differ slightly. Keep FreeSans.ttf; embed with `include_bytes!` or install path.
 6. Textures: PNG/TGA (RLE 24/32) plus arbitrary user images via `image` crate; generate mipmaps with trilinear sampling for file/user/avatar textures; beam.png wrap is GL default REPEAT.
 7. No depth buffer needed.
@@ -237,7 +239,7 @@ Not a shader asset: data/shaders contains exactly these six files (no README).
 - `FileKey::draw`, `Slider::draw`, `TextBox::draw` full geometry (src/key.cpp:110-160, src/slider.cpp:120-170, src/textbox.cpp:120-160).
 - Mouse cursor drawing (src/core/mousecursor.cpp), not exported.
 - Pawn/file/user colour, size, alpha formulas (simulation fan-out; src/pawn.cpp).
-- `--ffp` immediate-mode path only referenced; recommended to drop.
+- `--ffp` immediate-mode path only referenced; recommended to drop. Rust: accepted and ignored (D4).
 
 ## Tick 2 additions
 
@@ -335,10 +337,11 @@ Text positions (gource.cpp):
 
 ### T2.f Display / DPI / frameless mapping
 
-- SDL2 window flags: OPENGL|SHOWN; `frameless` -> BORDERLESS; `resizable && !frameless` -> RESIZABLE; fullscreen -> FULLSCREEN; ALLOW_HIGHDPI only if `--high-dpi` and not Windows (display.cpp:82-92). Default `high_dpi_aware=false` (display.cpp:47), so macOS gets a 1x backbuffer unless `--high-dpi`.
-- Windows branch: with `--high-dpi`, call `SetProcessDpiAwareness(PER_MONITOR=2)` (SHCORE, 8.1+) else `SetProcessDPIAware()` before window creation (display.cpp:549-593), needed to get real 4K pixels. winit is DPI-aware by default: request `PhysicalSize` and ignore scale factor unless `--high-dpi`.
+- (C++ behaviour; Rust mapping in the winit bullets below.) SDL2 window flags: OPENGL|SHOWN; `frameless` -> BORDERLESS; `resizable && !frameless` -> RESIZABLE; fullscreen -> FULLSCREEN; ALLOW_HIGHDPI only if `--high-dpi` and not Windows (display.cpp:82-92). Default `high_dpi_aware=false` (display.cpp:47), so macOS gets a 1x backbuffer unless `--high-dpi`.
+- Windows branch: with `--high-dpi`, call `SetProcessDpiAwareness(PER_MONITOR=2)` (SHCORE, 8.1+) else `SetProcessDPIAware()` before window creation (display.cpp:549-593), needed to get real 4K pixels. Windows is out of scope for Rust (decided 2026-10-30: Docker headless export only). winit is DPI-aware by default: request `PhysicalSize` and ignore scale factor unless `--high-dpi`.
 - Viewport: on resize `width/height = SDL_GL_GetDrawableSize` (pixels), `glViewport(0,0,w,h)`; `viewport_dpi_ratio = drawable/window size` (display.cpp:173-181,520-545). Only consumer: font_scale (T2.b). Port: drawable = `inner_size()` physical px; ratio = scale_factor only when high-dpi requested, else 1.
 - Frameless toggle (windowed only, display.cpp:405-470): SetWindowBordered(false), restore size/position (SDL bug 2791 workaround), then recreate video mode to drop RESIZABLE; Windows also uses GetWindowRect so the borderless window keeps outer framed size. winit: `set_decorations(false)`.
+- winit mapping (decided stack): window flags -> `WindowAttributes` (`with_decorations(!frameless)`, `with_resizable(resizable && !frameless)`, `with_fullscreen(Some(Fullscreen::Borderless(None)))` for desktop fullscreen, `with_transparent(enable_alpha)`); GL context/config via glutin-winit `DisplayBuilder` + `ConfigTemplateBuilder` (core 3.2, multisample); DPI via `Window::scale_factor()` and `inner_size()` (physical px); frameless toggle via `set_decorations`.
 - Fullscreen toggle uses FULLSCREEN_DESKTOP, saves/restores windowed size (display.cpp:360-400). Export path bypasses all of this (offscreen target).
 - Clear colour (0,0,0,1) default; `enable_alpha` makes clear alpha 0 (display.cpp:40-62).
 

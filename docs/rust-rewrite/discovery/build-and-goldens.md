@@ -50,3 +50,6 @@ Result: x86_64 Mach-O binary (868 KB). Run via Rosetta transparently.
 - utf8-caption.log: rc 1, "unsupported log format" with --log-format custom (it is a caption file, not a commit log; no golden). See custom-log/utf8-caption.stderr.txt.
 - Window probe: `SDL_VIDEODRIVER=dummy gource --stop-at-time 1 -o - tests/logs/utf8.log` -> rc 1, stderr "SDL initialization failed - OpenGL support is either not configured in SDL or not available in current SDL video driver (dummy)". The dummy driver cannot supply GL, so a real window/GL context is required for rendering (probe-dummy.stderr.txt). Real-window run not attempted (would open a window).
 - Note: --output-custom-log works without creating a window.
+
+## Fork build (decided 2026-10-31)
+The per-frame state-dump reference is a forked copy of the C++ sources at `reference/gource-cpp-dump/` (does not exist yet; see parity-test-spec.md 2.5). It is built by the same `golden/scripts/build.sh` and `link.sh`: build.sh copies `src/` and `data/` from `REPO` into `BUILD`, so pass the fork directory as `REPO` (it needs its own `Makefile.am` source list) and a separate `BUILD`. The oracle build (the untouched `src/`) is never modified and remains the only source of the byte-exact goldens; the fork must first reproduce the oracle's help and custom-log goldens before its dump is trusted.

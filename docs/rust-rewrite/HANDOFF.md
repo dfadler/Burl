@@ -1,40 +1,39 @@
 # Burl (Rust rewrite): Handoff
 
-Written 2026-10-30 (git and PR state updated 2026-10-31) so a fresh session with no memory of the conversation can continue. Burl is the name of this project and of the program it produces (the Rust rewrite and what it grows into). Gource means only the original C++ program (version 0.57, OpenGL, GPLv3+) that Burl was derived from and is checked against. Burl is our fork and will become a whole rewrite; it is never submitted back to Gource (user, 2026-10-31). The goal is a Rust rewrite with the same CLI, config format and log formats and the same parsed commits and simulation state (called parity, defined in `CONTEXT.md` at the repository root, now on `master`); rendering only has to be visually equivalent. Breaking changes and new features come after parity.
+Written 2026-10-30 (git, PR state and doc alignment updated 2026-10-31, after PR #3 merged) so a fresh session with no memory of the conversation can continue. Burl is the name of this project and of the program it produces (the Rust rewrite and what it grows into). Gource means only the original C++ program (version 0.57, OpenGL, GPLv3+) that Burl was derived from and is checked against. Burl is our fork and will become a whole rewrite; it is never submitted back to Gource (user, 2026-10-31). The goal is a Rust rewrite with the same CLI, config format and log formats and the same parsed commits and simulation state (called parity, defined in `CONTEXT.md` at the repository root, now on `master`); rendering only has to be visually equivalent. Breaking changes and new features come after parity.
 
-Path placeholders used below: `<repo>` is the main checkout; `<discovery-worktree>` is `<repo>/.claude/worktrees/rust-rewrite-discovery` (branch `worktree-rust-rewrite-discovery`, pushed and merged via PR #2, worktree clean); `<phase1-worktree>` is `<repo>/.claude/worktrees/hungry-kilby-78e776` (branch `claude/hungry-kilby-78e776` is checked out there, no longer detached); `<home>` is the user's home directory; `<user-global-conventions>` is the user's global conventions folder.
+Path placeholders used below: `<repo>` is the main checkout; `<discovery-worktree>` is `<repo>/.claude/worktrees/rust-rewrite-discovery` (branch `worktree-rust-rewrite-discovery`, pushed and merged via PR #2, worktree clean); `<phase1-worktree>` is `<repo>/.claude/worktrees/hungry-kilby-78e776` (its branch `claude/hungry-kilby-78e776` is merged via PR #3 and no longer checked out; the worktree now holds branch `docs/align-with-decisions`, cut from `master` `6e64025`); `<home>` is the user's home directory; `<user-global-conventions>` is the user's global conventions folder.
 
 ## Where things stand
 
 | Area | State |
 |---|---|
 | Discovery | Complete. 17 documents in `docs/rust-rewrite/discovery/` plus goldens captured from the real C++ binary in `golden/`. Verified in three passes. All goldens were captured on macOS arm64 hardware running x86_64 binaries under Rosetta; Linux behaviour (`rand()`, GL, fonts) is unverified. |
-| Phase 1 code | Cargo workspace on branch `claude/hungry-kilby-78e776` (open as draft PR #3, whose head moves with each push; 3482 lines of Rust in 20 files). `gource-util`, `gource-conf`, `gource-formats` and the `burl` binary are real; `gource-sim`, `gource-render`, `gource-gl` are empty. `cargo test --offline --locked` passes 45 tests on the merged branch (10 golden, 19 formats, 16 util); clippy was clean at the earlier tip and was not re-run after the merge; the `pcre2` feature tests were never run. Only `--log-format`, `--output-custom-log` and the positional path are implemented. |
-| Decisions | The user asked 12 questions. Q1 to Q3 were answered in chat, Q4 to Q12 in the questionnaire artifact (Part 1, section C). Decided 2026-10-31 on my recommendations: `--stop-on-idle` stays accepted with no effect; the state-dump fork directory is `reference/gource-cpp-dump/` (does not exist yet); the glossary is in `CONTEXT.md`; the expected help-text diff goes under `docs/rust-rewrite/discovery/golden/expected-diffs/` (does not exist yet); the project is named Burl. Still needs the user: (1) abort the paused merge in the main checkout (Git row); (2) review PR #3, which then merges as is with a merge commit. The binary name was decided 2026-10-31: the program is `burl` from now on and the golden harness normalises the program name (Part 1 D). Nothing blocks code work. The earlier question "open the docs PR now or start the next phase" is resolved: PR #2 is merged and PR #3 is open. |
+| Phase 1 code | On `master` (PR #3 merged 2026-10-31). Cargo workspace, 3482 lines of Rust in 20 files at the PR head. `gource-util`, `gource-conf`, `gource-formats` and the `burl` binary (`crates/burl`, renamed in `fd988b9`) are real; `gource-sim`, `gource-render`, `gource-gl` are empty. `cargo test --offline --locked` passes 45 tests (10 golden, 19 formats, 16 util); clippy was clean at an earlier tip and was not re-run after the merge; the `pcre2` feature tests were never run. Only `--log-format`, `--output-custom-log` and the positional path are implemented. The D5 fixes are NOT in the code: `logmill.rs` still matches `"cvs"` (explicit `cvs-exp` still fails) and the embedded help text still says user-friction 0.67 and dir-name-position 0.0 (it equals the oracle goldens apart from the program name). |
+| Decisions | The user asked 12 questions. Q1 to Q3 were answered in chat, Q4 to Q12 in the questionnaire artifact (Part 1, section C). Decided 2026-10-31 on my recommendations: `--stop-on-idle` stays accepted with no effect; the state-dump fork directory is `reference/gource-cpp-dump/` (does not exist yet); the glossary is in `CONTEXT.md`; the expected help-text diff goes under `docs/rust-rewrite/discovery/golden/expected-diffs/` (does not exist yet); the project is named Burl; the program is `burl` and the golden harness normalises the program name (Part 1 D). D1 to D6 are all decided. Still needs the user: (1) abort the paused merge in the main checkout (Git row); (2) review and merge the docs-alignment PR from branch `docs/align-with-decisions`. Undecided and not blocking: renaming the internal `gource-*` crates. |
 | Next phase | Phase numbers always mean the architecture map (0 to 7). Done: phase 2 (gate met, leftovers in Part 6). Partial: phase 0 (about 60%) and phase 1 (about 25%). Not started: 3 to 7. The first build session's "phase 1" (in `phase1.md`) covered map phases 0 and 2, so it is a different thing. **Next to implement: finish map phase 0** (prng, bounds, quadtree, `rotate_vec2` and `PI`, CI), because phase 3 (the XL simulation, the project's main correctness bar) depends on it; then the settings slice of phase 1 that phase 3 needs; then phase 3. Part 6 section D has the ordered actions. |
-| Docs vs decisions | Several discovery docs, the architecture map, the parity spec and the planning kit still describe the pre-decision plan (sdl2, patch file, optional D1 to D4, and the old project naming). Part 6 section B lists every passage with the exact change. |
-| Git | As of 2026-10-31 `origin/master` is `02d25f1` and contains the discovery docs, `golden/`, `CONTEXT.md`, the ledger decisions and this handoff (as commit `3b1cea2`), plus `setup-agent-skills` (PR #1, `216ec5d`), `CLAUDE.md` and `docs/agents/`. Branch `claude/hungry-kilby-78e776` (pushed; run `git rev-parse` for the current tip) is checked out in the phase 1 worktree; the discovery branch is pushed and merged and its worktree is clean. The main checkout (branch `setup-agent-skills` at `6ea1d6f`) is **still paused mid-merge** of the OLD discovery tip `6a9d08f` (`MERGE_HEAD` present, vim open in the user's terminal). It is pointless now that `master` has the docs; the user should type `:cq` in the editor, then run `git merge --abort` there (Part 1 B.5). |
-| PRs | PR #1 (setup-agent-skills) merged. PR #2 (docs; https://github.com/dfadler/Burl/pull/2) merged 2026-10-31 into `master` as the real merge commit `02d25f1`. PR #3 (code and planning kit; https://github.com/dfadler/Burl/pull/3) is a DRAFT, head `claude/hungry-kilby-78e776`, base `master`, opened 2026-10-31: 6 commits not on master (`e2d0c64`, `69725e1`, `4692454`, `179b76e`, the clean merge `f38481f` of `origin/master`, and `e66a9ee`), 50 files, +4,944 lines, nothing under `src/`. The repo has no CI; Auto-fix is enabled for the PR session. |
+| Docs vs decisions | Aligned on branch `docs/align-with-decisions` (2026-10-31, pending review; not yet on `master`): the doc rows of Part 6 section B1 to B7 and the planning kit under `plan/` (D1 to D6 decided) were updated by editors. `master` still carries the pre-decision text until that PR merges. The code, golden and script rows (D5 fixes, expected-diffs, harness change, the fork) are not done. |
+| Git | As of 2026-10-31 `origin/master` is `6e64025` (PR #3 merge commit; parents include `fd988b9` and the earlier `02d25f1` docs merge). It holds the discovery docs, `golden/`, `CONTEXT.md`, the Rust workspace, the planning kit, `CLAUDE.md` and `docs/agents/`. The phase 1 worktree is on branch `docs/align-with-decisions` (cut from `6e64025`, with uncommitted doc edits until the docs PR is opened); branch `claude/hungry-kilby-78e776` is merged and no longer checked out; the discovery branch is merged and its worktree is clean. The main checkout (branch `setup-agent-skills` at `6ea1d6f`) is **still paused mid-merge** of the OLD discovery tip `6a9d08f` (`MERGE_HEAD` present, vim open in the user's terminal). It is pointless now that `master` has the docs; the user should type `:cq` in the editor, then run `git merge --abort` there (Part 1 B.5). |
+| PRs | PR #1 (setup-agent-skills) merged. PR #2 (docs; https://github.com/dfadler/Burl/pull/2) merged 2026-10-31 into `master` as the real merge commit `02d25f1`. PR #3 (Rust workspace and parsers, burl rename, planning kit, handoff updates; https://github.com/dfadler/Burl/pull/3) merged 2026-10-31T20:27:01Z into `master` as the real merge commit `6e64025` (not a squash). The docs-alignment PR from branch `docs/align-with-decisions` against `master` (number unknown yet) is the next one: a draft to be opened. The repo has no CI. |
 
 ## Exact next commands (proposals; every one needs the user's go-ahead because it publishes or changes shared state)
 
-Run `git status --short` and `gh pr view 3 --repo dfadler/Burl` first; this list may have changed. Load the `github-pr:github-pr-workflow` and `gh-publish-guide` skills before any push or PR step.
+Run `git status --short`, `git branch --show-current` and `gh pr list --repo dfadler/Burl` first; this list may have changed. Load the `github-pr:github-pr-workflow` and `gh-publish-guide` skills before any push or PR step.
 
-Done (2026-10-31): the four uncommitted paths were committed as one commit `3b1cea2` (the branch history was rewritten by squashing the last two commits and force-pushed, so personal notes never appear in the PR; the older tick commits `36ba568` and `6a9d08f` still contain local worktree paths in hardcoded script paths, which was accepted); the discovery branch was pushed; PR #1 merged; PR #2 opened and merged into `master` as merge commit `02d25f1`; the phase 1 branch got `origin/master` merged in cleanly (`f38481f`), `e66a9ee` removed a worktree path and a session folder name from `plan/BRIEFS.md` and `plan/LEDGER.md`, and draft PR #3 was opened.
+Done (2026-10-31): the discovery docs were committed (`3b1cea2`; last two commits squashed and force-pushed so personal notes never appear in the PR; the older tick commits `36ba568` and `6a9d08f` still contain local worktree paths in hardcoded script paths, which was accepted); PR #1 and PR #2 (`02d25f1`) merged; PR #3 merged as `6e64025` (workspace, burl rename `fd988b9`, planning kit, handoff updates); branch `docs/align-with-decisions` was cut from `6e64025` and editors applied the doc rows of Part 6 section B plus the planning-kit update (uncommitted until the docs PR is opened).
 
 Remaining (proposals; each needs the user's go-ahead):
 
 1. The user aborts the paused merge in the main checkout: `:cq` in the open editor, then `git merge --abort` there. Agents must not run git in `<repo>` meanwhile.
-2. The user reviews PR #3; it then merges as is with a MERGE COMMIT (never squash), planning kit included, flagged stale in the PR body. All PRs target `dfadler/Burl` explicitly with `--repo`; GitHub still shows it as a fork of `acaudwell/Gource`, and nothing is ever proposed upstream.
-3. After PR #3 merges, branch from `master` and update the planning kit and the discovery docs per Part 6 section B (the kit still has 13 conflicts with the final decisions, Part 4 section 8; it is NOT ready to run).
-4. Finish map phase 0 (Part 6 section D, action 4), then the settings slice of phase 1, then phase 3.
-5. Planning loop (only after step 3): start a fresh session in a worktree on a branch from `master`, check `bash docs/rust-rewrite/plan/scripts/plan-coverage.sh` (baseline `SUMMARY: 221 gaps`), then run `/loop` with `Read docs/rust-rewrite/plan/LOOP.md and run one tick`. Budget 150 agents, 8 hours; the user must say go.
+2. Open the docs-alignment PR (draft) from `docs/align-with-decisions` against `dfadler/Burl` `master` with `--repo`; the user reviews it; it merges as is with a MERGE COMMIT (never squash). GitHub still shows the repo as a fork of `acaudwell/Gource`; nothing is ever proposed upstream.
+3. After it merges, branch from `master` for the D5 code fixes, the expected-diffs file and the harness change (Part 6 section D, action 2), then `reference/gource-cpp-dump/`, then finish map phase 0, the settings slice of phase 1, and phase 3.
+4. Planning loop (see Part 4 section 9 for what is still needed): start a fresh session in a worktree on a branch from `master`, check `bash docs/rust-rewrite/plan/scripts/plan-coverage.sh` (baseline `SUMMARY: 221 gaps`, re-measure first), then run `/loop` with `Read docs/rust-rewrite/plan/LOOP.md and run one tick`. Budget 150 agents, 8 hours; the user must say go.
 
 ## Do these first
 
-1. Open with one message to the user listing the two items that still need them (abort the paused merge, review and merge PR #3). Do not stall on the answers.
-2. Do not push, mark PR #3 ready, merge, or spend an agent budget without the user's explicit yes in chat.
-3. Once the user agrees, continue with the remaining steps above and the ten prioritised actions in Part 6 section D.
+1. Open with one message to the user listing the two items that still need them (abort the paused merge, review and merge the docs-alignment PR). Do not stall on the answers.
+2. Do not push, mark a PR ready, merge, or spend an agent budget without the user's explicit yes in chat.
+3. Once the user agrees, continue with the remaining steps above and the prioritised actions in Part 6 section D.
 
 ## Do not
 
@@ -85,6 +84,8 @@ Remaining (proposals; each needs the user's go-ahead):
 9. The phase 1 branch was checked out in its worktree, `origin/master` was merged into it with no conflicts (`f38481f`), and `e66a9ee` removed a worktree path and a session folder name from `plan/BRIEFS.md` and `plan/LEDGER.md`. Draft PR #3 was opened (6 commits, 50 files, +4,944 lines). `cargo test --offline --locked` passed 45 tests on the merged branch on macOS arm64 hardware with the x86_64 toolchain under Rosetta; clippy was not re-run.
 10. Standing instructions in this stretch: docs and code go as two PRs (Q4); agents do not touch the main checkout, so aborting the paused merge is left to the user. Auto-fix is enabled for the PR #3 session.
 11. 2026-10-31: the user named the project Burl (quote in section A) and accepted my recommendations for the open items (section C, rows Q13 to Q17). `CONTEXT.md` was rewritten with the glossary; the build session formerly called "phase 1" is called build session 1 in new text (historical file names such as `phase1.md` are unchanged).
+12. 2026-10-31: the binary was renamed to `burl` (`fd988b9`, golden harness normalises the name at six anchored phrases), and PR #3 merged the same day at 20:27:01Z as the real merge commit `6e64025` (`origin/master` is `6e64025`). The phase 1 branch `claude/hungry-kilby-78e776` is merged and no longer checked out.
+13. 2026-10-31: branch `docs/align-with-decisions` was cut from `master` `6e64025` in the phase 1 worktree. Four editors applied the doc rows of Part 6 section B (B1 renderer stack, B2 reference fork, B3 doc rows of D5, B4 to B7) and the planning kit under `plan/` was updated to the decisions (D1 to D6 decided; ledger "no planning tick has been run, Stop rule: NOT MET"). Code, goldens and scripts were left out of a docs PR. A draft PR from this branch against `master` is opened next (number unknown at time of writing).
 
 ### C. Decisions (authoritative)
 
@@ -112,14 +113,15 @@ The user answered the "which is better" notes on Q6/Q12 by choosing differently 
 
 ### D. Open items needing the user
 
-1. Abort the paused merge in the main checkout (`:cq`, then `git merge --abort`; B.5). A pending user action, not a decision.
-2. Review PR #3; it then merges as is with a merge commit (never squash), planning kit included, flagged stale in the PR body. A pending user action.
+1. Abort the paused merge in the main checkout (`:cq`, then `git merge --abort`; B.5). A pending user action, not a decision. Still pending, unchanged.
+2. Review and merge the docs-alignment PR from branch `docs/align-with-decisions` (merge commit, never squash). A pending user action.
+3. Undecided, not blocking: rename the internal `gource-*` library crates to `burl-*`.
 
-Decided 2026-10-31 (binary name, option 3 of three offered) and DONE on PR #3: the crate and binary are `burl` (`crates/burl`), the printed version stays 0.57 until Burl's first release, and the embedded help text says Burl. The golden harness (`crates/burl/tests/golden.rs`, functions `normalise_name` and `assert_named`) compares through a narrow normalisation of the program name only: it maps the name to a placeholder on both sides at six anchored phrases (the first help line `Gource v0.57`, `Usage: gource [options] [path]`, `a gource config`, `If omitted, gource will attempt`, any line starting `gource: `, and `Try 'gource --help' for more information.`), then compares everything else byte for byte. It is applied to every stderr and to the two help outputs; custom-log stdout is compared raw. Sabotage-checked: printing the old name in the usage line, or a stray `burl` anywhere else in the help, makes the harness fail. The embedded help copies in `crates/gource-conf/src/help-*.txt` differ from the goldens in exactly four lines each, all of them the name. The expected-diff file is reserved for deliberate behaviour changes, not the name. The internal library crates keep their `gource-*` names (`gource-util`, `gource-conf`, `gource-formats`, `gource-sim`, `gource-render`, `gource-gl`); renaming them to `burl-*` is a separate, undecided choice.
+Decided 2026-10-31 (binary name, option 3 of three offered) and DONE (merged in PR #3): the crate and binary are `burl` (`crates/burl`), the printed version stays 0.57 until Burl's first release, and the embedded help text says Burl. The golden harness (`crates/burl/tests/golden.rs`, functions `normalise_name` and `assert_named`) compares through a narrow normalisation of the program name only: it maps the name to a placeholder on both sides at six anchored phrases (the first help line `Gource v0.57`, `Usage: gource [options] [path]`, `a gource config`, `If omitted, gource will attempt`, any line starting `gource: `, and `Try 'gource --help' for more information.`), then compares everything else byte for byte. It is applied to every stderr and to the two help outputs; custom-log stdout is compared raw. Sabotage-checked: printing the old name in the usage line, or a stray `burl` anywhere else in the help, makes the harness fail. The embedded help copies in `crates/gource-conf/src/help-*.txt` differ from the goldens in exactly four lines each, all of them the name. The expected-diff file is reserved for deliberate behaviour changes, not the name. The internal library crates keep their `gource-*` names (`gource-util`, `gource-conf`, `gource-formats`, `gource-sim`, `gource-render`, `gource-gl`); renaming them to `burl-*` is a separate, undecided choice.
 
 Tasks, not decisions: create `reference/gource-cpp-dump/` and `docs/rust-rewrite/discovery/golden/expected-diffs/` (neither exists yet).
 
-Resolved: "open the docs PR now or start the next phase" (PR #2 merged, PR #3 open).
+Resolved: "open the docs PR now or start the next phase" (PR #2 and PR #3 merged; the docs-alignment PR is next).
 
 ### E. Things I got wrong in this session (do not repeat)
 
@@ -135,7 +137,8 @@ Resolved: "open the docs PR now or start the next phase" (PR #2 merged, PR #3 op
 
 | Item | Id / link | State |
 |---|---|---|
-| Phase 1 build session | branch `claude/hungry-kilby-78e776` | done, archived; the branch now carries draft PR #3 (the session for it has Auto-fix on) |
+| Phase 1 build session | branch `claude/hungry-kilby-78e776` | done, archived; the branch is merged via PR #3 (`6e64025`) |
+| Docs-alignment editors | branch `docs/align-with-decisions` | four editors applied the Part 6 section B doc rows; PR to be opened as a draft |
 | Loop session from the planning kit | none running | stopped by the user, archived, wrote nothing |
 | Decision questionnaire artifact (holds the answers to Q4 to Q12; Q1 to Q3 were answered in chat) | https://claude.ai/artifact/JA8AdPoD9scfugM1YWdAmP | published, private, version 2 |
 | Phase 1 session shared overview doc | https://claude.ai/artifact/Y6KtTYtQUs8vnHFuCUdQv8 | private, made by the phase 1 session; not read by this session |
@@ -159,13 +162,14 @@ Upstream Gource author commits (Andrew Caudwell) are the base; all work below is
 |---|---|---|
 | <repo> (main checkout) | 6ea1d6f | setup-agent-skills (NOT master); still MID-MERGE of the OLD discovery tip `6a9d08f` (`MERGE_HEAD` present, vim open in the user's terminal). The user should type `:cq`, then run `git merge --abort` there (Part 1 B.5) |
 | <discovery-worktree> | 3b1cea2 | worktree-rust-rewrite-discovery (pushed, merged via PR #2, worktree clean) |
-| <phase1-worktree> | e66a9ee | claude/hungry-kilby-78e776 (checked out, pushed, tracks origin) |
+| <phase1-worktree> | 6e64025 (plus uncommitted doc edits) | docs/align-with-decisions (cut from `master` `6e64025`; to be pushed with the docs-alignment PR). Branch `claude/hungry-kilby-78e776` is merged and no longer checked out |
 
-### What happened (merged and open)
+### What happened (all merged; the docs-alignment PR is next)
 - PR #1 (setup-agent-skills) merged earlier as `216ec5d` (parents `70db547` and `6ea1d6f`); it added `CLAUDE.md` and `docs/agents/`.
 - PR #2 (discovery docs, `golden/`, `CONTEXT.md`, the ledger decisions and this handoff) was merged 2026-10-31 into `master` as the real merge commit `02d25f1` (parents `216ec5d` and `3b1cea2`). The branch carried the work as one final commit `3b1cea2`: the last two commits were squashed and force-pushed so personal notes never appear in the PR. The older tick commits `36ba568` and `6a9d08f` still contain local worktree paths in hardcoded script paths; this was accepted. Local `master` (`70db547`) is behind `origin/master` and was not fast-forwarded.
-- PR #3 (https://github.com/dfadler/Burl/pull/3) is a DRAFT: head `claude/hungry-kilby-78e776`, base `master`. It has 6 commits not on master: `e2d0c64` (workspace and log-format parsers), `69725e1` (golden row count, SIGPIPE/PCRE2 CI notes), `4692454` (planning-loop kit), `179b76e` (plan-coverage fixes), `f38481f` (merge of `origin/master`, clean, no conflicts) and `e66a9ee` (removes a worktree path and a session folder name from `plan/BRIEFS.md` and `plan/LEDGER.md`). Diff against `master`: 50 files, +4,944, nothing under `src/`. Contents: Cargo workspace (`Cargo.toml`, `Cargo.lock`, `crates/{gource-util,gource-conf,gource-formats,burl,gource-sim,gource-render,gource-gl}`; sim/render/gl are stubs), `.gitignore` (+3), `docs/rust-rewrite/phase1.md`, `docs/rust-rewrite/plan/{BRIEFS.md,LEDGER.md,LOOP.md,decisions.md,scripts/plan-coverage.sh}`. Auto-fix is enabled for its session.
-- Remote branches: master, setup-agent-skills, worktree-rust-rewrite-discovery, claude/hungry-kilby-78e776.
+- PR #3 (https://github.com/dfadler/Burl/pull/3) merged 2026-10-31T20:27:01Z into `master` as the real merge commit `6e64025`. Its head `claude/hungry-kilby-78e776` had 6 commits not on master at opening (`e2d0c64` workspace and log-format parsers, `69725e1`, `4692454` planning-loop kit, `179b76e`, merge `f38481f`, `e66a9ee`) and was later extended (including the burl rename `e130d18`, `fd988b9`); nothing under `src/`. Contents on master: Cargo workspace (`Cargo.toml`, `Cargo.lock`, `crates/{gource-util,gource-conf,gource-formats,burl,gource-sim,gource-render,gource-gl}`; sim/render/gl are stubs), `.gitignore` (+3), `docs/rust-rewrite/phase1.md`, `docs/rust-rewrite/plan/{BRIEFS.md,LEDGER.md,LOOP.md,decisions.md,scripts/plan-coverage.sh}`.
+- The docs-alignment PR (branch `docs/align-with-decisions`, base `master`, number unknown yet) will carry the doc edits of Part 6 section B and the planning-kit update. It contains no code, goldens or scripts.
+- Remote branches: master, setup-agent-skills, worktree-rust-rewrite-discovery, claude/hungry-kilby-78e776 (merged), plus `docs/align-with-decisions` once pushed.
 
 ### Reference facts
 - setup-agent-skills (`6ea1d6f`, "Add agent skills configuration") adds `CLAUDE.md` (+13) and `docs/agents/{domain.md,issue-tracker.md,triage-labels.md}`; purpose (per the user): only so they can use a skill library to manage the repo; not part of Gource work. It is not a route to `master`.
@@ -175,11 +179,12 @@ Upstream Gource author commits (Andrew Caudwell) are the base; all work below is
 
 # Part 3: Phase 1 code
 
-## Phase 1 Rust code (worktree hungry-kilby-78e776)
+## Phase 1 Rust code (merged to master via PR #3, `6e64025`)
 
-Worktree: <phase1-worktree>
-Branch claude/hungry-kilby-78e776. Commits: e2d0c64 (workspace + parsers), 69725e1 (golden row count from
-exit-codes.txt, SIGPIPE/PCRE2 notes), then 4692454 and 179b76e (planning-kit only, no Rust).
+Worktree: <phase1-worktree> (now on branch docs/align-with-decisions; the code below is the same on `master`).
+Branch claude/hungry-kilby-78e776 (merged). Commits: e2d0c64 (workspace + parsers), 69725e1 (golden row count from
+exit-codes.txt, SIGPIPE/PCRE2 notes), then 4692454 and 179b76e (planning-kit only, no Rust), later e130d18 and fd988b9 (burl rename).
+Known gaps against the decisions (D5 code rows, not yet done): logmill.rs still matches "cvs"; help text embeds user-friction 0.67 and dir-name-position 0.0.
 Toolchain used: cargo 1.99.0 (5f94df478 2026-08-27), rustc 1.99.0 (b940084d7 2026-09-28), Homebrew.
 
 ### Workspace
@@ -192,7 +197,7 @@ All crates use `version/edition/license.workspace = true`. Every crate except go
 gource-gl has only a doc comment (designated as the sole future crate allowed unsafe). No unsafe anywhere today.
 
 ### Crates (real vs skeleton)
-Real: gource-util, gource-conf, gource-formats, gource (bin). Empty skeletons: gource-sim (2 lines), gource-render (2),
+Real: gource-util, gource-conf, gource-formats, burl (bin). Empty skeletons: gource-sim (2 lines), gource-render (2),
 gource-gl (1), no deps.
 
 #### gource-util (deps: regex, chrono; optional pcre2; feature `pcre2 = ["dep:pcre2"]`, default off)
@@ -307,14 +312,14 @@ Obvious defects: none noted; `Regex::captures` returns groups excluding whole ma
 - gource-formats: extra files commit.rs, commitlog.rs, settings.rs (`LogSettings`, not a conf dependency), xml.rs; map lists seeklog/commit/logmill and
   filters via conf. Uses roxmltree for TinyXML. Format files all present with map names.
 - gource-sim/render/gl: empty, no dependencies declared (map: sim depends on util/formats/conf; render on sim; gl on sdl2/glow).
-- gource bin: single main.rs (no app/input/shell_loop).
+- burl bin: single main.rs (no app/input/shell_loop).
 - Workspace declares sim/render path deps that no crate uses; no sdl2/glow/glam in workspace deps.
 
 # Part 4: Planning-loop kit and the previous session's notes
 
 ## Planning-loop kit and previous-session hand-off
 
-Sources read (all read-only). KIT = `<phase1-worktree>/docs/rust-rewrite/plan/` (branch `claude/hungry-kilby-78e776`). DISC = `<discovery-worktree>/docs/rust-rewrite/discovery/`.
+Sources read (all read-only). KIT = `<phase1-worktree>/docs/rust-rewrite/plan/` (on `master` since PR #3; the sections below describe it as first written, and section 8 lists the conflicts that the docs-alignment branch has since fixed). DISC = `<discovery-worktree>/docs/rust-rewrite/discovery/`.
 Kit files: `LOOP.md` (134 lines), `LEDGER.md` (126), `BRIEFS.md` (193), `decisions.md` (13), `scripts/plan-coverage.sh` (151, mode 755). No `map/`, `functions/`, `phases/` etc. exist yet.
 
 ### 1. Previous session's hand-off note (found)
@@ -410,18 +415,20 @@ bash .../plan-coverage.sh -h
 
 Output: sections `== A.1 .. A.6, B, C`, each gap printed as `  gap: <text>`, final `SUMMARY: N gaps`. Checks: A.1 each `src/*.cpp` in Makefile.am has a `| src/x.cpp |` row in map/modules.md; A.2 for 34 STATE_FILES a `functions/<base>.md` exists, contains every method name from the grep-based extractor plus headings `Rust signature`, `Pseudocode`, `Pins`, `Cite`, `## State and order hazards`, `## Corrections` (a doc may declare `methods: manual`); A.3 each option from help-long.txt and ARG_TYPES appears as `` `opt` `` in settings-spec.md, plus 3 required sections; A.4 matrix has >=28 numbered rows each with `golden:` or `script:` path that exists; A.5 each crate row has version, `docs.rs/`, ISO date, snippet dir that `cargo check`s; A.6 phase 1,3,4,5,6,7 briefs have 11 required headings; B dry-run files contain `questions: 0`, `cpp_opens: 0`, `gate: pass|not capturable here`; C `verified: <sha>` line present and not older than last content change. Caveat: the A.2 extractor is regex-based and "no methods found" is itself a gap unless `methods: manual`; it requires the `src/core` submodule checked out (present in hungry-kilby).
 
-CURRENT GAP COUNT (run during this task, on the kit worktree): `SUMMARY: 221 gaps`. Matches the previous session's baseline of 221. (Note: the discovery worktree I run in does not contain the kit; the kit exists only on branch `claude/hungry-kilby-78e776`.)
+CURRENT GAP COUNT (run during this task, on the kit worktree): `SUMMARY: 221 gaps`. Matches the previous session's baseline of 221. (Measured before the kit was updated to the decisions; re-measure, since the A.5 crate list may change.)
 
 ### 7. How to launch the loop
 
-1. Fresh session whose working directory is the hungry-kilby worktree (or a new worktree off that branch), on branch `claude/hungry-kilby-78e776`, clean tree.
+1. Fresh session in a new worktree on a branch cut from `master` (after the docs-alignment PR merges), clean tree.
 2. Run `/loop` (dynamic mode) with the prompt: `Read docs/rust-rewrite/plan/LOOP.md and run one tick` (per hand-off note line 26).
 3. The first tick must write `Started:` and `Hard stop:` in LEDGER.md (LEDGER.md:14), run the script, and begin.
 4. The idle loop session left over from the kit can be archived or sent "go"; it has done nothing.
 
-State left: kit committed (4692454, 179b76e), no tick ever run, ledger pristine, budget 150/150, all D1-D6 `open`.
+State left: kit on `master` (4692454, 179b76e, merged in PR #3), updated to the decisions on `docs/align-with-decisions` (D1 to D6 decided); no tick ever run, ledger says "no planning tick has been run (Stop rule: NOT MET)", budget 150/150.
 
 ### 8. Conflicts between kit assumptions and the user's final decisions
+
+Status 2026-10-31: all rows below were resolved in the kit on `docs/align-with-decisions` (D1 to D6 decided, sdl2 replaced by winit + glutin + glow, Windows rescoped, fork instead of patch); the table records the original conflicts and line numbers of the pre-update kit.
 
 Final decisions are recorded in DISC/LEDGER.md:106-121 (dated 2026-10-30) and `CONTEXT.md` at the repository root (both on `master` since PR #2). KIT paths below are relative to `.../hungry-kilby-78e776/docs/rust-rewrite/plan/`; DISC paths relative to the discovery docs dir.
 
@@ -445,7 +452,7 @@ Additional stale items: LEDGER.md:114 "9 phases" correction row is right; BRIEFS
 
 ### 9. Verdict
 
-Not ready to run as-is. Mechanically sound (script gives 221 gaps, templates complete, restartable), but the ledger's decisions table and three briefs encode the OLD defaults. Must change first, in order: (1) rewrite D5 ("fix all four now") in LEDGER.md:107 + decisions.md:12; (2) rewrite D6 (fork, not patch) in LEDGER.md:108, decisions.md:13, BRIEFS.md:103-105, and relax LOOP.md:20-22 to allow a fork directory (location unresolved: ask user); (3) replace sdl2 with winit+glutin+glow in LEDGER.md:77 (and map:20,205,291); (4) rescope Windows to Docker headless export in LEDGER.md:80-81 and map phases 6/7; (5) mark D1-D4 decided and add the two-PR delivery rule to LOOP.md step 7; (6) fill CONTEXT-based parity definition into LEDGER goal. Then launch per section 7. Also expect plan-coverage.sh gap count to change after (3)-(4) (A.5 crates list) but not A.1-A.4.
+Updated 2026-10-31: the kit is on `master` and was updated to the final decisions on `docs/align-with-decisions` (pending that PR's merge). It has NOT been run. Still needed before a first tick: (a) merge the docs-alignment PR so the updated kit is on `master`; (b) re-run `plan-coverage.sh` and record the new baseline (221 gaps was measured before the update); (c) the fork directory `reference/gource-cpp-dump/` still does not exist, so BRIEFS B4(d) refers to a directory that is absent (acceptable, the brief creates it); (d) the user's explicit go and a budget (150 agents, 8 hours). Original verdict, kept for the record: "Not ready to run as-is." Mechanically sound (script gives 221 gaps, templates complete, restartable), but the ledger's decisions table and three briefs encoded the OLD defaults. The changes that were needed, in order (now applied): (1) rewrite D5 ("fix all four now") in LEDGER.md:107 + decisions.md:12; (2) rewrite D6 (fork, not patch) in LEDGER.md:108, decisions.md:13, BRIEFS.md:103-105, and relax LOOP.md:20-22 to allow a fork directory (location unresolved: ask user); (3) replace sdl2 with winit+glutin+glow in LEDGER.md:77 (and map:20,205,291); (4) rescope Windows to Docker headless export in LEDGER.md:80-81 and map phases 6/7; (5) mark D1-D4 decided and add the two-PR delivery rule to LOOP.md step 7; (6) fill CONTEXT-based parity definition into LEDGER goal. Then launch per section 7. Also expect plan-coverage.sh gap count to change after (3)-(4) (A.5 crates list) but not A.1-A.4.
 
 # Part 5: Environment and operations
 
@@ -457,8 +464,8 @@ Facts marked (ran) were obtained by running the command in this session (2026-10
 
 - Main checkout: <repo> on branch `setup-agent-skills` (6ea1d6f, "Add agent skills configuration"), still MID-MERGE (paused, uncommitted; the user should abort it, Part 1 B.5). It has CLAUDE.md and docs/agents/*, no Rust, and an OLDER copy of the discovery tree from the paused merge (its LEDGER.md and build-and-goldens.md differ; the copies on `master` are authoritative).
 - Worktree A: <discovery-worktree>, branch `worktree-rust-rewrite-discovery` at 3b1cea2 (pushed and merged via PR #2). Contains the discovery docs, golden/ and golden/scripts; worktree clean. No Cargo.toml here.
-- Worktree B: <phase1-worktree>, branch `claude/hungry-kilby-78e776` checked out (no longer detached), pushed, carrying draft PR #3. This holds ALL the Rust code (Cargo workspace "phase 1") plus docs/rust-rewrite/phase1.md and docs/rust-rewrite/plan/{BRIEFS,LEDGER,LOOP,decisions}.md; it also contains `master` (merge `f38481f`). Other local branches: master (behind origin), setup-agent-skills, worktree-rust-rewrite-discovery.
-  - Commits not on master (Part 2): e2d0c64 "Rust rewrite phase 1: Cargo workspace and log-format parsers", 69725e1 (golden row count from exit-codes.txt, SIGPIPE/PCRE2 CI notes), 4692454 "Planning loop kit...", 179b76e "plan-coverage...", f38481f (merge of origin/master), e66a9ee (path scrub).
+- Worktree B: <phase1-worktree>, branch `docs/align-with-decisions` checked out (cut from `master` `6e64025`; branch `claude/hungry-kilby-78e776` is merged via PR #3). The Rust code (Cargo workspace) plus docs/rust-rewrite/phase1.md and docs/rust-rewrite/plan/{BRIEFS,LEDGER,LOOP,decisions}.md are on `master`. Other local branches: master (may be behind origin), setup-agent-skills, worktree-rust-rewrite-discovery.
+  - Commits from PR #3 (Part 2): e2d0c64 "Rust rewrite phase 1: Cargo workspace and log-format parsers", 69725e1 (golden row count from exit-codes.txt, SIGPIPE/PCRE2 CI notes), 4692454 "Planning loop kit...", 179b76e "plan-coverage...", f38481f (merge of origin/master), e66a9ee (path scrub), e130d18 and fd988b9 (burl rename).
 - git remote: origin git@github.com:dfadler/Burl.git. Default branch `master` (origin/HEAD). Remote branches: master, setup-agent-skills.
 
 ### 1. Toolchain (ran)
@@ -550,7 +557,7 @@ Agent/instruction files a successor must follow:
 - docs/agents/domain.md: read CONTEXT.md and docs/adr/ before exploring, proceed silently if absent, use glossary terms, flag ADR conflicts explicitly.
 - CONTEXT.md (repository root, on `master` since PR #2): defines the project (Rust rewrite of Gource, C++ to Rust; first release matches C++ behaviour) and the term **Parity** = same parsed commits and same simulation state for same inputs and settings; rendering only visually equivalent, not pixel-identical. Avoid the words Compatibility, identical output, same output.
 - <repo>/.claude/ contains only worktrees/ (no settings.json, no settings.local.json). No AGENTS.md anywhere. No docs/adr/ yet.
-- Worktree B's docs/rust-rewrite/plan/{LOOP,LEDGER,BRIEFS,decisions}.md are the planning-loop kit for the Rust phases (not read in detail; successor should read decisions.md first). phase1.md lists deferred items and ledger decisions D1-D5; LEDGER.md (worktree A) lists D1-D6, renderer stack winit+glutin+glow, first release macOS + Linux.
+- docs/rust-rewrite/plan/{LOOP,LEDGER,BRIEFS,decisions}.md (on `master`, updated to the decisions on `docs/align-with-decisions`) are the planning-loop kit for the Rust phases (not read in detail; successor should read decisions.md first). phase1.md lists deferred items and ledger decisions D1-D5; LEDGER.md (worktree A) lists D1-D6, renderer stack winit+glutin+glow, first release macOS + Linux.
 
 ### 4. Process and tooling gotchas
 
@@ -575,7 +582,7 @@ Source files are the user's global config (read, not modified): <home>/.claude/C
 Status key: VERIFIED = I ran it here; UNVERIFIED = taken from docs, not run (it writes in the repo or builds).
 
 1. `git clone git@github.com:dfadler/Burl.git && cd Burl` - UNVERIFIED (needs SSH access).
-2. `git fetch origin && git switch master` for the docs (merged, `02d25f1`), or `git switch claude/hungry-kilby-78e776` for the Rust code (draft PR #3); both are on origin. VERIFIED (branches and PRs checked with git and gh on 2026-10-31).
+2. `git fetch origin && git switch master` for docs, Rust code and the planning kit (PR #2 and PR #3 merged; `origin/master` is `6e64025`). The doc alignment edits are on `docs/align-with-decisions` until its PR merges. VERIFIED (branches and PRs checked with git and gh on 2026-10-31).
 3. `git submodule update --init src/core` (expect SHA d8d880fd58fda37b9d8fb59844a3c2a712969948) - init state VERIFIED in worktree A via `git submodule status`; the init command itself UNVERIFIED.
 4. `uname -m; sw_vers; arch -x86_64 /usr/bin/true` - VERIFIED (arm64, 26.5.1, Rosetta ok).
 5. `pkg-config --modversion sdl2 SDL2_image glew freetype2 libpcre2-8 libpng` - VERIFIED (2.30.1 2.8.2 2.2.0 26.6.20 10.47 1.6.59); also `ls /usr/local/opt/boost /usr/local/include/glm`.
@@ -583,7 +590,7 @@ Status key: VERIFIED = I ran it here; UNVERIFIED = taken from docs, not run (it 
 7. `BUILD=$BUILD ./link.sh` (expect x86_64 Mach-O `gource`, ~868 KB) - UNVERIFIED.
 8. `BUILD=$BUILD ./gold.sh && git status --short` (expect no golden diffs; rc rows in golden/exit-codes.txt) - UNVERIFIED.
 9. `BUILD=$BUILD ./tbuild.sh` (expect 69 assertions pass per unit-tests.md, written to golden/unit-tests.txt) - UNVERIFIED.
-10. Rust tests (same command as Part 3, with `CARGO_TARGET_DIR` set to a temp directory): `cargo test --offline --locked --manifest-path <worktree-with-Cargo.toml>/Cargo.toml` - VERIFIED on <phase1-worktree> (earlier HEAD 179b76e; re-run on the merged branch before PR #3, 45 passed: 10 golden, 19 formats, 16 util): "45 passed (14 suites, 0.84s)" (output was rtk-condensed; target dir kept out of the repo; used the cached crate registry so --offline worked). Also try `cargo test -p gource-util --features pcre2` (documented to pass, UNVERIFIED by me). Note `crates/burl/tests/golden.rs` reads the golden files, so run it from a tree that has discovery/golden (worktree B does).
+10. Rust tests (same command as Part 3, with `CARGO_TARGET_DIR` set to a temp directory): `cargo test --offline --locked --manifest-path <worktree-with-Cargo.toml>/Cargo.toml` - VERIFIED on <phase1-worktree> (earlier HEAD 179b76e; re-run on the merged branch before PR #3, 45 passed: 10 golden, 19 formats, 16 util; the same tree is now `master`): "45 passed (14 suites, 0.84s)" (output was rtk-condensed; target dir kept out of the repo; used the cached crate registry so --offline worked). Also try `cargo test -p gource-util --features pcre2` (documented to pass, UNVERIFIED by me). Note `crates/burl/tests/golden.rs` reads the golden files, so run it from a tree that has discovery/golden (worktree B does).
 
 # Part 6: Remaining work, decision impact, risks, next actions
 
@@ -591,10 +598,10 @@ Status key: VERIFIED = I ran it here; UNVERIFIED = taken from docs, not run (it 
 
 Path shorthands (all absolute bases):
 - DISC = <discovery-worktree>/docs/rust-rewrite/discovery
-- P1 = <phase1-worktree> (phase 1 code branch; also holds docs/rust-rewrite/phase1.md and docs/rust-rewrite/plan/{LEDGER,BRIEFS,LOOP,decisions}.md, an unfinished planning loop with "Stop rule: NOT MET", plan/LEDGER.md:126)
+- P1 = <phase1-worktree> (now on branch docs/align-with-decisions; the code is on `master`; also holds docs/rust-rewrite/phase1.md and docs/rust-rewrite/plan/{LEDGER,BRIEFS,LOOP,decisions}.md, a planning loop never run, "Stop rule: NOT MET"; the line numbers in section B predate the alignment edits)
 - MAP = DISC/rust-architecture-map.md, SPEC = DISC/parity-test-spec.md, DEP = DISC/deps-and-rust-mapping.md, TGS = DISC/tests-and-golden-strategy.md
 - Phase numbers below are the MAP sec. 9 numbering (MAP:354-361), NOT the "Phase 1" label in P1/docs/rust-rewrite/phase1.md (which means map phases 0+2).
-- Verified state: the docs are on `master` and the code is on draft PR #3 (see Part 2). P1 has no `.github/workflows` (only FUNDING.yml), no `tests/golden/`, 3482 lines of Rust in 20 files across 7 crates.
+- Verified state: the docs and the code are on `master` (PR #2, PR #3); the doc alignment is on branch `docs/align-with-decisions` (see Part 2). P1 has no `.github/workflows` (only FUNDING.yml), no `tests/golden/`, 3482 lines of Rust in 20 files across 7 crates.
 
 ---------------------------------------------------------------------------
 ### A. Remaining work by map phase (0-7)
@@ -659,7 +666,7 @@ Gate: manual checklist against APP T2.2 + automated regression of earlier gates;
 Size: L. Depends on: 5, 4. Parallel with: 7.
 
 #### Phase 7: packaging, resource lookup, cross-platform CI. Status: NOT STARTED
-Missing: resource-dir lookup order (COR sec. 3) / `include_bytes!` fonts and shaders, macOS + Linux builds, Linux render gate in CI, Windows only as a Docker image running headless export (decision 3), workflow files, cargo-deny licence audit, release PR hygiene. Two-PR delivery: PR #2 docs (merged), PR #3 phase-1 code (draft; decision 4).
+Missing: resource-dir lookup order (COR sec. 3) / `include_bytes!` fonts and shaders, macOS + Linux builds, Linux render gate in CI, Windows only as a Docker image running headless export (decision 3), workflow files, cargo-deny licence audit, release PR hygiene. Two-PR delivery: PR #2 docs (merged), PR #3 phase-1 code (merged; decision 4); the docs-alignment PR follows.
 Gate: `cargo build` + test on macOS and Linux; Docker image produces a valid PPM stream for a fixture; Linux visual gate green in CI.
 Size: M. Depends on: 5 (headless export) for the Docker part; CI skeleton (phase 0) can start now. Parallel with: 6.
 
@@ -672,6 +679,7 @@ Decision numbers: (1) parity, (2) workspace beside C++, (3) macOS/Linux + Window
 All DISC paths are relative to DISC; "P1" paths absolute under hungry-kilby.
 
 #### B1. Renderer stack (decision 10): sdl2 -> winit + glutin + glow
+Status: Docs rows applied on docs/align-with-decisions (2026-10-31); code rows still open: none (the renderer crates are not added yet; `gource-gl` is empty).
 | File:line | Current text | Change |
 |---|---|---|
 | rust-architecture-map.md:20 | `gource-gl` depends on "render, sdl2, glow" | "render, winit, glutin, glutin-winit, glow" |
@@ -699,6 +707,7 @@ All DISC paths are relative to DISC; "P1" paths absolute under hungry-kilby.
 | P1/docs/rust-rewrite/plan/LEDGER.md:80 | CI matrix "Linux/macOS/Windows" | Linux/macOS + Windows-in-Docker |
 
 #### B2. D6 fork vs patch file (decision 11)
+Status: Docs rows applied on docs/align-with-decisions (2026-10-31); code rows still open: create `reference/gource-cpp-dump/` with its README and guard script, and a fork target for `build.sh`.
 | File:line | Current text | Change |
 |---|---|---|
 | parity-test-spec.md:128-134 (sec. 2.5 "Minimal C++ patch (reference side)") | items 1-6 describe a patch; item 6 "Guard with `#ifdef GOURCE_DEBUG_DUMP` or keep on a separate branch" | Retitle "Reference fork"; items become commits on the fork; drop the `#ifdef` alternative; fork location/name still undecided (LEDGER:119); add the guard from LEDGER:119 as item 7: fork must reproduce all custom-log and help goldens identically before its dump is trusted |
@@ -716,6 +725,7 @@ All DISC paths are relative to DISC; "P1" paths absolute under hungry-kilby.
 Also: fork copies src/ so decision 2 ("C++ stays until parity proven") and the repo size/GPL licensing need a note; and risk "fork drift" (C below).
 
 #### B3. D5 bug fixes (decision 9) vs keep-the-bugs text and byte-exact goldens
+Status: Docs rows applied on docs/align-with-decisions (2026-10-31); code rows still open: the `logmill.rs` cvs-exp fix, the `golden.rs` flips, the corrected embedded help text, the `golden/expected-diffs/` file and the harness applying it (goldens stay untouched).
 | File:line | Current text | Change |
 |---|---|---|
 | rust-architecture-map.md:249 | "Help output must match the golden byte for byte (golden/help-short.txt, help-long.txt)" | match the golden except the D5 diff; add Rust-side goldens `golden-rs/help-*.txt` (or store a `.diff`) |
@@ -743,6 +753,7 @@ Also: fork copies src/ so decision 2 ("C++ stays until parity proven") and the r
 Gotcha: the cvs-exp fix also needs the same fix in the FORK? Recommendation: NO, keep fork behaviour identical to the oracle except the dump hooks (LEDGER:119 guard); the Rust deviation is then tested by auto-detect equivalence.
 
 #### B4. D1 / D2 wording (decisions 5, 6)
+Status: Docs rows applied on docs/align-with-decisions (2026-10-31); code rows still open: none (D1 up-front validation comes with phase 1; the optional D2 old-behaviour flag is not implemented).
 | File:line | Current text | Change |
 |---|---|---|
 | rust-architecture-map.md:170 | "intentional deviation D2 ... see sec. 7.2 and sec. 10 for flag and decision note" | remove "decision note"; state as decided |
@@ -758,6 +769,7 @@ Gotcha: the cvs-exp fix also needs the same fix in the FORK? Recommendation: NO,
 | settings-cli.md:489 gotcha (a) | lazy validation in `getNext()` | unchanged description; add "Rust validates up front (D1)" |
 
 #### B5. D3 PRNG (decision 7) and D4 --ffp (decision 8): mostly consistent, small edits
+Status: Docs rows applied on docs/align-with-decisions (2026-10-31); code rows still open: the PRNG module (phase 0) and `--ffp` handling in the settings slice.
 | File:line | Current | Change |
 |---|---|---|
 | rust-architecture-map.md:354 (phase 0 gate) | "glibc-mode PRNG first outputs ... (once confirmed against a real libc)" | keep; add "and the macOS compatibility mode vs a recorded macOS libc sequence" |
@@ -768,6 +780,7 @@ Gotcha: the cvs-exp fix also needs the same fix in the FORK? Recommendation: NO,
 | core-lib.md:13; output-pipeline.md:78, 240; settings-cli.md:212 | describe `--ffp` first-class / "recommended to drop" | add a one-line "Rust: accepted and ignored (D4)" |
 
 #### B6. Windows / delivery (decisions 3, 4, 2)
+Status: Docs rows applied on docs/align-with-decisions (2026-10-31); code rows still open: none (the Dockerfile and headless export come with phases 5 and 7).
 | File:line | Current | Change |
 |---|---|---|
 | rust-architecture-map.md:342 | whole Windows row (console, high-DPI, PeekNamedPipe, `dunce`, binary stdout) | collapse to: Windows = Docker headless frame export on Linux userland; no native Windows build in first release |
@@ -780,9 +793,10 @@ Gotcha: the cvs-exp fix also needs the same fix in the FORK? Recommendation: NO,
 | P1/Cargo.toml `[workspace]` `members = ["crates/*"]` | fine | check `Makefile.am`/`gource.pro` ignore the new dirs and `.gitignore` covers `target/` |
 
 #### B7. Other staleness found
+Status: Docs rows applied on docs/align-with-decisions (2026-10-31); code rows still open: none.
 - DISC/LEDGER.md:34 mentions "9 phases" in the architecture-map row (P1 plan/LEDGER.md:114 already flags MAP has phases 0-7; fix in the discovery table).
 - phase1.md "Status" paragraph still says `help-short/long` match the oracle goldens: true today, false after D5.
-- P1/docs/rust-rewrite/plan/ is an UNFINISHED planning loop (plan/LEDGER.md:126 "Stop rule: NOT MET") whose phase list ("Every remaining phase (1, 3, 4, 5, 6, 7)", :36) matches the MAP numbering but whose decisions table is pre-decision; it ships in PR #3 (it exists only on that branch), not PR #2; update it on a new branch from `master` after PR #3 merges.
+- P1/docs/rust-rewrite/plan/ is an UNFINISHED planning loop (plan/LEDGER.md:126 "Stop rule: NOT MET") whose phase list ("Every remaining phase (1, 3, 4, 5, 6, 7)", :36) matches the MAP numbering but whose decisions table is pre-decision; it shipped in PR #3 and was updated to the decisions on `docs/align-with-decisions` (PR pending); the ledger says no planning tick has been run.
 
 ---------------------------------------------------------------------------
 ### C. Risk register
@@ -815,27 +829,27 @@ L = likelihood (L/M/H), I = impact (L/M/H). Phase = where it bites (MAP numberin
 | R22 | Rendering gate thresholds (SSIM 0.97/0.90) are guesses; Linux-only; macOS has no llvmpipe; FreeType hinting vs Rust text stack differs; no render golden exists | M | M | measure C++ run-to-run spread first; structural set hides text; use `freetype-rs` for metrics (MAP:346) | 5 |
 | R23 | PPM/SIGPIPE behaviour of the oracle never exercised; Windows paths catalogued from source only; empty-stdin startup and `--stop-at-end` with stdin read from source only (LEDGER residuals) | L | L | exercise with oracle once; Windows now out of scope | 2, 5 |
 | R24 | Oracle build fragility: C++ builds only via clang++ `-arch x86_64` under Rosetta with Homebrew-Intel libs (BG); no CI reproducibility; fork doubles it | M | M | Dockerised Linux build of oracle and fork for reproducible goldens; record flags and SHA in golden headers | 3 |
-| R25 | Two-PR delivery: PR #2 (merged) carried the decisions but not the Part 6 B doc edits; PR #3 (phase 1) must not regress goldens; reviewer load | M | L | action 1 lands the doc edits on a branch from `master`; follow gh-publish and PR conventions | docs, 1 |
+| R25 | Two-PR delivery: PR #2 (merged) carried the decisions but not the Part 6 B doc edits; PR #3 (phase 1) must not regress goldens; reviewer load | M | L | the doc edits are on `docs/align-with-decisions` (PR pending); follow gh-publish and PR conventions | docs, 1 |
 | R26 | Licensing: fork + new crates under GPLv3-or-later; transitive crate licences unchecked (LEDGER residual); freetype/pcre2 native deps | L | M | `cargo deny` in CI | 7 |
 | R27 | Crate maintenance judged only by release date, not issue activity (DEP:217) | L | L | re-check before release | 5, 7 |
-| R28 | Stale state: the main checkout is still mid-merge of the old discovery tip with an older copy of the docs; P1 plan/ folder is in an unfinished state | M | M | the user aborts the paused merge (`:cq`, `git merge --abort`); keep doc edits out of the code PR | all |
+| R28 | Stale state: the main checkout is still mid-merge of the old discovery tip with an older copy of the docs; the planning kit has not been run | M | M | the user aborts the paused merge (`:cq`, `git merge --abort`); keep doc edits and code in separate PRs | all |
 | R29 | Platform coverage: every golden was captured on macOS arm64 running x86_64 binaries under Rosetta; Linux (`rand()` TYPE_3, GL, fonts, the oracle/fork build) was never run, so Linux goldens and the glibc mode are unverified | H | H | first Linux run (Docker) in actions 2 and 4; do not call glibc mode or Linux goldens verified until then | 0, 3, 5 |
 
 ---------------------------------------------------------------------------
 ### D. Next ten concrete actions (each doable in one session, in order)
 
-1. Apply the decision edits to the docs (section B1-B6) on a new branch from `master` (the docs are already merged): rewrite MAP 4.2 and the stack rows, DEP 262-270, SPEC 2.5/3.1/1.3/1.2, MAP 371-375/392/398, TGS 65/78, LEDGER decisions; add a "Decisions (final)" table with all eleven; and add the expected help diff note. Commit as a new docs PR. Done when `grep -nE "sdl2|wgpu|patch|needs user decision|keep:" ` over the touched docs returns only intentional "superseded" mentions.
-2. Create `reference/gource-cpp-dump/` (decided 2026-10-31; does not exist yet) with a README naming the commit forked from, copy `src/` verbatim at a pinned SHA with the `src/core` files copied in (not a nested submodule), build it with the existing recipe (DISC/golden/scripts/build.sh with `BUILD=`), and run the guard: the fork reproduces `golden/custom-log/*`, `help-*.txt`, `exit-codes.txt` exactly. Also try the same build inside a Linux Docker image (risk R4/R24).
-3. Generate the missing parser goldens from the ORACLE (not the fork): `tests/golden/edge/*` (empty, CRLF, BOM, out-of-order, `|` in names, start/stop date under TZ=UTC and Pacific/Auckland) and pick/pin real git/svn/hg/bzr repos for `tests/golden/real/*`. Wire them into `crates/burl/tests/golden.rs`.
-4. Phase 0 completion in P1: add `prng` (default xorshift, `Glibc`, `Park`, `Script`, call counter), `bounds`, `quadtree`, `math::rotate_vec2` and `PI`; first write a C helper for libc `rand()` on this Mac and in Docker/Linux and commit 10 000-value vectors (R1); add `.github/workflows` (cargo test, `--features pcre2`, fmt, clippy); confirm the `regex_tests.cpp` port exists or add it.
-5. Phase 1 core in P1: `conffile.rs` (grammar, first-value rule, multi-section, error text) and typed `settings_display/settings_gource` import with all validations and the D1 up-front section check; wire `--load-config`, positional conf detection, `--save-config`. Gate with a `--save-config` round-trip matrix captured from the oracle.
-6. Apply the D5 code changes in P1: fix `logmill.rs:68-69` (cvs-exp), flip the test at `golden.rs:160-161`, correct help text (user-friction default 1.0, dir-name-position 0.1) as Rust-side golden copies with a committed `.diff` against the oracle goldens, update `help_text_matches_golden` (golden.rs:224-225) and `phase1.md`; keep `--stop-on-idle` accepted/no-op; ask the user once to confirm that. Commit after PR #3 merges.
+1. Open the docs-alignment PR (draft) from `docs/align-with-decisions` against `dfadler/Burl` `master`, then the user reviews and merges it (merge commit). It carries the doc rows of section B1 to B7 and the planning-kit update; done when `grep -nE "sdl2|wgpu|patch|needs user decision|keep:"` over the touched docs returns only intentional "superseded" mentions.
+2. Apply the D5 code changes on a branch from `master`: fix `logmill.rs` (match `cvs-exp`), flip the explicit cvs-exp case in `golden.rs` `error_shapes` (and add a cvs-exp fixture), correct the embedded help text (user-friction default 1.0, dir-name-position 0.1), write the unified diff under `docs/rust-rewrite/discovery/golden/expected-diffs/` (does not exist yet), make `help_text_matches_golden` apply it before comparing, and update `phase1.md`; keep `--stop-on-idle` accepted with no effect. The oracle goldens stay untouched.
+3. Create `reference/gource-cpp-dump/` (decided 2026-10-31; does not exist yet) with a README naming the commit forked from, copy `src/` verbatim at a pinned SHA with the `src/core` files copied in (not a nested submodule), build it with the existing recipe (DISC/golden/scripts/build.sh with `BUILD=`), and run the guard: the fork reproduces `golden/custom-log/*`, `help-*.txt`, `exit-codes.txt` exactly. Also try the same build inside a Linux Docker image (risk R4/R24).
+4. Finish map phase 0: add `prng` (default xorshift, `Glibc`, `Park`, `Script`, call counter), `bounds`, `quadtree`, `math::rotate_vec2` and `PI`; first write a C helper for libc `rand()` on this Mac and in Docker/Linux and commit 10 000-value vectors (R1); add `.github/workflows` (cargo test, `--features pcre2`, fmt, clippy); confirm the `regex_tests.cpp` port exists or add it.
+5. Settings slice of phase 1: `conffile.rs` (grammar, first-value rule, multi-section, error text) and typed `settings_display/settings_gource` import with all validations and the D1 up-front section check (no flag); wire `--load-config`, positional conf detection, `--save-config`; `--ffp` accepted and ignored. Phase 3 only needs the minimal slice (action 8); the rest can follow. Gate with a `--save-config` round-trip matrix captured from the oracle.
+6. Generate the missing parser goldens from the ORACLE (not the fork): `tests/golden/edge/*` (empty, CRLF, BOM, out-of-order, `|` in names, start/stop date under TZ=UTC and Pacific/Auckland) and pick/pin real git/svn/hg/bzr repos for `tests/golden/real/*`. Wire them into `crates/burl/tests/golden.rs`.
 7. Implement the fork's dump hooks (commit series on the fork): `--debug-dump-state/-every/-max-frames`, `--rand-script`, `gource_rand()` wrapper for the four `rand()` sites, zero-init of the uninitialised fields, `dumpState()` after `logic()` at gource.cpp:265 (SPEC 2.2/2.5). Produce one golden (`file-removal`, Script mode) on this Mac and one in Linux Docker; write the comparator (`xtask` or python) with first-divergence reporting.
 8. Phase 3 slice 1 in P1: `gource-sim` DirTree arena, File, User, Action, Pawn, `SimRng` use, `Gource::logic` for ingestion and idle/removal on `file-removal.log` with `step(dt)` and the dump writer; get the exact tier (topology, add/remove frames, rand_calls) green in Script mode, then extend to forces (quadtree order) and the remaining fixtures; run the sabotage check on each gate.
 9. Renderer spike (parallel, any time after action 1): in `gource-gl` pin `winit`, `glutin`, `glutin-winit`, `glow`; open a GL 3.2 core context on macOS and in Linux under Xvfb/llvmpipe, draw one textured quad with a `#version 150` shader, read back and write a valid P6 frame via the sync_channel PPM writer; then test the same binary headless in Docker with no display (R7, R9, R10). Record what works in a short doc and settle the `GlContext` trait.
 10. Phase 4 and visuals plan refresh: extend the dump schema with captions and the multi-section shell, generate multi-section goldens for `tests/test.conf` from the fork, capture C++ reference frames under Xvfb+llvmpipe and measure the run-to-run SSIM spread to fix the visual thresholds; then start phase 4 (camera, rotate, selection, shell) behind that gate.
 
-(The first three are doc/infra and can be done by one successor without writing Rust; 4-5 can be split across two sessions in separate worktrees because they touch disjoint crates; 7 and 9 are independent of 4-6.)
+(Real next order: 1 docs PR, 2 D5 code fixes with expected-diffs and harness, 3 the fork directory, 4 finish phase 0, 5 settings slice, then phase 3 via 7 and 8. Actions 1, 3 and 6 are doc/infra and can be done by one successor without writing Rust; 4-5 can be split across two sessions in separate worktrees because they touch disjoint crates; 7 and 9 are independent of 4-6.)
 
 # Part 7: Digest of the discovery documentation
 
@@ -1315,10 +1329,10 @@ Purpose: domain glossary. Content: "Gource Rust Rewrite": rewrite of Gource from
 |---|---|---|
 | glibc `rand()` warm-up: 310 versus 344 discarded outputs | 310 discarded outputs. 344 is the recurrence index (31 + 3 + 310), not a discard count. Only a model in Python was used; it was never run against a real glibc | `discovery/deps-and-rust-mapping.md` tick 2 additions |
 | `--user-idle-time`: config-only or also a CLI option | Config-only. Running the built C++ binary with `--user-idle-time 5` prints `gource: unknown option user-idle-time` and the Try line | Run on 2026-10-30 against the oracle build |
-| Is the phase 1 worktree on a named branch | Yes. On 2026-10-30 the worktree HEAD was detached at `179b76e`, the same SHA as the branch; by 2026-10-31 the branch is checked out there | `git rev-parse`, `git branch -vv` |
+| Is the phase 1 worktree on a named branch | Yes. On 2026-10-30 the worktree HEAD was detached at `179b76e`, the same SHA as the branch; by 2026-10-31 the branch was checked out there, then merged via PR #3 and replaced by `docs/align-with-decisions` | `git rev-parse`, `git branch -vv` |
 | Was `build-and-goldens.md` truncated | Yes, at the "Needed to proceed" paragraph, with the next heading glued on. Fixed and relabelled "Autotools route (not needed)" | Edited 2026-10-30 |
 | Did the user's merge of the discovery branch into `setup-agent-skills` complete | Neither completed nor aborted: still paused and uncommitted as of 2026-10-31. `.git/MERGE_HEAD` = `6a9d08f93e7ff292c7cff470f13aa5bfcae31f0f` (the OLD discovery tip), vim waits at the commit message, the branch is still `6ea1d6f` (already on `origin/master` as `216ec5d`, PR #1). `master` now has the docs, so finishing is pointless: the user should type `:cq`, then run `git merge --abort` | Part 1 B.5, Part 2 |
-| PR #3 commit count: 6 not 5 | 6 commits not on master: `e2d0c64`, `69725e1`, `4692454`, `179b76e`, merge `f38481f` and `e66a9ee`. An earlier statement to the user said 5 | `gh pr view 3 --json commits` |
+| PR #3 commit count: 6 not 5 | At opening, 6 commits not on master: `e2d0c64`, `69725e1`, `4692454`, `179b76e`, merge `f38481f` and `e66a9ee`. An earlier statement to the user said 5. PR #3 later merged as `6e64025` with more commits (burl rename) | `gh pr view 3 --json commits` |
 | Number of phases | The architecture map has eight (0 to 7), not nine. The first build session's "phase 1" covered map phases 0 and 2 | `discovery/rust-architecture-map.md`, `docs/rust-rewrite/phase1.md` on the phase 1 branch |
 | Number of discovery documents | 17 markdown files, not 15, plus `golden/` | `ls docs/rust-rewrite/discovery` |
 | Which Rust architecture the host runs | Shell is arm64 but Homebrew under `/usr/local` and the installed Rust toolchain are x86_64, so both the C++ oracle and Rust test builds run under Rosetta on this machine | Part 5 |

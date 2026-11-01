@@ -19,3 +19,5 @@ BUILD=$BUILD ./tbuild.sh     # builds and runs the Boost unit tests into ../unit
 
 `glibc_rand.py` is the Python model of glibc's TYPE_3 `rand()` referenced by
 `../../deps-and-rust-mapping.md`; it has not been checked against a real glibc.
+
+To build the state-dump fork `reference/gource-cpp-dump/` (does not exist yet), run the same scripts with `REPO` pointing at that directory and a separate `BUILD`; do not re-run `gold.sh` against the fork's output to overwrite goldens. The oracle build (the untouched `src/`) is never modified, and the goldens stay the oracle's truth.

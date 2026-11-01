@@ -1,13 +1,13 @@
 # Decisions
 
-The live table is in `LEDGER.md` under "Decisions for the user". This file collects the
-reasoning behind each default and is updated when the user answers.
+The live table is in `LEDGER.md` under "Decisions". All six were decided 2026-10-30/31; this
+file collects the reasoning and records the final values.
 
 | # | Default taken | Why this default | What changes if the user chooses otherwise |
 | --- | --- | --- | --- |
-| D1 | validate all `[gource]` sections up front | a bad later section in C++ terminates mid-run; failing before anything plays is the only behaviour a user can act on | a parity test of the lazy path runs with the restoring flag |
-| D2 | block on log load in export mode | makes the frame-dump phase a function of the input alone; the C++ phase depends on disk speed, which no golden can pin | `loaded_frame0` alignment in the comparator covers both |
-| D3 | documented Rust PRNG by default | the C++ is not equal to itself across platforms; a documented default plus selectable glibc/Park/Script modes gives parity where it is measurable | glibc default would make Linux goldens pass unmodified and macOS ones fail |
-| D4 | accept `--ffp`, render through shaders | fixed-function GL does not exist on GL 3.2 core | rejecting breaks scripts that pass it |
-| D5 | keep known bugs during the port | goldens captured from the C++ stay valid until the last phase | fixing early forces a golden update per bug |
-| D6 | C++ dump reference via a patch file applied to a scratch checkout by the capture script | keeps `src/` untouched on this branch while still producing the reference | an instrumentation branch is equivalent; hand-derived vectors do not scale past the fixtures |
+| D1 | validate all `[gource]` sections up front | a bad later section in C++ terminates mid-run; failing before anything plays is the only behaviour a user can act on | decided, no flag |
+| D2 | block on log load in export mode | makes the frame-dump phase a function of the input alone; the C++ phase depends on disk speed, which no golden can pin | decided; `loaded_frame0` alignment in the comparator covers both; an old-behaviour flag is optional and was not requested |
+| D3 | documented Rust PRNG by default | the C++ is not equal to itself across platforms; a documented default plus selectable glibc/Park/Script modes gives parity where it is measurable | decided: documented Rust PRNG (xorshift) by default, glibc and macOS compatibility modes for parity tests |
+| D4 | accept `--ffp` and ignore it | fixed-function GL does not exist on GL 3.2 core | decided; rejecting would break scripts that pass it |
+| D5 | fix all four known bugs: explicit `cvs-exp` works, `--stop-on-idle` stays accepted with no effect, help text corrected to the code (friction 1.0, dir-name-position from 0.1) | the code defaults stay, so simulation state and parity are unchanged | decided; Gource goldens are never edited, the expected help diff lives under `discovery/golden/expected-diffs/` (does not exist yet) |
+| D6 | fork the C++ sources into `reference/gource-cpp-dump/` (does not exist yet) for the state dump | keeps `src/` untouched; the untouched build stays the oracle for byte-exact goldens, and the fork must first reproduce the oracle's help and custom-log goldens | decided (chosen over the recommended patch file) |

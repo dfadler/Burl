@@ -1,14 +1,16 @@
 # Rust architecture map (where an implementer starts)
 
+Updated 2026-10-31 for the final decisions; see docs/rust-rewrite/discovery/LEDGER.md Decisions. The binary crate is `burl` (`crates/burl`); the internal library crates keep their `gource-*` names below, and renaming them is still undecided.
+
 Synthesis of the other discovery docs; nothing here is new C++ research. Doc abbreviations: APP = app-core.md, SCN = scene-model.md, SET = settings-cli.md, LOG = log-formats.md, COR = core-lib.md, OUT = output-pipeline.md, DEP = deps-and-rust-mapping.md, TIM = timing.md, TST = tests-and-golden-strategy.md, BLD = build-and-goldens.md. Section refs are the doc's own headings ("T2.x" = its Tick 2 additions). Where docs conflict, TIM wins on timing (TIM sec. 6).
 
-Target contract (LEDGER top): same CLI/config/log API, same parsing and simulation state, visually equivalent (not pixel-identical) rendering.
+Target contract (LEDGER top): same CLI/config/log API, same parsed commits and simulation state as Gource, visually equivalent (not pixel-identical) rendering.
 
 ## 1. Workspace layout and file-to-module map
 
 ### 1.1 Crates
 
-Dependency arrows point downward only. `gource-sim` never imports a renderer, window, GL, or SDL type (APP T2.7: draw consumes no rand and mutates no sim state, so a headless sim is possible).
+Dependency arrows point downward only. `gource-sim` never imports a renderer, window, GL, or winit/glutin type (APP T2.7: draw consumes no rand and mutates no sim state, so a headless sim is possible).
 
 | Crate | Role | Depends on | Contents |
 |---|---|---|---|
@@ -17,10 +19,10 @@ Dependency arrows point downward only. `gource-sim` never imports a renderer, wi
 | `gource-formats` | log parsers | util, conf (filters only) | `seeklog`, `commitlog` trait + `RCommit`/`RCommitFile`, nine parsers, `logmill` |
 | `gource-sim` | simulation state | util, formats, conf | `dir_tree` (arena), `file`, `user`, `action`, `pawn`, `camera` (ZoomCamera), `gource` (Gource logic, no draw), `shell` (multi-section state machine), `dump` (debug state dump) |
 | `gource-render` | trait + CPU-side batching | sim, util | `Renderer` trait, `scene` (builds vertex batches from sim state), `text` layout, `ui` overlays, `spline` (SplineEdge geometry), `bloom` |
-| `gource-gl` | backend impl | render, sdl2, glow | window/context, shaders (`#version 150`), VBOs, textures, FreeType atlas, `PpmWriter`, PNG |
-| `gource` (bin) | app | all | `main` flow, `GourceShell` loop, input mapping, exit/err handling |
+| `gource-gl` | backend impl | render, winit, glutin, glutin-winit, glow | window/context, shaders (`#version 150`), VBOs, textures, FreeType atlas, `PpmWriter`, PNG |
+| `burl` (bin, `crates/burl`) | app | all | `main` flow, `GourceShell` loop, input mapping, exit/err handling |
 
-Rationale for the split: the parity gates (parser golden, sim dump) must run with only `gource-formats` / `gource-sim` compiled and no GL or SDL available, matching TST sec. 4 (the C++ sim is not headless; the Rust one must be).
+Rationale for the split: the parity gates (parser golden, sim dump) must run with only `gource-formats` / `gource-sim` compiled and no GL or windowing available, matching TST sec. 4 (the C++ sim is not headless; the Rust one must be).
 
 ### 1.2 Module tree
 
@@ -33,7 +35,7 @@ crates/
   gource-sim/src/{lib,pawn,dir_tree,file,user,action,camera,gource,shell,dump}.rs
   gource-render/src/{lib,renderer,scene,text,ui,spline,bloom,key,slider,textbox,caption}.rs
   gource-gl/src/{lib,context,shader,vbo,texture,font,ppm,png}.rs  + shaders/*.vert|*.frag (GLSL 150)
-  gource/src/{main,app,input,shell_loop}.rs
+  burl/src/{main,app,input,shell_loop}.rs
 ```
 
 ### 1.3 C++ file to Rust module
@@ -42,9 +44,9 @@ Class column: S = sim-state (parity-gated), R = render, U = UI/input only, I = I
 
 | C++ file | Major class / content | Rust module | Type | Class |
 |---|---|---|---|---|
-| src/main.cpp | program flow (SET sec. 1) | `gource/main.rs` | `fn main`, `run()` | I |
-| src/gource_shell.cpp | `GourceShell : SDLApp`, multi-section state machine (SET T2.1) | `gource-sim/shell.rs` (state machine) + `gource/shell_loop.rs` (frame loop, transition texture) | `Shell` | S + R |
-| src/gource.cpp / .h | `Gource` (logic, commit ingestion, camera drive, processCommit, writeCustomLog, draw) | `gource-sim/gource.rs` (logic) + `gource-render/scene.rs` (draw) + `gource/input.rs` (key/mouse map, APP T2.2) | `Gource`, `SceneBuilder` | S / R / U |
+| src/main.cpp | program flow (SET sec. 1) | `burl/main.rs` | `fn main`, `run()` | I |
+| src/gource_shell.cpp | `GourceShell : SDLApp`, multi-section state machine (SET T2.1) | `gource-sim/shell.rs` (state machine) + `burl/shell_loop.rs` (frame loop, transition texture) | `Shell` | S + R |
+| src/gource.cpp / .h | `Gource` (logic, commit ingestion, camera drive, processCommit, writeCustomLog, draw) | `gource-sim/gource.rs` (logic) + `gource-render/scene.rs` (draw) + `burl/input.rs` (key/mouse map, APP T2.2) | `Gource`, `SceneBuilder` | S / R / U |
 | src/gource_settings.cpp / .h | `GourceSettings`, help text, `commandLineOption`, import | `gource-conf/settings_gource.rs`, `help.rs` | `GourceSettings` | S (values) |
 | src/core/settings.cpp / .h | `SDLAppSettings` display half, `parseArgs`, `parseDateTime` | `gource-conf/{args,settings_display}.rs`, `gource-util/timeparse.rs` | `DisplaySettings`, `parse_args` | I |
 | src/core/conffile.cpp / .h | `ConfFile`, `ConfSection`, `ConfEntry` | `gource-conf/conffile.rs` | `ConfFile` | I |
@@ -64,8 +66,8 @@ Class column: S = sim-state (parity-gated), R = render, U = UI/input only, I = I
 | src/slider.cpp / .h | `PositionSlider` | `gource-render/slider.rs` | `PositionSlider` | U |
 | src/textbox.cpp / .h | `TextBox` | `gource-render/textbox.rs` | `TextBox` | U |
 | src/caption.cpp / .h | `RCaption`, caption-file load | `gource-render/caption.rs` (loader in `gource-formats` or conf) | `Caption` | U |
-| src/core/display.cpp | `SDLAppDisplay`, GL context, projection, unproject | `gource-gl/context.rs` | `GlContext` | R |
-| src/core/sdlapp.cpp | `SDLApp` frame loop, errors, resource dirs | `gource/shell_loop.rs`, `gource-util` (err format) | `run_loop` | I |
+| src/core/display.cpp | `SDLAppDisplay`, GL context, projection, unproject | `gource-gl/context.rs` (winit window plus glutin context behind the `GlContext` trait) | `GlContext` | R |
+| src/core/sdlapp.cpp | `SDLApp` frame loop, errors, resource dirs | `burl/shell_loop.rs` (event pump is a winit 0.30 `ApplicationHandler`, not a poll loop: inversion of control changes the loop structure), `gource-util` (err format) | `run_loop` | I |
 | src/core/fxfont.cpp | `FXFont`, `FXFontManager` | `gource-gl/font.rs` | `FontAtlas` | R |
 | src/core/shader.cpp, shader_common.cpp | `Shader`, preprocessor | `gource-gl/shader.rs` (preprocessor dropped, COR sec. 17) | `ShaderProgram` | R |
 | src/core/texture.cpp, vbo.cpp | `TextureResource`, VBO helpers | `gource-gl/{texture,vbo}.rs` | `Texture`, `Vbo` | R |
@@ -165,15 +167,15 @@ C++: one SDL thread started in the ctor; state is a plain int (STARTUP/FETCHING/
 Rust:
 - `std::thread::spawn` in `LogMill::new`, returning the boxed `CommitLog` (or error `String`) via `JoinHandle<Result<Box<dyn CommitLog + Send>, LogError>>`; `AtomicU8` state for `is_finished()`; `getLog()` = `join()`. Use `Result<_, LogError>` with the exact message strings (APP sec. 13, LOG sec. 1 item 6).
 - After handoff the Gource owns the log and reads it on the main thread (as C++ does: `readLog` is called from `Gource::logic`); the commit queue is therefore a plain `VecDeque` on the main thread, not a channel. Only the *detection and initial seek-to-start-timestamp* run on the worker, matching `RLogMill::run` (APP logmill section).
-- stdin: non-blocking read semantics must be kept ("no line yet" is not EOF, final unterminated line dropped, LOG sec. 4). Do not use blocking `read_line` on the main thread; either set `O_NONBLOCK` via `libc` / `rustix`, or run a dedicated stdin pump thread feeding an `mpsc::Receiver<Vec<u8>>` polled with `try_recv`. Recommend the pump thread (portable to Windows, where the C++ uses `PeekNamedPipe`, SET sec. 9); preserve the "unterminated last line dropped" rule explicitly.
+- stdin: non-blocking read semantics must be kept ("no line yet" is not EOF, final unterminated line dropped, LOG sec. 4). Do not use blocking `read_line` on the main thread; either set `O_NONBLOCK` via `libc` / `rustix`, or run a dedicated stdin pump thread feeding an `mpsc::Receiver<Vec<u8>>` polled with `try_recv`. Either approach is fine (decided 2026-10-31: no native Windows build, so `PeekNamedPipe` portability is not a factor); preserve the "unterminated last line dropped" rule explicitly.
 - SIGINT unblocked in the worker on POSIX (APP logmill): do not install a handler in the worker; leave default.
-- Parity wrinkle: because load time shifts `framecount` phase and `runtime` offset (TIM sec. 3 Determinism row), Rust blocks (`join`) until the log is ready before frame 0 in fixed-dt/export mode. This is intentional deviation D2 from C++, not parity; see sec. 7.2 and sec. 10 for flag and decision note. The worker also runs `fetchLog` format detection and the `--start-date` scan (consumes commits until `timestamp >= start_timestamp`, then `bufferCommit`s it; logmill.cpp:86-97); a `SeekLogException` becomes `unable to read log file`.
+- Parity wrinkle: because load time shifts `framecount` phase and `runtime` offset (TIM sec. 3 Determinism row), Rust blocks (`join`) until the log is ready before frame 0 in fixed-dt/export mode. This is intentional deviation D2 from C++, not parity (decided 2026-10-31; see sec. 7.2 and sec. 10). The worker also runs `fetchLog` format detection and the `--start-date` scan (consumes commits until `timestamp >= start_timestamp`, then `bufferCommit`s it; logmill.cpp:86-97); a `SeekLogException` becomes `unable to read log file`.
 
 ### 3.2 PPM writer (OUT sec. 1 Threading row)
 
 C++: one thread `frame_exporter`, mutex + cond, two pixel buffers + `pixels_out`; main thread does `glReadPixels` into the idle buffer, swaps, signals; the worker flips rows and writes. If the worker is still writing, main blocks (no drop, queue depth 1).
 
-Rust: `std::sync::mpsc::sync_channel::<Vec<u8>>(1)` is a faithful equivalent (send blocks when one frame is already queued and the worker is busy). Better: two pre-allocated buffers recycled through a second return channel (`sync_channel(1)` back) to avoid per-frame allocation. Worker: take frame, flip rows (GL bottom-up -> top-down), write `P6\n{w} {h} 255\n` header then bytes through `BufWriter<Stdout|File>`; header on EVERY frame; no per-frame flush; flush on drop/exit. Handle `BrokenPipe` by terminating cleanly (C++ ignores errors, OUT sec. 1 Rust notes). Windows stdout must be set to binary mode (`_setmode`), natural in Rust. Stdout lock held by the worker only; no other code may print to stdout while `-o -` is active (help/info paths exit before this, SET sec. 1).
+Rust: `std::sync::mpsc::sync_channel::<Vec<u8>>(1)` is a faithful equivalent (send blocks when one frame is already queued and the worker is busy). Better: two pre-allocated buffers recycled through a second return channel (`sync_channel(1)` back) to avoid per-frame allocation. Worker: take frame, flip rows (GL bottom-up -> top-down), write `P6\n{w} {h} 255\n` header then bytes through `BufWriter<Stdout|File>`; header on EVERY frame; no per-frame flush; flush on drop/exit. Handle `BrokenPipe` by terminating cleanly (C++ ignores errors, OUT sec. 1 Rust notes). Stdout lock held by the worker only; no other code may print to stdout while `-o -` is active (help/info paths exit before this, SET sec. 1).
 
 The `crossbeam-channel` crate is optional (DEP threads row); std suffices here.
 
@@ -200,13 +202,13 @@ Sim-to-render contract: `fn build_frame(&Gource, &Settings, &RenderState) -> Fra
 
 Mouse picking (`mousetrace`) is the one render-to-sim feedback path (APP T2.7: it selects user/file, locks the camera, deselects on fade). Keep it in `gource` (app) as an input step that calls `Gource::select_user/select_file` after a CPU unproject; the sim crate sees only selection commands. Skip it in headless/dump mode.
 
-### 4.2 Stack decision
+### 4.2 Stack decision (decided 2026-10-30)
 
-Use `sdl2` 0.38 + `glow` 0.18 + `glam`, targeting GL 3.2 core, `#version 150` (DEP T2.2 recommendation A; rationale there: SDL semantics 1:1, shaders tiny, wgpu can be added behind the same trait). macOS caps at GL 3.2 core (sec. 8). Alternatives rejected: winit+glutin (more input-behaviour tests), wgpu (WGSL rewrite and no GLSL 1.10 ingest, DEP T2.2 option C).
+Chosen stack: `winit` 0.30.x + `glutin` 0.32.x + `glutin-winit` 0.5.x + `glow` 0.18 + `glam`, versions pinned exactly, targeting OpenGL 3.2 core, `#version 150`. The window and GL context stay behind the `Renderer`/`GlContext` traits (sec. 4.1) so the sim and render crates never see winit or glutin types. The user chose this over the recommended `sdl2` 0.38 + `glow` (DEP T2.2 recommendation A), which is now a rejected alternative, as is wgpu (WGSL rewrite and no GLSL 1.10 ingest, DEP T2.2 option C). Cost accepted: more hand-written input-behaviour tests than SDL's 1:1 semantics. macOS caps at GL 3.2 core (sec. 8).
 
 ### 4.3 Render pass checklist (order from OUT sec. 4, `Gource::draw` gource.cpp:2401-2780)
 
-Reference mode is shaders (`--ffp` need not be ported; OUT sec. 4 intro; COR sec. 0 notes `--ffp` is first-class in C++, so decide: either accept `--ffp` as a no-op alias that uses the shader path, or fail; see Gaps).
+Reference mode is shaders (`--ffp` need not be ported; OUT sec. 4 intro; COR sec. 0 notes `--ffp` is first-class in C++, so decided 2026-10-31 (D4): `--ffp` is accepted and ignored, rendering always uses the shader path; the `P` key toggle (APP lines 294, 554) becomes a no-op).
 
 - [ ] 0 clear + optional background image; blend SRC_ALPHA, ONE_MINUS_SRC_ALPHA (same factors for alpha)
 - [ ] loading screen when no commitlog ("Reading Log"/"Aborting" + dots from `int(runtime*3)%4`)
@@ -246,8 +248,8 @@ Files: `data/shaders/{shadow.vert, text.vert, shadow.frag, text.frag, bloom.vert
 
 Reasons:
 - `parseArgs` does not behave like a normal CLI: all leading `-` stripped (`-x`, `--x`, `---x` identical), a lone `-` is positional, `--` is "unknown option -", no `--opt=value`, a value-taking option consumes the next token even if it starts with `-`, and a `-WxH` token (regex `^([0-9.]+)x([0-9.]+)(!)?$`, both ints >0) is a magic viewport (SET sec. 3 items 1-6). clap would reject or reinterpret most of these.
-- Help output must match the golden byte for byte (`golden/help-short.txt`, `help-long.txt`), exit 0 to stdout; clap-generated help cannot. Embed the two files with `include_str!`; keep platform variations (Windows omits `--high-dpi`, console resize) as `cfg` branches (SET sec. 9, GS:59).
-- Errors are `gource: <msg>\nTry 'gource --help' for more information.\n\n` on stderr, exit 1 (SET sec. 1 error format). Messages come from ConfFile and import validation, not from the arg library.
+- Help output must match the Gource goldens (`golden/help-short.txt`, `help-long.txt`) byte for byte except the recorded D5 help-text diff (user-friction default 1.0; dir-name-position range starts at 0.1), which will live as a unified diff under `golden/expected-diffs/` (does not exist yet); the goldens themselves are never edited. Exit 0 to stdout; clap-generated help cannot do this. Embed the corrected text with `include_str!`; no Windows `cfg` branches are needed (no native Windows build).
+- Errors are `<program>: <msg>\nTry '<program> --help' for more information.\n\n` on stderr, exit 1 (the C++ prints `gource`; Burl prints `burl`, and the golden harness normalises the program name only at six anchored phrases, see `crates/burl/tests/golden.rs`) (SET sec. 1 error format). Messages come from ConfFile and import validation, not from the arg library.
 - Behaviours like "CLI scalars applied to every `[gource]` section" need direct access to the ConfFile structure (below), which a derive-based parser would obscure.
 
 clap may still be used in tests only to cross-check the option index; do not ship it. The option table (`arg_types`, `arg_aliases`, section routing) comes from SET sec. 8; make it one `static` table `(name, type: Bool|Int|Float|String|Multi, section: Display|Gource|CommandLine)` and generate parse/help-index tests from it.
@@ -272,7 +274,7 @@ Two passes, exactly the order of SET sec. 1 steps 3-11 / T2.1 "Load order in mai
 4. If positionals remain: the LAST is `path`; `set_entry("path", ..)` on every `[gource]` section, or create one.
 5. `import_display_settings` (first `[display]` only), `import_gource_settings` (first `[gource]` only, defaults reset first, see item 8). `--output-custom-log` exits 0 only if the imported `path` is non-empty (main.cpp:119). Then `--save-config` -> save, exit 0; `--output-custom-log` non-empty -> write log, exit 0.
 6. Per-option application: for non-command options, apply to EVERY section of the target name: Multi types `add_entry` (config entries then CLI entries); others `set_entry` (replace all entries of that key in that section). Bool options store `"true"`. Magic `-WxH` writes `[display] viewport=<token as typed>`.
-7. **INTENTIONAL DEVIATION D1 (not C++ parity; needs user decision; corrected tick 4)**: C++ validates later `[gource]` sections lazily in `Shell::get_next` (SET T2.1 gotcha a), so earlier repos play before a bad later section terminates the process via uncaught exception. Proposed Rust behaviour: validate ALL `[gource]` sections up front in step 5 and exit 1 with the same message before anything plays. Only failure timing changes. Flag: hidden `--strict-lazy-sections` (name proposed) restores the C++ lazy behaviour; a parity test of the lazy path must pass that flag. Default and flag name are open decisions (sec. 10).
+7. **INTENTIONAL DEVIATION D1 (not C++ parity; decided 2026-10-31; corrected tick 4)**: C++ validates later `[gource]` sections lazily in `Shell::get_next` (SET T2.1 gotcha a), so earlier repos play before a bad later section terminates the process via uncaught exception. Proposed Rust behaviour: validate ALL `[gource]` sections up front in step 5 and exit 1 with the same message before anything plays. Only failure timing changes. There is no flag: the lazy C++ behaviour is not reproduced.
 8. **Per-repo settings reset set (C++ behaviour to reproduce; misc-traces.md sec. 3, gource_settings.cpp:368-520, 613)**: each `[gource]` section is imported into a FRESH default `GourceSettings` (C++ calls `setGourceDefaults()` at the start of `importGourceSettings`, and again in the `Gource` dtor, gource.cpp:223). The reset covers every per-repo field (path ".", hide_*, start/stop dates and positions, stop_at_time -1, stop_at_end, dont_stop, loop, days_per_second 0.1, time_scale 1, auto_skip 3, camera zoom 50/100/10000, bloom, colours, fonts, caption_*, filters cleared and freed, `follow_users`/`highlight_users`/`user_image_map` cleared, user_friction 1, ...) AND the global `gStringHashSeed = 31`, so `SimCtx.hash_seed` is re-initialised per repo (and overwritten by the recolour `rand()` path, gource.cpp:1555). NOT reset: `repo_count`, `shutdown`, `load_config`, `save_config`, `output_custom_filename`, `file_graphic` texture, `log_level`, all display-level settings (imported once), the ConfFile. So `Shell` holds `(DisplaySettings, ConfFile, repo_count)` once and builds `GourceSettings` per section; the not-reset fields live outside `GourceSettings`. Per-repo fixups after import (gource_shell.cpp:221-242): exporter present and not (`dont_stop || loop || path=="-"`) => `stop_at_end=true`; `repo_count>1 && stop_at_time<=0 && stop_position<=0` => `stop_at_time=60.0`; wrap to the first repo only when `repo_count>1 && exporter==0`. (timing.md sec. 2 last paragraph says re-import resets "only options present"; misc-traces.md and the source say defaults are reset first, so the latter is right.)
 
 Exit codes: `exit(1)` for `SDLAppQuit` errors, `exit(0)` for help/info/save/custom-log (SET sec. 1; golden `exit-codes.txt`). Version string `0.57` (`GOURCE_VERSION`). **There is no `--version` option** (corrected tick 4): `gource --version` is an unknown option, stderr `gource: unknown option version` plus the Try line, exit 1 (`golden/version.stderr.txt`, `exit-codes.txt` rc=1). `Gource v0.57` is only the first line of `-h`/`-H` output (gource_settings.cpp:50); DEP sec. 1 wording "printed by `--version`" is wrong.
@@ -288,7 +290,7 @@ Typed settings: `import_*` validators produce the exact messages catalogued in S
 | Internal parser patterns (git, svn, hg, bzr, cvs, apache, custom, parseDateTime, conffile) | `regex::bytes::Regex` with `(?-u)` | no look-around used (LOG sec. 3 "Features in log parsers"); BOM `\xEF\xBB\xBF` works in bytes mode |
 | Hot loops (git line parsing) | hand-written byte scanning where trivial | optional optimisation; must keep identical results |
 
-Build note: `pcre2` needs `pcre2-sys`, which can vendor-build with a C compiler; document that as the one native build dependency besides SDL2 and FreeType (DEP regex row).
+Build note: `pcre2` needs `pcre2-sys`, which can vendor-build with a C compiler; document that as the one native build dependency besides FreeType (SDL2 is no longer a dependency, sec. 4.2) (DEP regex row).
 
 `gource_util::Regex` wrapper semantics (LOG sec. 3, regex.cpp:149-208) that every call site relies on:
 
@@ -311,8 +313,8 @@ Differential test: the 4 filter options and the git-branch check against the C++
 Plan (consistent with LEDGER key findings and parity-test-spec.md sec. 2.4; corrected tick 4: the earlier text made glibc the default):
 - `trait SimRng { fn next_i31(&mut self) -> i32 /* 0..=2^31-1 like libc rand() */; }` held in `SimCtx`, with a call counter.
 - **Default (production)**: Rust's own documented, platform-independent PRNG (`Xorshift` in the parity spec) with a fixed default seed, so runs are reproducible; `--start-position random` is the only wall-clock seed.
-- **Optional compatibility modes**, selected by hidden flag or env `GOURCE_RS_PRNG=xorshift|glibc|park|script` (parity spec 2.4; recorded in the `--debug-dump-state` header; no documented public CLI behaviour changes): `Glibc` (TYPE_3, seed 1, `srand(0)` maps to 1; about 15 lines), `Park` (macOS Park-Miller), `Script` (values from `--rand-script FILE`, cyclic; the primary mode of the parity matrix because both binaries can read it).
-- The glibc first outputs `1804289383, 846930886, 1681692777, 1714636915` come from a scratch Python reimplementation (DEP T2.1), not from a libc run, and the parity spec (sec. 2.4, 6) marks the glibc and macOS algorithms `unverified`. Confirm against a real libc in CI before relying on them. Bit-exact C++ parity is per platform and only in the matching mode; cross-platform comparison uses `Script` or the tolerance tier (TST sec. 6 (2), parity spec 2.6).
+- **Compatibility modes** (decided 2026-10-31, D3: glibc and macOS modes exist for parity tests), selected by env `GOURCE_RS_PRNG=xorshift|glibc|park|script` (one mechanism, as in parity-test-spec.md sec. 2.4; recorded in the `--debug-dump-state` header; no documented public CLI behaviour changes): `Glibc` (TYPE_3, seed 1, `srand(0)` maps to 1; about 15 lines), `Park` (macOS Park-Miller), `Script` (values from `--rand-script FILE`, cyclic; the primary mode of the parity matrix because both binaries can read it).
+- The glibc first outputs `1804289383, 846930886, 1681692777, 1714636915` come from a scratch Python reimplementation (DEP T2.1), not from a libc run, and the parity spec (sec. 2.4, 6) marks the glibc and macOS algorithms `unverified`. Confirm against a real libc in CI before relying on them (the macOS mode against a recorded macOS libc sequence). Bit-exact C++ parity is per platform and only in the matching mode; cross-platform comparison uses `Script` or the tolerance tier (TST sec. 6 (2), parity spec 2.6).
 - Pin the argument order of `vec2(rand()%100-50, rand()%100-50)`: C++ leaves it unspecified and clang (the golden compiler, BLD) evaluates x first (SCN Tick 3 corrections; verification-tick3-scene.md row 9). Draw x then y in every Rust mode and record the reference compiler.
 - `--start-position random` seeds from `time(0)` (non-reproducible by design).
 
@@ -326,7 +328,7 @@ Plan (consistent with LEDGER key findings and parity-test-spec.md sec. 2.4; corr
 | `Gource::update` | `scaled_dt = min(dt, 1/60)`; with exporter `scaled_dt = max_tick_rate`; `*= time_scale`; `runtime += scaled_dt` unless paused; stop-at-time check; `logic`; `draw`; dump; cursor with REAL dt; `framecount += 1` | TIM sec. 1, 3 |
 | Fixed-dt (exporter) path | `gource_fps = F; skip=0; while gource_fps < 60 { gource_fps += F; skip += 1 }`; `max_tick_rate = 1/gource_fps`; dump when `framecount % (skip+1) == 0` and the log is loaded and not shutting down. F=60 -> 60 Hz skip 0; F=30 -> 60 Hz skip 1; F=25 -> 75 Hz skip 2 | TIM sec. 3, OUT sec. 1 |
 | `--headless`-style fixed mode | The Rust sim must expose `step(&mut self, dt: f32)` where interactive and exporter paths feed the same function; the exporter path just supplies `max_tick_rate`. A dump-state run uses that fixed path without a window (same as exporter) | TIM sec. 3, TST sec. 6 (2) |
-| Log-load phase | In C++, frames before `commitlog` exists still advance `runtime` and `framecount`, so the dump phase depends on load time (TIM sec. 3). **INTENTIONAL DEVIATION D2 (not C++ parity; needs user decision; corrected tick 4)**: in fixed-dt/export mode Rust blocks (`join`) until the log is ready before frame 0, with `framecount` phase 0 and `runtime` 0 at the first loaded frame. C++ output in that phase is load-time dependent, so no byte-exact C++ comparison exists for it anyway. Flag: hidden `--legacy-log-load` (name proposed) keeps C++ behaviour. Interactive mode keeps C++ behaviour (no deviation) | TIM sec. 3 |
+| Log-load phase | In C++, frames before `commitlog` exists still advance `runtime` and `framecount`, so the dump phase depends on load time (TIM sec. 3). **INTENTIONAL DEVIATION D2 (not C++ parity; decided 2026-10-31; corrected tick 4)**: in fixed-dt/export mode Rust blocks (`join`) until the log is ready before frame 0, with `framecount` phase 0 and `runtime` 0 at the first loaded frame. C++ output in that phase is load-time dependent, so no byte-exact C++ comparison exists for it anyway. An old-behaviour flag is OPTIONAL and was not specifically requested: add a hidden flag (name chosen then) only if the parity comparator needs C++ log-load timing. Interactive mode keeps C++ behaviour (no deviation) | TIM sec. 3 |
 | Seconds to days | `time_inc` is `f32`: `let time_inc: f32 = (dt as f64 * 86400.0 * days_per_second as f64) as f32;` then `seconds = time_inc as i32` (truncate), `subseconds(f32) += time_inc - seconds as f32`; if `subseconds >= 1.0 { currtime += subseconds as i64; subseconds -= (subseconds as i32) as f32 }`; then `currtime += seconds` (corrected tick 4: app-core.md 242/356 said f64; gource.cpp:1723-1733 declares `float`; verification-tick3-scene.md row 2) | SCN sec. 0 item 3, APP table row 12 |
 | Stop conditions | `stop_at_end` forced when exporting (unless `dont_stop`/`loop`/path `-`); trailing fade-out frames still exported until `users.empty() && stop_position_reached`; multi-repo default `stop_at_time=60` only when `stop_at_time<=0 && stop_position<=0` (gource_shell.cpp:228-233) | TIM sec. 4, OUT sec. 1 |
 | Wall-clock reads that affect sim | start/stop date parsing uses local TZ `mktime`; `srand(time(0))`; non-UTC parsers use `mktime`/`timegm` (TZ dependent) | TIM sec. 5 |
@@ -339,8 +341,8 @@ Plan (consistent with LEDGER key findings and parity-test-spec.md sec. 2.4; corr
 | Platform | Notes | Source |
 |---|---|---|
 | macOS | OpenGL is capped at 3.2 core and deprecated: request profile core 3.2, forward-compatible, `#version 150`, no `GL_QUADS`/`GL_ALPHA`/`glLineWidth>1`. Default window height 640 (768 elsewhere). Frameless toggle disabled at runtime. `--high-dpi`: C++ disables high-DPI on non-Windows when a viewport is specified without `--high-dpi`. NFC-normalise avatar file names (`user-image-dir`). `rand()` differs from glibc (sec. 7.1). Homebrew libs here are x86_64 (BLD) so run the C++ reference via Rosetta when capturing goldens | DEP T2.2; SET sec. 9; COR sec. 16; BLD |
-| Windows | Console: attach/hide/show logic, "Press Enter" prompts after help/info/error when not run from an existing console, console resize for help; high-DPI awareness always on; stdout set binary for PPM; UTF-16 -> UTF-8 for avatar names; `PeekNamedPipe` stdin; git/hg command quoting differs; `fs::canonicalize` returns `\\?\` paths (use `dunce`). winit equivalents for HWND hacks are missing; with SDL2 most are covered | SET sec. 9; COR sec. 16; DEP risk 5 |
-| Linux | Reference CI target. No GL needed for parser/sim gates. Render gate: Xvfb + Mesa llvmpipe (`LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe`, request a core 3.2 context). Wayland: C++ tolerates `GLEW_ERROR_NO_GLX_DISPLAY`; with glow no GLEW exists so skip | TST sec. 4, 6 (3); COR sec. 16 |
+| Windows | No native Windows build in the first release (decided 2026-10-30). Windows users run a Docker image (Linux userland) as headless frame export only | decisions |
+| Linux | Reference CI target. No GL needed for parser/sim gates. Render gate: Xvfb + Mesa llvmpipe (`LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe`, request a core 3.2 context; glutin config selection, GLX or EGL, under Xvfb and Wayland). Wayland: C++ tolerates `GLEW_ERROR_NO_GLX_DISPLAY`; with glow no GLEW exists so skip | TST sec. 4, 6 (3); COR sec. 16 |
 | All | Resource lookup order and `SDLAPP_RESOURCE_DIR` define (COR sec. 3); fonts `FreeSans.ttf` embedded via `include_bytes!` or installed; log commands run through `system()` with a temp file (git/hg/bzr/svn/cvs flags verbatim, DEP risk 6; quoting per LOG sec. 2 Windows row) | COR, LOG |
 
 Font choice: use `freetype-rs` for hinted glyphs to keep label metrics close (DEP font row, risk 2); `fontdue` is the pure-Rust fallback with unhinted drift.
@@ -351,29 +353,32 @@ Gate tools exist in the repo: `docs/rust-rewrite/discovery/golden/` (help, versi
 
 | Phase | Deliverable | Parity gate | Source |
 |---|---|---|---|
-| 0 | workspace skeleton, CI, `gource-util` (strhash, utf8, bounds, math, regex wrapper, prng, timeparse) | `cargo test`: port `src/test/{datetime,regex}` cases; stringHash/colourHash vectors; glibc-mode PRNG first outputs `1804289383, 846930886, 1681692777, 1714636915` (once confirmed against a real libc, sec. 7.1) plus a determinism test of the default Rust PRNG; `replace_invalid` cases | TST sec. 1; DEP T2.1; COR T2 (d)(e) |
-| 1 | `gource-conf`: ConfFile, parse_args, settings import, help text, error strings, `--save-config`, `--log-command` | byte-exact diff of `-h`, `-H`, `--version`, exit codes against `golden/help-short.txt`, `help-long.txt`, `version.stderr.txt` (there is no `--version` option: `gource --version` exits 1 with `unknown option version` on stderr; version.txt is empty), `exit-codes.txt`; round-trip `--save-config` vs C++ on a matrix of args (multi-section included) | SET sec. 7, 3; BLD |
-| 2 | `gource-formats`: SeekLog/StreamLog, nine parsers, logmill detect order, filters, `--output-custom-log` | `gource-rs --output-custom-log - tests/logs/*.log` equals `golden/custom-log/*` exactly; plus captured git/svn/hg/bzr samples through `--log-format`; edge inputs (empty, CRLF, BOM, out-of-order, `|` in names, stdin unterminated line) | TST sec. 6 (1); LOG sec. 9 |
-| 3 | `gource-sim` headless: DirTree, File, User, Action, QuadTree, Gource::logic, fixed-dt `step`, `--debug-dump-state` (added to both C++ and Rust, JSONL as in TST sec. 6 (2)) | Exact tier: topology, add/remove/idle-expire frames, user set, colours. Position tier: exact when the glibc RNG is selected and sim built with matching f32 op order, else 1e-3 relative. Run `file-removal.log` etc. with `--hash-seed 31 --disable-auto-rotate --stop-at-time 10` | TST sec. 6 (2); SCN sec. 10 |
+| 0 | workspace skeleton, CI, `gource-util` (strhash, utf8, bounds, math, regex wrapper, prng, timeparse) | `cargo test`: port `src/test/{datetime,regex}` cases; stringHash/colourHash vectors; glibc-mode PRNG first outputs `1804289383, 846930886, 1681692777, 1714636915` (once confirmed against a real libc, sec. 7.1) and the macOS compatibility mode against a recorded macOS libc sequence plus a determinism test of the default Rust PRNG; `replace_invalid` cases | TST sec. 1; DEP T2.1; COR T2 (d)(e) |
+| 1 | `gource-conf`: ConfFile, parse_args, settings import, help text, error strings, `--save-config`, `--log-command` | byte-exact diff of `-h`, `-H`, `--version`, exit codes against the oracle goldens `golden/help-short.txt`, `help-long.txt`, `version.stderr.txt`, modulo the recorded D5 help diff (`golden/expected-diffs/`, does not exist yet) (there is no `--version` option: `gource --version` exits 1 with `unknown option version` on stderr; version.txt is empty), `exit-codes.txt`; round-trip `--save-config` vs C++ on a matrix of args (multi-section included) | SET sec. 7, 3; BLD |
+| 2 | `gource-formats`: SeekLog/StreamLog, nine parsers, logmill detect order, filters, `--output-custom-log` | `burl --output-custom-log - tests/logs/*.log` equals `golden/custom-log/*` exactly; plus captured git/svn/hg/bzr samples through `--log-format`; edge inputs (empty, CRLF, BOM, out-of-order, `|` in names, stdin unterminated line) | TST sec. 6 (1); LOG sec. 9 |
+| 3 | `gource-sim` headless: DirTree, File, User, Action, QuadTree, Gource::logic, fixed-dt `step`, `--debug-dump-state` (added to the C++ fork at `reference/gource-cpp-dump/` (does not exist yet; it must first reproduce the oracle's help and custom-log goldens, and the untouched original build stays the oracle) and to Rust, JSONL as in TST sec. 6 (2)) | Exact tier: topology, add/remove/idle-expire frames, user set, colours. Position tier: exact when the glibc RNG is selected and sim built with matching f32 op order, else 1e-3 relative. Run `file-removal.log` etc. with `--hash-seed 31 --disable-auto-rotate --stop-at-time 10` | TST sec. 6 (2); SCN sec. 10 |
 | 4 | Camera, auto-rotate, selection, captions timeline, multi-section shell (still headless) | camera pos/zoom fields in the dump; multi-section run of `tests/test.conf` matches section-by-section counts | APP; SET T2.1 |
 | 5 | `gource-gl` renderer: window, shaders (sec. 4.4), passes (sec. 4.3), font atlas, textures, screenshot, PPM writer thread | `-o` stream is valid P6 with the per-frame header and correct frame count (`ffmpeg` decode); frame cadence from sec. 7.2 (frames dumped per runtime second for F=25/30/60); SSIM >= ~0.9 vs C++ reference frames under Xvfb/llvmpipe on every 30th frame; structure checks with bloom and shadows off | TST sec. 6 (3); OUT sec. 1, 8 |
-| 6 | UI overlays (key, slider, textbox, logo, splash), input bindings, interactive loop with 16 ms accumulation, HiDPI, Windows console | manual checklist against APP T2.2 key/mouse table; no regression in earlier gates | APP T2.2 |
-| 7 | packaging, resource lookup, cross-platform CI | `cargo build` on Linux/macOS/Windows; Linux render gate in CI | DEP sec. 5, 7 |
+| 6 | UI overlays (key, slider, textbox, logo, splash), input bindings, interactive loop with 16 ms accumulation, HiDPI | manual checklist against APP T2.2 key/mouse table; no regression in earlier gates | APP T2.2 |
+| 7 | packaging, resource lookup, cross-platform CI | `cargo build` on Linux and macOS natively; Windows via the Docker headless-export image; Linux render gate in CI | DEP sec. 5, 7 |
 
 Rule: a phase may not start before the previous gate is green; the sim gate (phase 3) is the rewrite's main correctness bar (visual gate is intentionally loose).
 
 Sabotage check for each gate test (user convention): temporarily break the code under test (e.g. flip the `children` iteration order, return `from_utf8_lossy` output, drop the empty-subject rule) and confirm the corresponding gate fails before trusting it.
 
-## 10. Decisions to confirm and known quirks
+## 10. Decisions taken and known quirks
 
-| Item | Proposed handling | Source |
+All rows decided 2026-10-30/31 (D1 to D5 as numbered in the LEDGER Decisions).
+
+| Item | Handling | Source |
 |---|---|---|
-| `--log-format cvs-exp` unmatched by logmill (`"cvs"` only) | keep: explicit `cvs-exp` yields "unsupported log format"; auto-detect works. Fixing is a conscious behaviour change | LOG sec. 1 item 7 |
-| `--stop-on-idle` no-op | accept the flag, ignore it | OUT sec. 1 |
-| help text says user-friction 0.67 but code default 1.0 | keep the help text verbatim (golden), implement 1.0 | LEDGER key findings |
-| Later-section validation lazily terminates | **DEVIATION D1** (flag `--strict-lazy-sections` restores C++; default needs user decision): validate all sections up front (sec. 5.3 item 7) | SET T2.1 gotcha |
-| Log load in export mode | **DEVIATION D2** (flag `--legacy-log-load` restores C++; default needs user decision): block on log load before frame 0 (sec. 7.2) | TIM sec. 3 |
-| `--ffp` (fixed-function path) | accept the flag; render through the shader path (visually equivalent); document | COR sec. 0 |
+| `--log-format cvs-exp` unmatched by logmill (`"cvs"` only) in C++ | fix (D5): explicit `cvs-exp` selects the CVS-EXP parser; auto-detect still works | LOG sec. 1 item 7 |
+| `--stop-on-idle` no-op | accepted option, documented as having no effect (decided 2026-10-31, D5) | OUT sec. 1 |
+| help text says user-friction 0.67 but code default 1.0 | fix (D5): corrected help text says 1.0, as implemented; the Gource golden is not edited, the diff goes under `golden/expected-diffs/` | LEDGER key findings |
+| help text gives `--dir-name-position` range starting at 0.0, code starts at 0.1 | fix (D5): corrected help text starts the range at 0.1, recorded in the same expected diff | settings-cli.md |
+| Later-section validation lazily terminates | **DEVIATION D1**, decided: validate all sections up front (sec. 5.3 item 7); no flag | SET T2.1 gotcha |
+| Log load in export mode | **DEVIATION D2**, decided: block on log load before frame 0 (sec. 7.2); old-behaviour flag optional, not requested | TIM sec. 3 |
+| `--ffp` (fixed-function path) | accepted and ignored (D4); shader path only; `P` key toggle is a no-op | COR sec. 0 |
 | `RDirNode` ctor shadowed `parent` | no ctor parent parameter in Rust (sec. 2.2) | SCN 3.1 |
 | Uninitialised C++ fields | glm vectors are zero by definition (GLM_FORCE_CTOR_INIT); only `QuadItem::node_count` is truly uninit, use 0 (corrected tick 4) | verification-tick3-scene.md row 1 |
 | PI constant | `PI` is `3.14159265` f64; use that constant for sim, not `std::f64::consts::PI` | SCN sec. 1 |
@@ -389,10 +394,10 @@ Corrections made (each marked "corrected tick 4" in place):
 - Commits are never sorted; sec. 2.4 and the sec. 10 gap row updated.
 - PRNG default is a documented Rust PRNG with optional glibc/Park/Script modes (was glibc default); glibc first outputs flagged as verified only by a scratch Python script.
 - Per-repo reset set added (sec. 5.3 item 8), including `gStringHashSeed=31` and the not-reset list; stop_at_time=60 condition and `stop_at_end` fixup stated precisely.
-- Two intentional deviations now labelled D1 (validate all sections up front) and D2 (block on log load in export mode) with proposed hidden flags and an open-decision note; they are not parity.
+- Two intentional deviations now labelled D1 (validate all sections up front) and D2 (block on log load in export mode) not parity; both decided 2026-10-31 (D1 has no flag, a D2 flag is optional).
 - Makefile.am coverage: every built .cpp has a row; tinyxml is conditional (USE_BUNDLED_TINYXML); utf8/ftgl are header-only; ui/, tga.cpp, timer.cpp unbuilt.
 - Smaller: uninitialised-field wording (GLM_FORCE_CTOR_INIT), `toa` 1.99999988, PCRE2 `$` vs Rust `$`, `--output-custom-log` needs non-empty path, shell no-update iteration, worker also does the `--start-date` scan.
 
-Confirmed unchanged: min delta 16 ms (gource_shell.cpp:29), mapped `rand()` sites (4 plus `--start-position random`), regex wrapper semantics (regex.cpp matchOffset: offset>=size returns -1, trailing non-participating groups dropped, middle become empty), `cvs-exp` unmatched by logmill (`"cvs"` only), conffile grammar regexes, parseArgs hyphen stripping, window height 640 on macOS.
+Confirmed unchanged: min delta 16 ms (gource_shell.cpp:29), mapped `rand()` sites (4 plus `--start-position random`), regex wrapper semantics (regex.cpp matchOffset: offset>=size returns -1, trailing non-participating groups dropped, middle become empty), C++ `cvs-exp` unmatched by logmill (`"cvs"` only; fixed in Burl, sec. 10), conffile grammar regexes, parseArgs hyphen stripping, window height 640 on macOS.
 
-Open: D1 and D2 default/flag names need a user decision; glibc/macOS `rand()` values unverified against a real libc; timing.md sec. 2 last paragraph ("only options present") and deps sec. 1 ("--version") are wrong in their own docs and were not edited.
+Open: glibc/macOS `rand()` values unverified against a real libc; timing.md sec. 2 last paragraph ("only options present") and deps sec. 1 ("--version") are wrong in their own docs and were not edited.

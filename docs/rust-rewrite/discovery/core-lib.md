@@ -10,7 +10,7 @@ All paths relative to repo root. Line refs are to the checked-out submodule.
 | GL context is **compatibility profile**, no version requested; code is fixed-function GL 1.x/2.x with optional GLSL 1.10-style shaders (`gl_Vertex`, `varying`, `ftransform()`), VBOs for text only | src/core/display.cpp:254, data/shaders/*.vert |
 | SDL2 only in practice (SDL1.2 `#else` branches are dead; configure requires sdl2) | configure.ac:39, display.cpp:`SDL_VERSION_ATLEAST` blocks |
 | GLEW is the loader; GLU used (`gluPerspective`, `gluProject`, `gluUnProject`, `gluBuild2DMipmaps`, `gluErrorString`) | gl.h:4, display.cpp:~510-575, texture.cpp:232 |
-| Fixed-function path (`--ffp`) is a first-class mode: shaders/VBO-text only used when `!gGourceSettings.ffp` | src/gource.cpp:81-86, 2491-2530 |
+| Fixed-function path (`--ffp`) is a first-class mode: shaders/VBO-text only used when `!gGourceSettings.ffp` (Rust: accepted and ignored (D4)) | src/gource.cpp:81-86, 2491-2530 |
 | Not compiled into gource by Makefile.am: `ui/`, `tga.cpp`, `timer.cpp`, `utf8/` (header-only, used once), `ftgl/` (header only, used by fxfont). `tga.cpp` is listed only in gource.pro:84. No Gource source includes `core/ui/*` | Makefile.am:11-32, gource.pro:84, grep UIElement src (none) |
 | `mktime_utc` is used only by core/settings.cpp (other child); svn.cpp has its own copy of the same TZ hack and prefers `timegm` | settings.cpp:331,348; src/formats/svn.cpp:118-144,239-241 |
 | `GLTimer` (GL_TIME_ELAPSED query) is unused by Gource | grep (only timer.*) |
@@ -79,7 +79,7 @@ Gource-side use: main.cpp:131-174 (frameless, multisample 4, alpha if transparen
 | Clipboard | `SDL_GetClipboardText/SetClipboardText` |
 | Info/Quit | `SDLAppInfo` prints, exit(0); `SDLAppQuit` SDL_Quit, prints "`exec: msg`" + "Try '`exec` --help' for more information.", exit(1) |
 | `SDLAppException(fmt,...)` | printf-formatted, 64 KiB buffer, `showHelp` flag |
-| Platform ifdefs | `_WIN32`: include windows.h, `_WIN32_WINNT 0x0501`, console create/hide/resize (GetConsoleWindow, "<title> Console" naming, disable close button), "Press Enter" pauses unless existing console (:49-153); `_MSC_VER` skip unistd; `USE_X11` declares clipboard event filter in header only (no impl in .cpp); `SDL_VERSION_ATLEAST` dead branches |
+| Platform ifdefs (scope: C++ behaviour; Windows is out of scope for Rust, decided 2026-10-30) | `_WIN32`: include windows.h, `_WIN32_WINNT 0x0501`, console create/hide/resize (GetConsoleWindow, "<title> Console" naming, disable close button), "Press Enter" pauses unless existing console (:49-153); `_MSC_VER` skip unistd; `USE_X11` declares clipboard event filter in header only (no impl in .cpp); `SDL_VERSION_ATLEAST` dead branches |
 
 ### Resource directory lookup order (SDLAppInit)
 1. Defaults: `conf_dir=""`, `resource_dir="data/"`, `fonts="data/fonts/"`, `shaders="data/shaders/"`.
@@ -230,7 +230,7 @@ Gource's own on-screen widgets (slider.cpp, key.cpp, textbox, caption) live in s
 | `HAVE_TIMEGM`-style | svn.cpp:239 | not Core |
 
 ## 17. Rust rewrite guidance (derived)
-- Windowing: winit/SDL2 (sdl2 crate) + OpenGL (glow/glutin) compat profile is not available in core-profile-only stacks; visual equivalence is easiest with wgpu re-implementing fixed pipeline (orthographic 2D quads, perspective camera, alpha/additive blend, 16-bit depth for picking not required if `unproject` replaced by ray/plane math — Gource's `unproject` depth readback is used for mouse-to-world conversion, see callers).
+- Windowing and renderer (decided 2026-10-30): winit + glutin (+ glutin-winit) + glow on OpenGL 3.2 core, versions pinned exactly, window and GL context behind the renderer trait; sdl2 and wgpu were rejected. The compat profile is not available on this stack, so re-implement the fixed pipeline (orthographic 2D quads, perspective camera, alpha/additive blend, 16-bit depth for picking not required if `unproject` replaced by ray/plane math — Gource's `unproject` depth readback is used for mouse-to-world conversion, see callers).
 - Keep: 16 ms minimum step (Gource overrides the 8 ms SDLApp default; see timing.md), float seconds `t,dt`, dpi-scaled mouse coordinates, FreeSans.ttf with integer advances, 512 px atlas pages, quadtree rules (depth 6 / 1 item / rebuild each tick / 1.0 padding / TL,TR,BL,BR order), logger tag format, resource lookup order, `--WxH`, `-f`, `-w` arg handling.
 - Drop: ui/, tga, timer, shader preprocessor, SDL1.2 paths, Windows console shim (unless Windows target).
 

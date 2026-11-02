@@ -44,6 +44,10 @@ dependencies = [
 [[package]]
 name = "burl-conf"
 version = "0.57.0"
+dependencies = [
+ "burl-util",
+ "chrono",
+]
 
 [[package]]
 name = "burl-formats"

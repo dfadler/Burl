@@ -1,28 +1,31 @@
 #![forbid(unsafe_code)]
-//! Phase 1 entry point: the `main.cpp` flow up to `--output-custom-log`. Argument
-//! consumption follows `SDLAppSettings::parseArgs` with the full option table so unknown
-//! options and value swallowing match the C++ binary; only `--log-format`,
-//! `--output-custom-log`, the `*-command` printers, `-h`/`-H` and the positional path do
-//! anything. Everything else is parsed and ignored (docs/rust-rewrite/phase1.md).
+//! Entry point: the `main.cpp` flow from argument parsing through settings import,
+//! `--save-config` and `--output-custom-log`. Arguments become a `ConfFile` (`burl-conf`), which
+//! is imported and validated for every `[gource]` section up front (deviation D1); there is no
+//! display path yet, so a run that gets that far exits 1.
 
-use burl_conf::args::{alias, arg_type, section, ArgType, Section};
+use burl_conf::args::parse_args;
+use burl_conf::conffile::{ConfError, ConfFile};
 use burl_conf::help::{HELP_LONG, HELP_SHORT};
+use burl_conf::settings::{import_all_gource_settings, import_display_settings, DebugOptions};
 use burl_formats::formats::{bzr, cvs2cl, cvs_exp, git, hg, svn};
 use burl_formats::{fetch_log, LogSettings, RCommit};
-use burl_util::cstr::atoi;
-use burl_util::regex::Regex;
-use std::io::Write;
-use std::sync::{Arc, LazyLock};
+use std::io::{BufRead, Write};
+use std::sync::Arc;
 
 const EXEC: &str = "burl";
-
-static VIEWPORT_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"^([0-9.]+)x([0-9.]+)(!)?$"));
 
 /// `SDLAppQuit`: stderr `gource: <msg>` + the Try line + a blank line, exit 1.
 fn quit(msg: &str) -> ! {
     let _ = std::io::stdout().flush();
     let mut err = std::io::stderr().lock();
-    let _ = write!(err, "{}: {}\nTry '{}--help' for more information.\n\n", EXEC, msg, format_args!("{} ", EXEC));
+    let _ = write!(
+        err,
+        "{}: {}\nTry '{}--help' for more information.\n\n",
+        EXEC,
+        msg,
+        format_args!("{} ", EXEC)
+    );
     let _ = err.flush();
     std::process::exit(1);
 }
@@ -43,149 +46,91 @@ fn help(extended: bool) -> ! {
     std::process::exit(0);
 }
 
+/// The command-line-section state (`GourceSettings::load_config` etc.): never stored in the
+/// ConfFile, so it survives the `conf.clear()` between the two argument passes.
 #[derive(Default)]
-struct Phase1 {
-    files: Vec<Vec<u8>>,
-    /// Last `--log-format` value, if the option appeared (`setEntry` replaces).
-    log_format: Option<Vec<u8>>,
-    output_custom_filename: Option<Vec<u8>>,
+struct CommandLine {
+    load_config: String,
+    save_config: String,
+    output_custom_filename: String,
+    /// Hidden test-only controls (ticket #22), parsed and recorded here; the sim lanes act on them.
+    #[allow(dead_code)]
+    debug: DebugOptions,
 }
 
-/// `parseViewport`: `^([0-9.]+)x([0-9.]+)(!)?$` with both ints > 0.
-fn parse_viewport(value: &[u8]) -> bool {
-    match VIEWPORT_REGEX.captures(value) {
-        Some(m) => atoi(&m[0]) > 0 && atoi(&m[1]) > 0,
-        None => false,
-    }
-}
-
-/// `commandLineOption`.
-fn command_line_option(name: &str, value: &[u8], p: &mut Phase1) {
+/// `commandLineOption`. The VCS printers and help exit from here, in argument order.
+fn command_line_option(name: &str, value: &str, cl: &mut CommandLine) -> Result<(), ConfError> {
     match name {
         "help" => help(false),
         "extended-help" => help(true),
         _ => {}
     }
-    if (name == "load-config" || name == "save-config") && !value.is_empty() {
-        // ponytail: accepted and ignored in phase 1 (ConfFile comes in phase 2)
-        return;
+    if DebugOptions::is_debug_option(name) {
+        return cl.debug.set(name, value);
+    }
+    if name == "load-config" && !value.is_empty() {
+        cl.load_config = value.to_string();
+        return Ok(());
+    }
+    if name == "save-config" && !value.is_empty() {
+        cl.save_config = value.to_string();
+        return Ok(());
     }
     let settings = LogSettings::default();
-    let log_command: &[u8] = if name == "log-command" { value } else { b"" };
-    if name == "git-log-command" || log_command == b"git" {
+    let log_command = if name == "log-command" { value } else { "" };
+    if name == "git-log-command" || log_command == "git" {
         info(&git::log_command(&settings));
     }
-    if name == "cvs-exp-command" || log_command == b"cvs-exp" {
+    if name == "cvs-exp-command" || log_command == "cvs-exp" {
         info(cvs_exp::LOG_COMMAND);
     }
-    if log_command == b"cvs" {
-        quit("please use either 'cvs2cl' or 'cvs-exp'");
+    if log_command == "cvs" {
+        return Err(ConfError("please use either 'cvs2cl' or 'cvs-exp'".into()));
     }
-    if name == "cvs2cl-command" || log_command == b"cvs2cl" {
+    if name == "cvs2cl-command" || log_command == "cvs2cl" {
         info(cvs2cl::LOG_COMMAND);
     }
-    if name == "svn-log-command" || log_command == b"svn" {
+    if name == "svn-log-command" || log_command == "svn" {
         info(&svn::log_command(&settings));
     }
-    if name == "hg-log-command" || log_command == b"hg" {
+    if name == "hg-log-command" || log_command == "hg" {
         info(&hg::log_command(&settings));
     }
-    if name == "bzr-log-command" || log_command == b"bzr" {
+    if name == "bzr-log-command" || log_command == "bzr" {
         info(&bzr::log_command(&settings));
     }
     if name == "output-custom-log" && !value.is_empty() {
-        p.output_custom_filename = Some(value.to_vec());
-        return;
+        cl.output_custom_filename = value.to_string();
+        return Ok(());
     }
     if name == "log-level" {
         // warn/debug/info/error/pedantic set the level; anything else is silently ignored
-        return;
+        return Ok(());
     }
-    quit(&format!("invalid {} value", name));
+    Err(ConfError(format!("invalid {name} value")))
 }
 
-/// `parseArgs` into the phase-1 subset of the ConfFile.
-fn parse_args(arguments: &[Vec<u8>], p: &mut Phase1) {
-    let mut i = 0;
-    while i < arguments.len() {
-        let mut args: &[u8] = &arguments[i];
-        let mut is_option = false;
-        while args.len() > 1 && args[0] == b'-' {
-            args = &args[1..];
-            is_option = true;
-        }
-        if args.is_empty() {
-            i += 1;
-            continue;
-        }
-        if !is_option {
-            p.files.push(args.to_vec());
-            i += 1;
-            continue;
-        }
-        let name_raw = String::from_utf8_lossy(args).into_owned();
-        let name = alias(&name_raw).to_string();
-        // NUMBERxNUMBER is a magic alias for viewport
-        if name.len() > 1 && name.contains('x') && parse_viewport(name.as_bytes()) {
-            i += 1;
-            continue;
-        }
-        let Some(ty) = arg_type(&name) else { quit(&format!("unknown option {}", name)) };
-        let value: Vec<u8> = if ty == ArgType::Bool {
-            b"true".to_vec()
-        } else if i + 1 < arguments.len() {
-            i += 1;
-            arguments[i].clone()
-        } else {
-            Vec::new()
-        };
-        if section(&name) == Section::CommandLine {
-            command_line_option(&name, &value, p);
-            i += 1;
-            continue;
-        }
-        if name == "log-format" {
-            p.log_format = Some(value);
-        }
-        // every other option is stored in the ConfFile and imported in phase 2
-        i += 1;
-    }
+/// `parseArgs` with the command-line handler bound to `cl`.
+fn parse(
+    arguments: &[Vec<u8>],
+    conf: &mut ConfFile,
+    files: Option<&mut Vec<String>>,
+    cl: &mut CommandLine,
+) -> Result<(), ConfError> {
+    parse_args(arguments, conf, files, &mut |n, v| {
+        command_line_option(n, v, cl)
+    })
 }
 
-/// The `importGourceSettings` checks for the two imported keys, with the exact messages.
-fn import(p: &Phase1) -> (String, String) {
-    let mut log_format = String::new();
-    if let Some(v) = &p.log_format {
-        if v.is_empty() {
-            quit("specify log-format (format)");
-        }
-        log_format = String::from_utf8_lossy(v).into_owned();
-        if log_format == "cvs" {
-            quit("please use either 'cvs2cl' or 'cvs-exp'");
-        }
-        if !matches!(log_format.as_str(), "git" | "cvs-exp" | "cvs2cl" | "svn" | "custom" | "hg" | "bzr" | "apache") {
-            quit("invalid 'log-format' value");
-        }
-    }
-    // path: the last positional, default "."
-    let mut path = match p.files.last() {
-        Some(f) => String::from_utf8_lossy(f).into_owned(),
-        None => ".".to_string(),
-    };
-    if path == "-" {
-        if log_format.is_empty() {
-            quit("log-format required when reading from STDIN");
-        }
-        // the C++ then polls until the first byte arrives; blocking reads do the same
-    } else if !path.is_empty() && path != "." && (path.ends_with('\\') || path.ends_with('/')) {
-        path.pop();
-    }
-    (path, log_format)
+/// `.conf` (longer than 5 chars), `.cfg` or `.ini` (longer than 4): a positional that might be a config.
+fn looks_like_config(file: &str) -> bool {
+    (file.ends_with(".conf") && file.len() > 5)
+        || ((file.ends_with(".cfg") || file.ends_with(".ini")) && file.len() > 4)
 }
 
 /// `Gource::writeCustomLog`.
-fn write_custom_log(path: &str, output_file: &[u8], log_format: String) {
-    let settings = Arc::new(LogSettings { log_format, ..LogSettings::default() });
+fn write_custom_log(path: &str, output_file: &str, settings: LogSettings) {
+    let settings = Arc::new(settings);
     let mut commitlog = match fetch_log(path, settings) {
         Ok(l) => l,
         Err(e) => {
@@ -196,11 +141,10 @@ fn write_custom_log(path: &str, output_file: &[u8], log_format: String) {
         }
     };
     let stdout = std::io::stdout();
-    let mut out: Box<dyn Write> = if output_file == b"-" {
+    let mut out: Box<dyn Write> = if output_file == "-" {
         Box::new(std::io::BufWriter::new(stdout.lock()))
     } else {
-        let name = String::from_utf8_lossy(output_file).into_owned();
-        match std::fs::File::create(&name) {
+        match std::fs::File::create(output_file) {
             Ok(f) => Box::new(std::io::BufWriter::new(f)),
             Err(_) => return, // fopen failure: silent, still exit 0
         }
@@ -230,22 +174,84 @@ fn raw_args() -> Vec<Vec<u8>> {
     }
     #[cfg(not(unix))]
     {
-        std::env::args_os().skip(1).map(|a| a.to_string_lossy().into_owned().into_bytes()).collect()
+        std::env::args_os()
+            .skip(1)
+            .map(|a| a.to_string_lossy().into_owned().into_bytes())
+            .collect()
     }
 }
 
-fn main() {
+/// main.cpp steps 3-11 up to the point a display would open.
+fn run() -> Result<(), ConfError> {
     let arguments = raw_args();
-    let mut p = Phase1::default();
-    parse_args(&arguments, &mut p);
-    let (path, log_format) = import(&p);
-    if let Some(output) = &p.output_custom_filename {
-        if !path.is_empty() {
-            write_custom_log(&path, output, log_format);
-            std::process::exit(0);
+    let mut conf = ConfFile::new();
+    let mut files = Vec::new();
+    let mut cl = CommandLine::default();
+    parse(&arguments, &mut conf, Some(&mut files), &mut cl)?;
+
+    // a positional that loads as a ConfFile is the config (first match wins, then it is removed)
+    if cl.load_config.is_empty() {
+        if let Some(i) = files
+            .iter()
+            .position(|f| looks_like_config(f) && ConfFile::new().load(f).is_ok())
+        {
+            cl.load_config = files.remove(i);
         }
     }
+    if !cl.load_config.is_empty() {
+        conf.clear();
+        conf.load(&cl.load_config)?;
+        parse(&arguments, &mut conf, None, &mut cl)?; // CLI over the file
+    }
+    // the last positional is the path of every repo
+    if let Some(path) = files.last() {
+        if conf.count_section("gource") > 0 {
+            for sec in conf.sections_mut("gource") {
+                sec.set_entry("path", path);
+            }
+        } else {
+            conf.set_entry("gource", "path", path);
+        }
+    }
+    let _display = import_display_settings(&conf)?;
+    // D1: every [gource] section is validated now, not lazily as each repo starts
+    let mut repos = import_all_gource_settings(&mut conf)?;
+
+    if !cl.save_config.is_empty() {
+        conf.save(&cl.save_config)?;
+        std::process::exit(0);
+    }
+    let first = &mut repos[0];
+    if !cl.output_custom_filename.is_empty() && !first.path.is_empty() {
+        if first.path == "-" {
+            // wait for the first byte (or EOF) without consuming it; the C++ polls every 100 ms
+            let _ = std::io::stdin().lock().fill_buf();
+        }
+        let settings = LogSettings {
+            log_format: first.log_format.clone(),
+            file_filters: std::mem::take(&mut first.file_filters),
+            file_show_filters: std::mem::take(&mut first.file_show_filters),
+            user_filters: std::mem::take(&mut first.user_filters),
+            user_show_filters: std::mem::take(&mut first.user_show_filters),
+            hash_seed: first.hash_seed,
+            start_date: first.start_date.clone(),
+            stop_date: first.stop_date.clone(),
+            start_timestamp: first.start_timestamp,
+            stop_timestamp: first.stop_timestamp,
+            git_branch: first.git_branch.clone(),
+            author_time: first.author_time,
+            ..LogSettings::default()
+        };
+        write_custom_log(&first.path, &cl.output_custom_filename, settings);
+        std::process::exit(0);
+    }
     // Not a C++ message: the display path does not exist yet.
-    eprintln!("{}: phase 1 build: only --output-custom-log is implemented", EXEC);
+    eprintln!("{}: the display path is not implemented yet", EXEC);
     std::process::exit(1);
+}
+
+fn main() {
+    if let Err(e) = run() {
+        quit(&e.0);
+    }
 }

@@ -1,0 +1,14 @@
+    1 alice	2020-01-01
+      one
+      A  a.txt
+      A  sub/
+      A  sub/b.txt
+
+    2 bob	2020-01-02
+      two
+      M  a.txt
+
+    3 alice	2020-01-03
+      three
+      D  sub/b.txt
+

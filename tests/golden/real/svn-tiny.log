@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<log>
+<logentry
+   revision="1">
+<author>alice</author>
+<date>2020-01-01T10:00:00.000000Z</date>
+<paths>
+<path
+   action="A"
+   prop-mods="false"
+   text-mods="true"
+   kind="file">/a.txt</path>
+<path
+   action="A"
+   prop-mods="false"
+   text-mods="false"
+   kind="dir">/sub</path>
+<path
+   action="A"
+   prop-mods="false"
+   text-mods="true"
+   kind="file">/sub/b.txt</path>
+</paths>
+</logentry>
+<logentry
+   revision="2">
+<author>bob</author>
+<date>2020-01-02T11:00:00.000000Z</date>
+<paths>
+<path
+   prop-mods="false"
+   text-mods="true"
+   kind="file"
+   action="M">/a.txt</path>
+</paths>
+</logentry>
+<logentry
+   revision="3">
+<author>alice</author>
+<date>2020-01-03T12:00:00.000000Z</date>
+<paths>
+<path
+   text-mods="false"
+   kind="file"
+   action="D"
+   prop-mods="false">/sub/b.txt</path>
+</paths>
+</logentry>
+</log>

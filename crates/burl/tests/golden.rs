@@ -607,5 +607,53 @@ fn scripted_cases() {
             }
         }
     }
-    assert!(cases >= 2 * 12, "only {cases} runs");
+    assert!(cases >= 2 * 17, "only {cases} runs");
+}
+
+/// D8: Gource polls non-blocking stdin and drops the first half of a line split across pipe
+/// writes; Burl blocks and keeps it. Burl-only test, no oracle golden.
+#[test]
+fn deviation_d8_stdin_blocking_read() {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_burl"));
+    cmd.args(["--log-format", "custom", "--output-custom-log", "-", "-"]);
+    cmd.stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd.spawn().unwrap();
+    let mut pipe = child.stdin.take().unwrap();
+    pipe.write_all(b"1000000000|ali").unwrap();
+    pipe.flush().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    pipe.write_all(b"ce|A|a.txt\n").unwrap();
+    drop(pipe);
+    let out = child.wait_with_output().unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    assert_bytes("stdout", &out.stdout, b"1000000000|alice|A|/a.txt\n");
+}
+
+/// D8: Gource's SeekLog goes through a different path above 100 MiB; Burl reads the whole
+/// file. A 101 MiB log must come out complete. Burl-only test, no oracle golden.
+#[test]
+#[ignore = "101 MiB: slow in debug builds; run with --release -- --ignored (heavy tier)"]
+fn deviation_d8_log_over_100_mib() {
+    let dir = std::env::temp_dir().join(format!("burl-d8-big-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("big.log");
+    let line = b"1000000000|alice|A|a.txt\n";
+    let lines = 101 * 1024 * 1024 / line.len() + 1;
+    let mut f = std::io::BufWriter::new(std::fs::File::create(&path).unwrap());
+    for _ in 0..lines {
+        f.write_all(line).unwrap();
+    }
+    drop(f);
+    let out = run(&[
+        "--log-format",
+        "custom",
+        "--output-custom-log",
+        "-",
+        path.to_str().unwrap(),
+    ]);
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(out.code, 0);
+    assert_eq!(out.stdout.iter().filter(|b| **b == b'\n').count(), lines);
 }

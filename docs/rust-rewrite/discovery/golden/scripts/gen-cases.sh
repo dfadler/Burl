@@ -8,6 +8,7 @@ set -uo pipefail
 B=$1
 cd /repo
 bash docs/rust-rewrite/discovery/golden/scripts/make-edge-inputs.sh
+bash docs/rust-rewrite/discovery/golden/scripts/make-vcs-logs.sh tests/golden/real
 for c in tests/golden/edge/*.case tests/golden/real/*.case; do
   base=${c%.case}
   read -r -a words < "$c"

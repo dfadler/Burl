@@ -25,6 +25,7 @@ run "$G/help-long.txt" "$G/help-long.stderr.txt" "$B" -H
 run "$G/version.txt" "$G/version.stderr.txt" "$B" --version
 for l in "$REPO"/tests/logs/*.log; do
   n=$(basename "$l" .log)
+  [ "$n" = cvs-exp ] && continue  # Burl-only fixture (D5); the oracle cannot select it
   fmt=custom; [ "$n" = svn-dir-delete ] && fmt=svn
   run "$G/custom-log/$n.txt" "$G/custom-log/$n.stderr.txt" "$B" --log-format $fmt --output-custom-log - "$l"
 done

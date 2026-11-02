@@ -1,8 +1,8 @@
 [package]
-name = "gource-render"
+name = "burl-conf"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Gource rewrite: render crate (empty in phase 1)"
+description = "Gource rewrite: CLI option tables, config model and help text"
 
 [dependencies]

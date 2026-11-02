@@ -6,14 +6,14 @@ members = ["crates/*"]
 version = "0.57.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
-repository = "https://github.com/acaudwell/Gource"
+repository = "https://github.com/dfadler/Burl"
 
 [workspace.dependencies]
-gource-util = { path = "crates/gource-util" }
-gource-conf = { path = "crates/gource-conf" }
-gource-formats = { path = "crates/gource-formats" }
-gource-sim = { path = "crates/gource-sim" }
-gource-render = { path = "crates/gource-render" }
+burl-util = { path = "crates/burl-util" }
+burl-conf = { path = "crates/burl-conf" }
+burl-formats = { path = "crates/burl-formats" }
+burl-sim = { path = "crates/burl-sim" }
+burl-render = { path = "crates/burl-render" }
 regex = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 roxmltree = "0.20"

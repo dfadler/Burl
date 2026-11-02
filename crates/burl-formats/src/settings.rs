@@ -1,8 +1,8 @@
 //! The slice of `GourceSettings` the log layer reads (gource_settings.cpp). Phase 1 never
 //! sets anything but `log_format`; the rest keeps its C++ default.
 
-use gource_util::regex::Regex;
-use gource_util::strhash::DEFAULT_HASH_SEED;
+use burl_util::regex::Regex;
+use burl_util::strhash::DEFAULT_HASH_SEED;
 
 #[derive(Clone, Debug)]
 pub struct LogSettings {

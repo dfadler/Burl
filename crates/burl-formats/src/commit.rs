@@ -1,9 +1,9 @@
 //! `RCommit` / `RCommitFile` (src/formats/commitlog.cpp:290-384).
 
 use crate::settings::LogSettings;
-use gource_util::math::Vec3;
-use gource_util::strhash::colour_hash;
-use gource_util::utf8::filter_utf8;
+use burl_util::math::Vec3;
+use burl_util::strhash::colour_hash;
+use burl_util::utf8::filter_utf8;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RCommitFile {
@@ -92,7 +92,7 @@ impl RCommit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gource_util::regex::Regex;
+    use burl_util::regex::Regex;
 
     #[test]
     fn commit_file_prepends_slash_and_filters_utf8() {

@@ -10,6 +10,6 @@ name = "burl"
 path = "src/main.rs"
 
 [dependencies]
-gource-util.workspace = true
-gource-conf.workspace = true
-gource-formats.workspace = true
+burl-util.workspace = true
+burl-conf.workspace = true
+burl-formats.workspace = true

@@ -46,12 +46,19 @@ pub fn get_text(elem: Node) -> Option<String> {
 }
 
 /// `FirstChildElement(name)`.
-pub fn first_child_element<'a, 'input>(elem: Node<'a, 'input>, name: &str) -> Option<Node<'a, 'input>> {
-    elem.children().find(|c| c.is_element() && c.tag_name().name() == name)
+pub fn first_child_element<'a, 'input>(
+    elem: Node<'a, 'input>,
+    name: &str,
+) -> Option<Node<'a, 'input>> {
+    elem.children()
+        .find(|c| c.is_element() && c.tag_name().name() == name)
 }
 
 /// `FirstChildElement(name)` then `NextSiblingElement()` (any name) iteration.
-pub fn sibling_elements_from<'a, 'input>(elem: Node<'a, 'input>, name: &str) -> impl Iterator<Item = Node<'a, 'input>> {
+pub fn sibling_elements_from<'a, 'input>(
+    elem: Node<'a, 'input>,
+    name: &str,
+) -> impl Iterator<Item = Node<'a, 'input>> {
     let name = name.to_string();
     elem.children()
         .filter(|c| c.is_element())
@@ -79,7 +86,9 @@ mod tests {
 
     #[test]
     fn get_text_first_child_only() {
-        let doc = roxmltree::Document::parse("<r><a>x<b/>y</a><c><b/>z</c><d>  </d><e>&amp;&lt;</e></r>").unwrap();
+        let doc =
+            roxmltree::Document::parse("<r><a>x<b/>y</a><c><b/>z</c><d>  </d><e>&amp;&lt;</e></r>")
+                .unwrap();
         let root = doc.root_element();
         let get = |n: &str| first_child_element(root, n).unwrap();
         assert_eq!(get_text(get("a")).as_deref(), Some("x"));

@@ -48,7 +48,14 @@ impl SeekLog {
                 buf.truncate(nul);
             }
         }
-        Ok(SeekLog { buf, pos: 0, file_size, eof: false, fail: false, current_percent: 0.0 })
+        Ok(SeekLog {
+            buf,
+            pos: 0,
+            file_size,
+            eof: false,
+            fail: false,
+            current_percent: 0.0,
+        })
     }
 
     pub fn from_bytes(buf: Vec<u8>) -> SeekLog {
@@ -57,7 +64,14 @@ impl SeekLog {
         if let Some(nul) = buf.iter().position(|&b| b == 0) {
             buf.truncate(nul);
         }
-        SeekLog { buf, pos: 0, file_size, eof: false, fail: false, current_percent: 0.0 }
+        SeekLog {
+            buf,
+            pos: 0,
+            file_size,
+            eof: false,
+            fail: false,
+            current_percent: 0.0,
+        }
     }
 
     fn clear(&mut self) {
@@ -141,7 +155,11 @@ pub struct StreamLog;
 impl StreamLog {
     /// `std::cin.peek()`: first unread byte, `None` at EOF.
     pub fn peek() -> Option<u8> {
-        std::io::stdin().lock().fill_buf().ok().and_then(|b| b.first().copied())
+        std::io::stdin()
+            .lock()
+            .fill_buf()
+            .ok()
+            .and_then(|b| b.first().copied())
     }
 
     pub fn next_line(&mut self, line: &mut Vec<u8>) -> bool {

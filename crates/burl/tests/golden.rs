@@ -8,7 +8,10 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").canonicalize().unwrap()
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .unwrap()
 }
 
 fn golden_dir() -> PathBuf {
@@ -27,7 +30,11 @@ fn run_with(args: &[&str], stdin: Option<&[u8]>, envs: &[(&str, &str)]) -> Run {
     for (k, v) in envs {
         cmd.env(k, v);
     }
-    cmd.stdin(if stdin.is_some() { Stdio::piped() } else { Stdio::null() });
+    cmd.stdin(if stdin.is_some() {
+        Stdio::piped()
+    } else {
+        Stdio::null()
+    });
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
     let mut child = cmd.spawn().unwrap();
     if let Some(input) = stdin {
@@ -36,7 +43,11 @@ fn run_with(args: &[&str], stdin: Option<&[u8]>, envs: &[(&str, &str)]) -> Run {
         drop(pipe);
     }
     let out = child.wait_with_output().unwrap();
-    Run { stdout: out.stdout, stderr: out.stderr, code: out.status.code().unwrap_or(-1) }
+    Run {
+        stdout: out.stdout,
+        stderr: out.stderr,
+        code: out.status.code().unwrap_or(-1),
+    }
 }
 
 fn run(args: &[&str]) -> Run {
@@ -106,7 +117,11 @@ fn normalise_name(text: &[u8], n: &str, cap: &str) -> Vec<u8> {
 
 /// `got` is this program's output (named burl), `want` a golden captured from gource.
 fn assert_named(what: &str, got: &[u8], want: &[u8]) {
-    assert_bytes(what, &normalise_name(got, "burl", "Burl"), &normalise_name(want, "gource", "Gource"));
+    assert_bytes(
+        what,
+        &normalise_name(got, "burl", "Burl"),
+        &normalise_name(want, "gource", "Gource"),
+    );
 }
 
 /// `rc=N  name  (gource args...)` rows; the probe needs SDL and is C++-only.
@@ -129,7 +144,10 @@ fn exit_codes_txt_rows() {
             argv.truncate(pos);
         }
         let out = run_with(&argv, stdin.as_deref(), &[]);
-        let dir = if name.ends_with(".txt") && Path::new(name).file_stem().is_some() && golden_dir().join("custom-log").join(name).exists() {
+        let dir = if name.ends_with(".txt")
+            && Path::new(name).file_stem().is_some()
+            && golden_dir().join("custom-log").join(name).exists()
+        {
             golden_dir().join("custom-log")
         } else {
             golden_dir()
@@ -137,15 +155,30 @@ fn exit_codes_txt_rows() {
         let stem = name.trim_end_matches(".txt");
         assert_eq!(out.code, rc.parse::<i32>().unwrap(), "{line}");
         if name.starts_with("help-") {
-            assert_named(&format!("{name} stdout"), &out.stdout, &golden_with_expected_diff(name));
+            assert_named(
+                &format!("{name} stdout"),
+                &out.stdout,
+                &golden_with_expected_diff(name),
+            );
         } else {
-            assert_bytes(&format!("{name} stdout"), &out.stdout, &read(&dir.join(name)));
+            assert_bytes(
+                &format!("{name} stdout"),
+                &out.stdout,
+                &read(&dir.join(name)),
+            );
         }
-        assert_named(&format!("{name} stderr"), &out.stderr, &read(&dir.join(format!("{stem}.stderr.txt"))));
+        assert_named(
+            &format!("{name} stderr"),
+            &out.stderr,
+            &read(&dir.join(format!("{stem}.stderr.txt"))),
+        );
         checked += 1;
     }
     // every row except the SDL probe (.bin) was replayed
-    assert!(expected > 0 && checked == expected, "rows replayed: {checked} of {expected}");
+    assert!(
+        expected > 0 && checked == expected,
+        "rows replayed: {checked} of {expected}"
+    );
 }
 
 /// `gource --log-format custom --output-custom-log - - < tests/logs/utf8.log` must equal
@@ -154,10 +187,18 @@ fn exit_codes_txt_rows() {
 fn stdin_variant_matches_file_golden() {
     let g = golden_dir().join("custom-log");
     let input = read(&repo_root().join("tests/logs/utf8.log"));
-    let out = run_with(&["--log-format", "custom", "--output-custom-log", "-", "-"], Some(&input), &[]);
+    let out = run_with(
+        &["--log-format", "custom", "--output-custom-log", "-", "-"],
+        Some(&input),
+        &[],
+    );
     assert_eq!(out.code, 0);
     assert_bytes("stdout", &out.stdout, &read(&g.join("utf8.stdin.txt")));
-    assert_bytes("stderr", &out.stderr, &read(&g.join("utf8.stdin.stderr.txt")));
+    assert_bytes(
+        "stderr",
+        &out.stderr,
+        &read(&g.join("utf8.stdin.stderr.txt")),
+    );
     assert_bytes("same as file run", &out.stdout, &read(&g.join("utf8.txt")));
 }
 
@@ -165,10 +206,22 @@ fn stdin_variant_matches_file_golden() {
 fn stdin_drops_unterminated_last_line() {
     let g = golden_dir().join("custom-log");
     let input = read(&g.join("stdin-unterminated.input.txt"));
-    let out = run_with(&["--log-format", "custom", "--output-custom-log", "-", "-"], Some(&input), &[]);
+    let out = run_with(
+        &["--log-format", "custom", "--output-custom-log", "-", "-"],
+        Some(&input),
+        &[],
+    );
     assert_eq!(out.code, 0);
-    assert_bytes("stdout", &out.stdout, &read(&g.join("stdin-unterminated.txt")));
-    assert_bytes("stderr", &out.stderr, &read(&g.join("stdin-unterminated.stderr.txt")));
+    assert_bytes(
+        "stdout",
+        &out.stdout,
+        &read(&g.join("stdin-unterminated.txt")),
+    );
+    assert_bytes(
+        "stderr",
+        &out.stderr,
+        &read(&g.join("stdin-unterminated.stderr.txt")),
+    );
 }
 
 #[test]
@@ -198,8 +251,16 @@ fn auto_detect_matches_explicit_format() {
         let explicit = run(&["--log-format", fmt, "--output-custom-log", "-", &log]);
         let detected = run(&["--output-custom-log", "-", &log]);
         assert_eq!(detected.code, explicit.code, "{fixture}");
-        assert_bytes(&format!("{fixture} stdout"), &detected.stdout, &explicit.stdout);
-        assert_bytes(&format!("{fixture} stderr"), &detected.stderr, &explicit.stderr);
+        assert_bytes(
+            &format!("{fixture} stdout"),
+            &detected.stdout,
+            &explicit.stdout,
+        );
+        assert_bytes(
+            &format!("{fixture} stderr"),
+            &detected.stderr,
+            &explicit.stderr,
+        );
     }
 }
 
@@ -209,19 +270,67 @@ fn error_shapes() {
     let cases: [(&[&str], &str); 8] = [
         (&["--version"], "unknown option version"),
         (&["--", "x"], "unknown option -"),
-        (&["--log-format", "bogus", "--output-custom-log", "-", "tests/logs/utf8.log"], "invalid 'log-format' value"),
-        (&["--log-format", "cvs", "--output-custom-log", "-", "tests/logs/utf8.log"], "please use either 'cvs2cl' or 'cvs-exp'"),
-        (&["--output-custom-log", "-", "tests/logs/utf8.log", "--log-format"], "specify log-format (format)"),
+        (
+            &[
+                "--log-format",
+                "bogus",
+                "--output-custom-log",
+                "-",
+                "tests/logs/utf8.log",
+            ],
+            "invalid 'log-format' value",
+        ),
+        (
+            &[
+                "--log-format",
+                "cvs",
+                "--output-custom-log",
+                "-",
+                "tests/logs/utf8.log",
+            ],
+            "please use either 'cvs2cl' or 'cvs-exp'",
+        ),
+        (
+            &[
+                "--output-custom-log",
+                "-",
+                "tests/logs/utf8.log",
+                "--log-format",
+            ],
+            "specify log-format (format)",
+        ),
         (&["--output-custom-log"], "invalid output-custom-log value"),
-        (&["--log-format", "custom", "--output-custom-log", "-", "tests/logs/does-not-exist.log"], "unsupported log format (you may need to regenerate your log file)"),
+        (
+            &[
+                "--log-format",
+                "custom",
+                "--output-custom-log",
+                "-",
+                "tests/logs/does-not-exist.log",
+            ],
+            "unsupported log format (you may need to regenerate your log file)",
+        ),
         // explicit cvs-exp works in Burl (D5); a non-cvs-exp file is rejected by its parser
-        (&["--log-format", "cvs-exp", "--output-custom-log", "-", "tests/logs/utf8.log"], "unsupported log format (you may need to regenerate your log file)"),
+        (
+            &[
+                "--log-format",
+                "cvs-exp",
+                "--output-custom-log",
+                "-",
+                "tests/logs/utf8.log",
+            ],
+            "unsupported log format (you may need to regenerate your log file)",
+        ),
     ];
     for (args, msg) in cases {
         let out = run(args);
         assert_eq!(out.code, 1, "{args:?}");
         assert!(out.stdout.is_empty(), "{args:?}");
-        assert_bytes(&format!("{args:?}"), &out.stderr, format!("burl: {msg}\n{try_line}").as_bytes());
+        assert_bytes(
+            &format!("{args:?}"),
+            &out.stderr,
+            format!("burl: {msg}\n{try_line}").as_bytes(),
+        );
     }
     // a directory with no repository above it (tests/logs sits inside this git checkout,
     // so detection would walk up and find .git), with and without a format
@@ -230,23 +339,56 @@ fn error_shapes() {
     let dir_s = dir.to_str().unwrap();
     let out = run(&["--output-custom-log", "-", dir_s]);
     assert_eq!(out.code, 1);
-    assert_bytes("dir", &out.stderr, format!("burl: directory not supported\n{try_line}").as_bytes());
-    let out = run(&["--log-format", "custom", "--output-custom-log", "-", &format!("{dir_s}/")]);
-    assert_bytes("dir+fmt", &out.stderr, format!("burl: failed to generate log file\n{try_line}").as_bytes());
+    assert_bytes(
+        "dir",
+        &out.stderr,
+        format!("burl: directory not supported\n{try_line}").as_bytes(),
+    );
+    let out = run(&[
+        "--log-format",
+        "custom",
+        "--output-custom-log",
+        "-",
+        &format!("{dir_s}/"),
+    ]);
+    assert_bytes(
+        "dir+fmt",
+        &out.stderr,
+        format!("burl: failed to generate log file\n{try_line}").as_bytes(),
+    );
     let _ = std::fs::remove_dir_all(&dir);
     // value-taking options swallow the next token even if it starts with '-'
-    let out = run(&["--seconds-per-day", "--output-custom-log", "-", "--log-format", "custom", "tests/logs/utf8.log"]);
+    let out = run(&[
+        "--seconds-per-day",
+        "--output-custom-log",
+        "-",
+        "--log-format",
+        "custom",
+        "tests/logs/utf8.log",
+    ]);
     assert_eq!(out.code, 1);
-    assert!(out.stderr.starts_with(b"burl: phase 1 build"), "{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.stderr.starts_with(b"burl: phase 1 build"),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
 
 #[test]
 fn log_command_printers() {
     let out = run(&["--svn-log-command"]);
     assert_eq!(out.code, 0);
-    assert_bytes("svn", &out.stdout, b"svn log -r 1:HEAD --xml --verbose --quiet\n");
+    assert_bytes(
+        "svn",
+        &out.stdout,
+        b"svn log -r 1:HEAD --xml --verbose --quiet\n",
+    );
     let out = run(&["--log-command", "bzr"]);
-    assert_bytes("bzr", &out.stdout, b"bzr log --verbose -r 1..-1 --short -n0 --forward\n");
+    assert_bytes(
+        "bzr",
+        &out.stdout,
+        b"bzr log --verbose -r 1..-1 --short -n0 --forward\n",
+    );
     let out = run(&["--log-command", "cvs"]);
     assert_eq!(out.code, 1);
 }
@@ -258,9 +400,17 @@ fn local_timezone_from_env() {
     let log = b"2021-11-01|bob|A|a\n2021-11-01 12:01:59|bob|A|b\n2021-11-01T12:01:59Z|bob|A|c\n";
     let args = ["--log-format", "custom", "--output-custom-log", "-", "-"];
     let out = run_with(&args, Some(log), &[("TZ", "Pacific/Auckland")]);
-    assert_bytes("auckland", &out.stdout, b"1635678000|bob|A|/a\n1635721319|bob|A|/b\n1635768119|bob|A|/c\n");
+    assert_bytes(
+        "auckland",
+        &out.stdout,
+        b"1635678000|bob|A|/a\n1635721319|bob|A|/b\n1635768119|bob|A|/c\n",
+    );
     let out = run_with(&args, Some(log), &[("TZ", "UTC")]);
-    assert_bytes("utc", &out.stdout, b"1635724800|bob|A|/a\n1635768119|bob|A|/b\n1635768119|bob|A|/c\n");
+    assert_bytes(
+        "utc",
+        &out.stdout,
+        b"1635724800|bob|A|/a\n1635768119|bob|A|/b\n1635768119|bob|A|/c\n",
+    );
 }
 
 #[test]
@@ -268,10 +418,26 @@ fn output_to_file_and_silent_open_failure() {
     let dir = std::env::temp_dir().join(format!("gource-phase1-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let out_path = dir.join("out.txt");
-    let out = run(&["--log-format", "custom", "--output-custom-log", out_path.to_str().unwrap(), "tests/logs/utf8.log"]);
+    let out = run(&[
+        "--log-format",
+        "custom",
+        "--output-custom-log",
+        out_path.to_str().unwrap(),
+        "tests/logs/utf8.log",
+    ]);
     assert_eq!(out.code, 0);
-    assert_bytes("file", &read(&out_path), &read(&golden_dir().join("custom-log/utf8.txt")));
-    let out = run(&["--log-format", "custom", "--output-custom-log", dir.join("no/such/dir/x").to_str().unwrap(), "tests/logs/utf8.log"]);
+    assert_bytes(
+        "file",
+        &read(&out_path),
+        &read(&golden_dir().join("custom-log/utf8.txt")),
+    );
+    let out = run(&[
+        "--log-format",
+        "custom",
+        "--output-custom-log",
+        dir.join("no/such/dir/x").to_str().unwrap(),
+        "tests/logs/utf8.log",
+    ]);
     assert_eq!(out.code, 0);
     assert!(out.stdout.is_empty() && out.stderr.is_empty());
     let _ = std::fs::remove_dir_all(&dir);
@@ -280,7 +446,9 @@ fn output_to_file_and_silent_open_failure() {
 /// A golden with its `expected-diffs/<file>.diff` (deviation register, DEVIATIONS.md) applied;
 /// the golden itself is never edited. No diff file means the golden is used as is.
 fn golden_with_expected_diff(file: &str) -> Vec<u8> {
-    let diff = golden_dir().join("expected-diffs").join(format!("{}.diff", file.trim_end_matches(".txt")));
+    let diff = golden_dir()
+        .join("expected-diffs")
+        .join(format!("{}.diff", file.trim_end_matches(".txt")));
     if !diff.exists() {
         return read(&golden_dir().join(file));
     }
@@ -288,8 +456,17 @@ fn golden_with_expected_diff(file: &str) -> Vec<u8> {
     let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let tmp = std::env::temp_dir().join(format!("burl-golden-{}-{n}-{file}", std::process::id()));
     std::fs::copy(golden_dir().join(file), &tmp).unwrap();
-    let st = Command::new("patch").arg("-s").arg(&tmp).arg(&diff).status().expect("patch(1) is required");
-    assert!(st.success(), "expected diff {} does not apply", diff.display());
+    let st = Command::new("patch")
+        .arg("-s")
+        .arg(&tmp)
+        .arg(&diff)
+        .status()
+        .expect("patch(1) is required");
+    assert!(
+        st.success(),
+        "expected diff {} does not apply",
+        diff.display()
+    );
     let out = read(&tmp);
     let _ = std::fs::remove_file(&tmp);
     out
@@ -297,7 +474,12 @@ fn golden_with_expected_diff(file: &str) -> Vec<u8> {
 
 #[test]
 fn help_text_matches_golden() {
-    for (flag, file) in [("-h", "help-short.txt"), ("-H", "help-long.txt"), ("--help", "help-short.txt"), ("-?", "help-short.txt")] {
+    for (flag, file) in [
+        ("-h", "help-short.txt"),
+        ("-H", "help-long.txt"),
+        ("--help", "help-short.txt"),
+        ("-?", "help-short.txt"),
+    ] {
         let out = run(&[flag]);
         assert_eq!(out.code, 0);
         assert_named(flag, &out.stdout, &golden_with_expected_diff(file));
@@ -310,20 +492,55 @@ fn help_text_matches_golden() {
 #[test]
 fn deviation_d5_cvs_exp_explicit() {
     let envs = [("TZ", "UTC")];
-    let explicit = run_with(&["--log-format", "cvs-exp", "--output-custom-log", "-", "tests/logs/cvs-exp.log"], None, &envs);
-    let detected = run_with(&["--output-custom-log", "-", "tests/logs/cvs-exp.log"], None, &envs);
-    assert_eq!(explicit.code, 0, "{}", String::from_utf8_lossy(&explicit.stderr));
-    assert_eq!(String::from_utf8_lossy(&explicit.stdout), "1073012645|bob|M|/src/a.c\n1073099045|amy|D|/src/a.c\n");
+    let explicit = run_with(
+        &[
+            "--log-format",
+            "cvs-exp",
+            "--output-custom-log",
+            "-",
+            "tests/logs/cvs-exp.log",
+        ],
+        None,
+        &envs,
+    );
+    let detected = run_with(
+        &["--output-custom-log", "-", "tests/logs/cvs-exp.log"],
+        None,
+        &envs,
+    );
+    assert_eq!(
+        explicit.code,
+        0,
+        "{}",
+        String::from_utf8_lossy(&explicit.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&explicit.stdout),
+        "1073012645|bob|M|/src/a.c\n1073099045|amy|D|/src/a.c\n"
+    );
     assert_bytes("detected", &detected.stdout, &explicit.stdout);
 }
 
 /// D5: `--stop-on-idle` and `--ffp` are accepted and have no effect.
 #[test]
 fn deviation_d5_ignored_options() {
-    let base = run(&["--output-custom-log", "-", "--log-format", "custom", "tests/logs/utf8.log"]);
+    let base = run(&[
+        "--output-custom-log",
+        "-",
+        "--log-format",
+        "custom",
+        "tests/logs/utf8.log",
+    ]);
     assert_eq!(base.code, 0);
     for opt in ["--stop-on-idle", "--ffp"] {
-        let out = run(&[opt, "--output-custom-log", "-", "--log-format", "custom", "tests/logs/utf8.log"]);
+        let out = run(&[
+            opt,
+            "--output-custom-log",
+            "-",
+            "--log-format",
+            "custom",
+            "tests/logs/utf8.log",
+        ]);
         assert_eq!(out.code, 0, "{opt}");
         assert_bytes(opt, &out.stdout, &base.stdout);
         assert_bytes(opt, &out.stderr, &base.stderr);

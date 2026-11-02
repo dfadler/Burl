@@ -90,7 +90,10 @@ fn fetch(logfile: &str, log_format: &str, s: &Arc<LogSettings>) -> Attempt {
 
 /// `RLogMill::run` minus the thread and the start-date skip: open `logfile` (a path or
 /// `"-"`) in `settings.log_format` (empty = detect), or the exact C++ error message.
-pub fn fetch_log(logfile: &str, settings: Arc<LogSettings>) -> Result<Box<dyn CommitLog>, LogMillError> {
+pub fn fetch_log(
+    logfile: &str,
+    settings: Arc<LogSettings>,
+) -> Result<Box<dyn CommitLog>, LogMillError> {
     let mut logfile = logfile.to_string();
     let mut log_format = settings.log_format.clone();
     if log_format.is_empty() && logfile != "-" && Path::new(&logfile).is_dir() {

@@ -1,0 +1,7 @@
+# Actions only: cargo bumps stay manual (winit/glutin/glow need exact = pins), see #13.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

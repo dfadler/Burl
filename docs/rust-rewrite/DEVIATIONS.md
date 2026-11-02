@@ -28,7 +28,7 @@ A new Change or Gap needs a row in this file **and the user's explicit OK** befo
 | D5b | Help says `--dir-name-position` is "between 0.0 and 1.0"; code rejects below 0.1 | Help says 0.1 to 1.0 | As D5a | Change | `expected-diffs/help-long.diff`; `help_text_matches_golden` |
 | D5c | Explicit `--log-format cvs-exp` fails with "unsupported log format" (`fetchLog` matches `"cvs"`) | Selects the CVS-EXP parser | Plain bug; auto-detect already worked | Change | `deviation_d5_cvs_exp_explicit` (Burl-only) |
 | D5d | `--stop-on-idle` is accepted and does nothing | Same, via the `Ignored` option kind (#8); silent | Keeps scripts working; no invented semantics | Change | `deviation_d5_ignored_options` |
-| D8 | `StreamLog` polls for the first byte of stdin; `SeekLog` fails on logs over 100 MiB | Blocking stdin read; no size limit | Fixed with the settings import | Change | Burl-only tests when the settings import lands (not yet written) |
+| D8 | `StreamLog` polls for the first byte of stdin; `SeekLog` fails on logs over 100 MiB | Blocking stdin read; no size limit | Fixed with the settings import | Change | `deviation_d8_stdin_blocking_read`, `deviation_d8_log_over_100_mib` (Burl-only; the latter is `#[ignore]`, run by the heavy tier) |
 | D9 | Resources found via a search path | Embedded with `include_bytes!` | Single-binary release (#21) | Change | phase 7 packaging tests |
 | G1 | SIGPIPE behaviour on a closed PPM pipe | Not matched | Not exercised by any golden | Gap | Fix trigger: first user report or phase 5 export tests |
 | G2 | TinyXML quirks (e.g. CDATA handling) in svn logs | `roxmltree` semantics | Edge cases only | Gap | Fix trigger: a real log that parses differently; Burl-only test when found |

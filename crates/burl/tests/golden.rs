@@ -308,7 +308,7 @@ fn error_shapes() {
                 "-",
                 "tests/logs/does-not-exist.log",
             ],
-            "unsupported log format (you may need to regenerate your log file)",
+            "'tests/logs/does-not-exist.log' does not appear to be a valid file or directory",
         ),
         // explicit cvs-exp works in Burl (D5); a non-cvs-exp file is rejected by its parser
         (
@@ -357,7 +357,8 @@ fn error_shapes() {
         format!("burl: failed to generate log file\n{try_line}").as_bytes(),
     );
     let _ = std::fs::remove_dir_all(&dir);
-    // value-taking options swallow the next token even if it starts with '-'
+    // value-taking options swallow the next token even if it starts with '-', so the value of
+    // --seconds-per-day is "--output-custom-log" (atof 0) and the import rejects it
     let out = run(&[
         "--seconds-per-day",
         "--output-custom-log",
@@ -367,10 +368,10 @@ fn error_shapes() {
         "tests/logs/utf8.log",
     ]);
     assert_eq!(out.code, 1);
-    assert!(
-        out.stderr.starts_with(b"burl: phase 1 build"),
-        "{}",
-        String::from_utf8_lossy(&out.stderr)
+    assert_bytes(
+        "swallow",
+        &out.stderr,
+        format!("burl: invalid 'seconds-per-day' value\n{try_line}").as_bytes(),
     );
 }
 

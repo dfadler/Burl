@@ -5,4 +5,11 @@ edition.workspace = true
 license.workspace = true
 description = "Gource rewrite: CLI option tables, config model and help text"
 
+[features]
+default = []
+# Real PCRE2 for the four user filters (look-around, backreferences); forwards to burl-util.
+pcre2 = ["burl-util/pcre2"]
+
 [dependencies]
+burl-util.workspace = true
+chrono.workspace = true

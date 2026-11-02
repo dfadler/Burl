@@ -3,6 +3,9 @@
 //! alias translation, magic `-WxH` viewport, type lookup (unknown -> error), value
 //! consumption (bools take none, everything else swallows the next token), section routing.
 
+use crate::conffile::{ConfError, ConfFile};
+use burl_util::cstr::atoi;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ArgType {
     Bool,
@@ -10,7 +13,9 @@ pub enum ArgType {
     Float,
     Str,
     MultiValue,
-    /// Accepted like a bool (no value taken) and then discarded: `--ffp`, `--stop-on-idle`.
+    /// Accepted like a bool (consumes no value) and stored in the ConfFile like one, but the
+    /// import never reads it: `--ffp` and `--stop-on-idle` (ticket #8). Silent on purpose,
+    /// stderr is compared to goldens.
     Ignored,
 }
 
@@ -62,6 +67,13 @@ pub const CONF_SECTIONS: &[(&str, Section)] = &[
     ("save-config", Section::CommandLine),
     ("output-custom-log", Section::CommandLine),
     ("log-level", Section::CommandLine),
+    // hidden test-only controls (ticket #22): run immediately, never stored, never saved
+    ("debug-dump-state", Section::CommandLine),
+    ("debug-dump-every", Section::CommandLine),
+    ("debug-dump-max-frames", Section::CommandLine),
+    ("prng", Section::CommandLine),
+    ("prng-seed", Section::CommandLine),
+    ("rand-script", Section::CommandLine),
     // display section (core/settings.cpp SDLAppSettings ctor)
     ("viewport", Section::Display),
     ("windowed", Section::Display),
@@ -194,6 +206,13 @@ pub const ARG_TYPES: &[(&str, ArgType)] = &[
     ("caption-colour", ArgType::Str),
     ("caption-offset", ArgType::Int),
     ("dir-name-depth", ArgType::Int),
+    // hidden test-only controls (ticket #22); not in the help text
+    ("debug-dump-state", ArgType::Str),
+    ("debug-dump-every", ArgType::Str),
+    ("debug-dump-max-frames", ArgType::Str),
+    ("prng", ArgType::Str),
+    ("prng-seed", ArgType::Str),
+    ("rand-script", ArgType::Str),
 ];
 
 pub fn alias(name: &str) -> &str {
@@ -214,4 +233,86 @@ pub fn section(name: &str) -> Section {
         .find(|(n, _)| *n == name)
         .map(|(_, s)| *s)
         .unwrap_or(DEFAULT_SECTION)
+}
+
+fn parse_viewport_token(value: &str) -> bool {
+    static VIEWPORT: std::sync::LazyLock<burl_util::regex::Regex> =
+        std::sync::LazyLock::new(|| burl_util::regex::Regex::must(r"^([0-9.]+)x([0-9.]+)(!)?$"));
+    match VIEWPORT.captures(value.as_bytes()) {
+        Some(m) => atoi(&m[0]) > 0 && atoi(&m[1]) > 0,
+        None => false,
+    }
+}
+
+/// `SDLAppSettings::parseArgs`: applies the arguments to `conf` (every option is stored as a
+/// raw string; typed conversion happens in `settings`). Positional arguments go to `files`
+/// when given. Command-line-section options are handed to `command_line` immediately, in
+/// argument order, and never stored; an `Err` from it aborts the parse.
+pub fn parse_args(
+    arguments: &[Vec<u8>],
+    conf: &mut ConfFile,
+    mut files: Option<&mut Vec<String>>,
+    command_line: &mut dyn FnMut(&str, &str) -> Result<(), ConfError>,
+) -> Result<(), ConfError> {
+    let mut i = 0;
+    while i < arguments.len() {
+        let mut arg: &[u8] = &arguments[i];
+        i += 1;
+        let mut is_option = false;
+        while arg.len() > 1 && arg[0] == b'-' {
+            arg = &arg[1..];
+            is_option = true;
+        }
+        if arg.is_empty() {
+            continue;
+        }
+        let arg = String::from_utf8_lossy(arg).into_owned();
+        if !is_option {
+            if let Some(f) = files.as_deref_mut() {
+                f.push(arg);
+            }
+            continue;
+        }
+        let name = alias(&arg);
+        // NUMBERxNUMBER is a magic alias for viewport (written to the first [display] only)
+        if name.len() > 1 && name.contains('x') && parse_viewport_token(name) {
+            if conf.section("display").is_none() {
+                conf.add_section("display");
+            }
+            conf.section_mut("display")
+                .unwrap()
+                .set_entry("viewport", name);
+            continue;
+        }
+        let Some(ty) = arg_type(name) else {
+            return Err(ConfError(format!("unknown option {name}")));
+        };
+        let value = if matches!(ty, ArgType::Bool | ArgType::Ignored) {
+            "true".to_string()
+        } else if i < arguments.len() {
+            i += 1;
+            String::from_utf8_lossy(&arguments[i - 1]).into_owned()
+        } else {
+            String::new()
+        };
+        let target = match section(name) {
+            Section::CommandLine => {
+                command_line(name, &value)?;
+                continue;
+            }
+            Section::Display => "display",
+            Section::Gource => "gource",
+        };
+        if conf.count_section(target) == 0 {
+            conf.add_section(target);
+        }
+        for sec in conf.sections_mut(target) {
+            if ty == ArgType::MultiValue {
+                sec.add_entry(name, &value, 0);
+            } else {
+                sec.set_entry(name, &value);
+            }
+        }
+    }
+    Ok(())
 }

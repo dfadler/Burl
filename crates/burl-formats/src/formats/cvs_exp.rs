@@ -7,8 +7,8 @@ use crate::commitlog::{CommitLog, CommitLogBase};
 use crate::seeklog::SeekLogError;
 use crate::settings::LogSettings;
 use crate::formats::svn::tm_from_entries;
-use gource_util::regex::Regex;
-use gource_util::timeparse::mktime_local;
+use burl_util::regex::Regex;
+use burl_util::timeparse::mktime_local;
 use std::sync::{Arc, LazyLock};
 
 pub const LOG_COMMAND: &str = "cvs-exp.pl -notree";

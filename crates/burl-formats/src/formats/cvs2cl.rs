@@ -8,8 +8,8 @@ use crate::formats::svn::{read_entry, tm_from_entries};
 use crate::seeklog::SeekLogError;
 use crate::settings::LogSettings;
 use crate::xml;
-use gource_util::regex::Regex;
-use gource_util::timeparse::mktime_local;
+use burl_util::regex::Regex;
+use burl_util::timeparse::mktime_local;
 use std::sync::{Arc, LazyLock};
 
 pub const LOG_COMMAND: &str = "cvs2cl --chrono --stdout --xml -g-q";

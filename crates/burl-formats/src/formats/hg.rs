@@ -5,8 +5,8 @@ use crate::commit::RCommit;
 use crate::commitlog::{CommitLog, CommitLogBase};
 use crate::seeklog::SeekLogError;
 use crate::settings::LogSettings;
-use gource_util::cstr::atoll;
-use gource_util::regex::Regex;
+use burl_util::cstr::atoll;
+use burl_util::regex::Regex;
 use std::path::Path;
 use std::sync::{Arc, LazyLock};
 

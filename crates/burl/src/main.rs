@@ -5,12 +5,12 @@
 //! `--output-custom-log`, the `*-command` printers, `-h`/`-H` and the positional path do
 //! anything. Everything else is parsed and ignored (docs/rust-rewrite/phase1.md).
 
-use gource_conf::args::{alias, arg_type, section, ArgType, Section};
-use gource_conf::help::{HELP_LONG, HELP_SHORT};
-use gource_formats::formats::{bzr, cvs2cl, cvs_exp, git, hg, svn};
-use gource_formats::{fetch_log, LogSettings, RCommit};
-use gource_util::cstr::atoi;
-use gource_util::regex::Regex;
+use burl_conf::args::{alias, arg_type, section, ArgType, Section};
+use burl_conf::help::{HELP_LONG, HELP_SHORT};
+use burl_formats::formats::{bzr, cvs2cl, cvs_exp, git, hg, svn};
+use burl_formats::{fetch_log, LogSettings, RCommit};
+use burl_util::cstr::atoi;
+use burl_util::regex::Regex;
 use std::io::Write;
 use std::sync::{Arc, LazyLock};
 

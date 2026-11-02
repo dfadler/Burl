@@ -36,9 +36,42 @@ checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 name = "burl"
 version = "0.57.0"
 dependencies = [
- "gource-conf",
- "gource-formats",
- "gource-util",
+ "burl-conf",
+ "burl-formats",
+ "burl-util",
+]
+
+[[package]]
+name = "burl-conf"
+version = "0.57.0"
+
+[[package]]
+name = "burl-formats"
+version = "0.57.0"
+dependencies = [
+ "burl-util",
+ "roxmltree",
+]
+
+[[package]]
+name = "burl-gl"
+version = "0.57.0"
+
+[[package]]
+name = "burl-render"
+version = "0.57.0"
+
+[[package]]
+name = "burl-sim"
+version = "0.57.0"
+
+[[package]]
+name = "burl-util"
+version = "0.57.0"
+dependencies = [
+ "chrono",
+ "pcre2",
+ "regex",
 ]
 
 [[package]]
@@ -115,39 +148,6 @@ dependencies = [
  "cfg-if",
  "libc",
  "r-efi",
-]
-
-[[package]]
-name = "gource-conf"
-version = "0.57.0"
-
-[[package]]
-name = "gource-formats"
-version = "0.57.0"
-dependencies = [
- "gource-util",
- "roxmltree",
-]
-
-[[package]]
-name = "gource-gl"
-version = "0.57.0"
-
-[[package]]
-name = "gource-render"
-version = "0.57.0"
-
-[[package]]
-name = "gource-sim"
-version = "0.57.0"
-
-[[package]]
-name = "gource-util"
-version = "0.57.0"
-dependencies = [
- "chrono",
- "pcre2",
- "regex",
 ]
 
 [[package]]

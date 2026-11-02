@@ -6,9 +6,9 @@ use crate::commitlog::{CommitLog, CommitLogBase};
 use crate::seeklog::SeekLogError;
 use crate::settings::LogSettings;
 use crate::xml;
-use gource_util::cstr::atoi;
-use gource_util::regex::Regex;
-use gource_util::timeparse::{timegm, Tm};
+use burl_util::cstr::atoi;
+use burl_util::regex::Regex;
+use burl_util::timeparse::{timegm, Tm};
 use std::path::Path;
 use std::sync::{Arc, LazyLock};
 

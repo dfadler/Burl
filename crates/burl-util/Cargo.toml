@@ -3,7 +3,7 @@ name = "burl-util"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Gource rewrite: pure helpers (regex wrapper, string hash, utf8 filter, date parsing)"
+description = "Gource rewrite: pure helpers (regex wrapper, string hash, utf8 filter, date parsing, prng, bounds, quadtree)"
 
 [features]
 default = []
@@ -14,4 +14,6 @@ pcre2 = ["dep:pcre2"]
 [dependencies]
 regex.workspace = true
 chrono.workspace = true
+# Pinned in-crate rather than in [workspace.dependencies] to stay out of the shared root manifest.
+glam = "=0.34.2"
 pcre2 = { workspace = true, optional = true }

@@ -1,9 +1,10 @@
-# Heavy tier (ticket #13): Docker golden, simulation and visual gates. Stub until goldens and
-# the pinned image exist; it only records the triggers.
+# Heavy tier (ticket #13): Docker-based gates. Today: rebuild the oracle in the pinned image
+# and check the committed goldens reproduce, plus the slow Burl-only tests. Simulation and
+# visual gates are added when the fork and renderer exist.
 name: heavy
 on:
   pull_request:
-    paths: ["tests/golden/**", "reference/**", "docker/**", "crates/burl-sim/**", "crates/burl-render/**"]
+    paths: ["tests/golden/**", "docs/rust-rewrite/discovery/golden/**", "docker/**", "reference/**", "src/**"]
   schedule:
     - cron: "17 3 * * 1"
   workflow_dispatch:
@@ -11,9 +12,31 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: heavy-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  stub:
+  goldens-reproduce:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 60
     steps:
-      - run: echo "heavy tier not implemented yet (needs committed goldens and the pinned image)"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Rebuild the oracle and recapture every golden
+        run: bash docs/rust-rewrite/discovery/golden/scripts/regen.sh
+      - name: Goldens must be unchanged
+        # PROVENANCE.txt records the image id, which differs per build, so it is excluded.
+        run: |
+          git add -A -- tests/golden docs/rust-rewrite/discovery/golden
+          git diff --cached --exit-code -- . ':!tests/golden/PROVENANCE.txt'
+
+  slow-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: cargo test --locked --release --workspace -- --ignored

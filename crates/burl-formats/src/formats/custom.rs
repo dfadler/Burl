@@ -11,8 +11,9 @@ use burl_util::regex::Regex;
 use burl_util::timeparse::parse_date_time;
 use std::sync::{Arc, LazyLock};
 
-static CUSTOM_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::must(r"^(?:\xEF\xBB\xBF)?([^|]+)\|([^|]*)\|([ADM]?)\|([^|]+)(?:\|#?([a-fA-F0-9]{6}))?"));
+static CUSTOM_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::must(r"^(?:\xEF\xBB\xBF)?([^|]+)\|([^|]*)\|([ADM]?)\|([^|]+)(?:\|#?([a-fA-F0-9]{6}))?")
+});
 
 pub struct CustomLog {
     base: CommitLogBase,
@@ -20,12 +21,15 @@ pub struct CustomLog {
 
 impl CustomLog {
     pub fn new(logfile: &str, settings: Arc<LogSettings>) -> Result<CustomLog, SeekLogError> {
-        Ok(CustomLog { base: CommitLogBase::open(logfile, None, settings)? })
+        Ok(CustomLog {
+            base: CommitLogBase::open(logfile, None, settings)?,
+        })
     }
 
     /// `parseColour`: `sscanf("%02x%02x%02x") / 255`; the regex guarantees 6 hex digits.
     pub fn parse_colour(cstr: &[u8]) -> Vec3 {
-        let hex = |i: usize| u8::from_str_radix(std::str::from_utf8(&cstr[i..i + 2]).unwrap_or("zz"), 16);
+        let hex =
+            |i: usize| u8::from_str_radix(std::str::from_utf8(&cstr[i..i + 2]).unwrap_or("zz"), 16);
         match (hex(0), hex(2), hex(4)) {
             (Ok(r), Ok(g), Ok(b)) => [r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0],
             _ => [0.0, 0.0, 0.0],
@@ -37,7 +41,9 @@ impl CustomLog {
         if !self.base.next_line(&mut line) {
             return false;
         }
-        let Some(entries) = CUSTOM_REGEX.captures(&line) else { return false };
+        let Some(entries) = CUSTOM_REGEX.captures(&line) else {
+            return false;
+        };
 
         // Allow timestamp to be a string
         let ts = &entries[0];
@@ -54,8 +60,16 @@ impl CustomLog {
             t
         };
 
-        let username: &[u8] = if entries[1].is_empty() { b"Unknown" } else { &entries[1] };
-        let action = if entries[2].is_empty() { "A" } else { std::str::from_utf8(&entries[2]).unwrap_or("A") };
+        let username: &[u8] = if entries[1].is_empty() {
+            b"Unknown"
+        } else {
+            &entries[1]
+        };
+        let action = if entries[2].is_empty() {
+            "A"
+        } else {
+            std::str::from_utf8(&entries[2]).unwrap_or("A")
+        };
 
         if commit.files.is_empty() {
             commit.timestamp = timestamp;
@@ -96,7 +110,12 @@ mod tests {
     use crate::seeklog::SeekLog;
 
     fn log(bytes: &[u8]) -> CustomLog {
-        let mut base = CommitLogBase::open("/nonexistent/gource-test", None, Arc::new(LogSettings::default())).unwrap();
+        let mut base = CommitLogBase::open(
+            "/nonexistent/gource-test",
+            None,
+            Arc::new(LogSettings::default()),
+        )
+        .unwrap();
         base.logf = Some(LogSource::Seek(SeekLog::from_bytes(bytes.to_vec())));
         base.seekable = true;
         base.success = true;
@@ -128,14 +147,22 @@ mod tests {
 
     #[test]
     fn bom_colour_defaults_and_trailing_text() {
-        let cs = commits(b"\xEF\xBB\xBF1||\x7c/a.txt|#ff8000\n1||\x7c/b|zzz\n1||\x7c/c|abcdef junk\n");
+        let cs =
+            commits(b"\xEF\xBB\xBF1||\x7c/a.txt|#ff8000\n1||\x7c/b|zzz\n1||\x7c/c|abcdef junk\n");
         assert_eq!(cs.len(), 1);
         let c = &cs[0];
         assert_eq!(c.username, b"Unknown");
         assert_eq!(c.files[0].action, "A");
         assert_eq!(c.files[0].colour, [1.0, 128.0 / 255.0, 0.0]);
         assert_eq!(c.files[1].colour, RCommit::file_colour(b"/b", 31));
-        assert_eq!(c.files[2].colour, [0xab as f32 / 255.0, 0xcd as f32 / 255.0, 0xef as f32 / 255.0]);
+        assert_eq!(
+            c.files[2].colour,
+            [
+                0xab as f32 / 255.0,
+                0xcd as f32 / 255.0,
+                0xef as f32 / 255.0
+            ]
+        );
     }
 
     #[test]

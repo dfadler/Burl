@@ -10,12 +10,16 @@ use burl_util::regex::Regex;
 use std::path::Path;
 use std::sync::{Arc, LazyLock};
 
-static HG_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"^([0-9]+) -?[0-9]+\|([^|]+)\|([ADM]?)\|(.+)$"));
+static HG_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::must(r"^([0-9]+) -?[0-9]+\|([^|]+)\|([ADM]?)\|(.+)$"));
 
 /// `MercurialLog::logCommand()`. Note the double space when no date range is given.
 pub fn log_command(settings: &LogSettings) -> String {
     let style = format!("{}gource.style", settings.resource_dir);
-    let range = match (settings.start_date.is_empty(), settings.stop_date.is_empty()) {
+    let range = match (
+        settings.start_date.is_empty(),
+        settings.stop_date.is_empty(),
+    ) {
         (false, false) => format!("--date '{} to {}'", settings.start_date, settings.stop_date),
         (false, true) => format!("--date '>{}'", settings.start_date),
         (true, false) => format!("--date '<{}'", settings.stop_date),
@@ -38,7 +42,10 @@ impl MercurialLog {
         let mut base = CommitLogBase::open(logfile, None, settings)?;
         if base.logf.is_none() && base.is_dir {
             let hgdir = Path::new(logfile).join(".hg");
-            if std::fs::metadata(&hgdir).map(|m| m.is_dir()).unwrap_or(false) {
+            if std::fs::metadata(&hgdir)
+                .map(|m| m.is_dir())
+                .unwrap_or(false)
+            {
                 let cmd = format!("{} -R \"{}\"", log_command(&base.settings), logfile);
                 base.run_log_command(&cmd, None)?;
             }
@@ -51,7 +58,9 @@ impl MercurialLog {
         if !self.base.next_line(&mut line) {
             return false;
         }
-        let Some(entries) = HG_REGEX.captures(&line) else { return false };
+        let Some(entries) = HG_REGEX.captures(&line) else {
+            return false;
+        };
         let timestamp = atoll(&entries[0]);
         let username = &entries[1];
         if commit.files.is_empty() {
@@ -61,7 +70,11 @@ impl MercurialLog {
             self.base.lastline = line;
             return false;
         }
-        let action = if entries[2].is_empty() { "A" } else { std::str::from_utf8(&entries[2]).unwrap_or("A") };
+        let action = if entries[2].is_empty() {
+            "A"
+        } else {
+            std::str::from_utf8(&entries[2]).unwrap_or("A")
+        };
         let settings = self.base.settings.clone();
         commit.add_file(&entries[3], action, &settings);
         true
@@ -87,11 +100,26 @@ mod tests {
 
     #[test]
     fn command_string() {
-        let s = LogSettings { resource_dir: "/usr/share/gource/".into(), ..LogSettings::default() };
-        assert_eq!(log_command(&s), "hg log  -r 0:tip --style '/usr/share/gource/gource.style'");
-        let s = LogSettings { start_date: "2020-01-01".into(), ..s };
-        assert_eq!(log_command(&s), "hg log --date '>2020-01-01' -r 0:tip --style '/usr/share/gource/gource.style'");
-        let s = LogSettings { stop_date: "2020-02-01".into(), ..s };
+        let s = LogSettings {
+            resource_dir: "/usr/share/gource/".into(),
+            ..LogSettings::default()
+        };
+        assert_eq!(
+            log_command(&s),
+            "hg log  -r 0:tip --style '/usr/share/gource/gource.style'"
+        );
+        let s = LogSettings {
+            start_date: "2020-01-01".into(),
+            ..s
+        };
+        assert_eq!(
+            log_command(&s),
+            "hg log --date '>2020-01-01' -r 0:tip --style '/usr/share/gource/gource.style'"
+        );
+        let s = LogSettings {
+            stop_date: "2020-02-01".into(),
+            ..s
+        };
         assert_eq!(log_command(&s), "hg log --date '2020-01-01 to 2020-02-01' -r 0:tip --style '/usr/share/gource/gource.style'");
     }
 }

@@ -51,7 +51,11 @@ impl CommitLogBase {
     /// file is peeked and, if the first byte matches, loaded whole. An unreadable regular
     /// file surfaces as [`SeekLogError`] ("unable to read log file"); a missing path or a
     /// first-byte mismatch leaves `success == false` ("unsupported log format").
-    pub fn open(logfile: &str, first_char: Option<u8>, settings: Arc<LogSettings>) -> Result<CommitLogBase, SeekLogError> {
+    pub fn open(
+        logfile: &str,
+        first_char: Option<u8>,
+        settings: Arc<LogSettings>,
+    ) -> Result<CommitLogBase, SeekLogError> {
         let mut base = CommitLogBase {
             logf: None,
             seekable: false,
@@ -115,9 +119,17 @@ impl CommitLogBase {
             .map(|d| d.subsec_nanos())
             .unwrap_or(0);
         for attempt in 0..100u32 {
-            let name = format!("gource-{:06x}", (nanos.wrapping_add(pid).wrapping_add(attempt * 7919)) & 0xffffff);
+            let name = format!(
+                "gource-{:06x}",
+                (nanos.wrapping_add(pid).wrapping_add(attempt * 7919)) & 0xffffff
+            );
             let path = base.join(name);
-            if std::fs::OpenOptions::new().write(true).create_new(true).open(&path).is_ok() {
+            if std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+                .is_ok()
+            {
                 return Some(path);
             }
         }
@@ -127,8 +139,14 @@ impl CommitLogBase {
     /// `generateLog` tail shared by every VCS: `system("<command> > <tmp>")` (optionally
     /// with the repository as cwd), then a `SeekLog` over the temp file. `Ok(false)` when
     /// the command could not run or exited non-zero; the temp file is removed on drop.
-    pub fn run_log_command(&mut self, command: &str, cwd: Option<&Path>) -> Result<bool, SeekLogError> {
-        let Some(temp) = CommitLogBase::create_temp_file() else { return Ok(false) };
+    pub fn run_log_command(
+        &mut self,
+        command: &str,
+        cwd: Option<&Path>,
+    ) -> Result<bool, SeekLogError> {
+        let Some(temp) = CommitLogBase::create_temp_file() else {
+            return Ok(false);
+        };
         self.temp_file = Some(temp.clone());
         let shell_cmd = format!("{} > {}", command, temp.display());
         let mut cmd = std::process::Command::new("sh");

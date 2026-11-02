@@ -54,7 +54,9 @@ impl Regex {
         regex::bytes::RegexBuilder::new(pattern)
             .unicode(false)
             .build()
-            .map(|r| Regex { engine: Engine::Bytes(r) })
+            .map(|r| Regex {
+                engine: Engine::Bytes(r),
+            })
             .map_err(|_| RegexCompilationError(pattern.to_string()))
     }
 
@@ -68,7 +70,9 @@ impl Regex {
     pub fn new_pcre2(pattern: &str) -> Result<Regex, RegexCompilationError> {
         pcre2::bytes::RegexBuilder::new()
             .build(pattern)
-            .map(|r| Regex { engine: Engine::Pcre2(r) })
+            .map(|r| Regex {
+                engine: Engine::Pcre2(r),
+            })
             .map_err(|_| RegexCompilationError(pattern.to_string()))
     }
 
@@ -104,15 +108,17 @@ impl Regex {
         match &self.engine {
             Engine::Bytes(re) => {
                 let caps = re.captures(subject)?;
-                let groups: Vec<Option<&[u8]>> =
-                    (1..caps.len()).map(|i| caps.get(i).map(|m| m.as_bytes())).collect();
+                let groups: Vec<Option<&[u8]>> = (1..caps.len())
+                    .map(|i| caps.get(i).map(|m| m.as_bytes()))
+                    .collect();
                 Some(trim_trailing(groups))
             }
             #[cfg(feature = "pcre2")]
             Engine::Pcre2(re) => {
                 let caps = re.captures(subject).ok()??;
-                let groups: Vec<Option<&[u8]>> =
-                    (1..caps.len()).map(|i| caps.get(i).map(|m| m.as_bytes())).collect();
+                let groups: Vec<Option<&[u8]>> = (1..caps.len())
+                    .map(|i| caps.get(i).map(|m| m.as_bytes()))
+                    .collect();
                 Some(trim_trailing(groups))
             }
         }
@@ -157,7 +163,10 @@ mod tests {
     fn trailing_groups_dropped_middle_groups_empty() {
         let r = Regex::new("(a)(b)?(c)?(d)?").unwrap();
         assert_eq!(r.captures(b"a"), Some(vec![b"a".to_vec()]));
-        assert_eq!(r.captures(b"ac"), Some(vec![b"a".to_vec(), vec![], b"c".to_vec()]));
+        assert_eq!(
+            r.captures(b"ac"),
+            Some(vec![b"a".to_vec(), vec![], b"c".to_vec()])
+        );
         assert_eq!(
             r.captures(b"ad"),
             Some(vec![b"a".to_vec(), vec![], vec![], b"d".to_vec()])
@@ -167,10 +176,7 @@ mod tests {
     #[test]
     fn byte_mode_matches_invalid_utf8_and_bom_bytes() {
         let r = Regex::new(r"^(?:\xEF\xBB\xBF)?([^|]+)\|").unwrap();
-        assert_eq!(
-            r.captures(b"\xEF\xBB\xBFab|"),
-            Some(vec![b"ab".to_vec()])
-        );
+        assert_eq!(r.captures(b"\xEF\xBB\xBFab|"), Some(vec![b"ab".to_vec()]));
         // PCRE2 without UTF treats 0xFF as an ordinary byte
         assert_eq!(r.captures(b"a\xFFb|"), Some(vec![b"a\xFFb".to_vec()]));
         // ASCII-only classes and `.` excluding newline
@@ -220,8 +226,12 @@ mod tests {
             Regex::new(p).unwrap_or_else(|e| panic!("{e}"));
         }
         // bzr's bare `}` must be a literal
-        let bzr = Regex::new(r"^ *([\d.]+) (.+)\t(\d{4})-(\d+)-(\d+)(?: \{[^}]+})?(?: \[merge\])?$").unwrap();
-        let c = bzr.captures(b"    3 Bob Smith\t2010-06-29 {tag-1} [merge]").unwrap();
+        let bzr =
+            Regex::new(r"^ *([\d.]+) (.+)\t(\d{4})-(\d+)-(\d+)(?: \{[^}]+})?(?: \[merge\])?$")
+                .unwrap();
+        let c = bzr
+            .captures(b"    3 Bob Smith\t2010-06-29 {tag-1} [merge]")
+            .unwrap();
         assert_eq!(c[1], b"Bob Smith");
         assert_eq!(c.len(), 5);
     }

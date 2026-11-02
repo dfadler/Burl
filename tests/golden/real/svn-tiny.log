@@ -28,10 +28,10 @@
 <date>2020-01-02T11:00:00.000000Z</date>
 <paths>
 <path
+   action="M"
    prop-mods="false"
    text-mods="true"
-   kind="file"
-   action="M">/a.txt</path>
+   kind="file">/a.txt</path>
 </paths>
 </logentry>
 <logentry
@@ -40,10 +40,10 @@
 <date>2020-01-03T12:00:00.000000Z</date>
 <paths>
 <path
-   text-mods="false"
-   kind="file"
    action="D"
-   prop-mods="false">/sub/b.txt</path>
+   prop-mods="false"
+   text-mods="false"
+   kind="file">/sub/b.txt</path>
 </paths>
 </logentry>
 </log>

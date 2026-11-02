@@ -30,7 +30,13 @@ sc() { svn -q commit --username "$1" -m "$3" >/dev/null; svn -q propset --revpro
 mkdir sub; echo a > a.txt; echo b > sub/b.txt; svn -q add a.txt sub; sc alice 2020-01-01T10:00:00 one
 echo a2 >> a.txt; sc bob 2020-01-02T11:00:00 two
 svn -q rm sub/b.txt; sc alice 2020-01-03T12:00:00 three
-svn -q update; svn log -r 1:HEAD --xml --verbose --quiet "file://$R" > "$OUT/svn-tiny.log"
+svn -q update; # svn emits <path> attributes in a random order; pin it so the log is reproducible
+svn log -r 1:HEAD --xml --verbose --quiet "file://$R" | python3 -c '
+import re, sys
+def fix(m):
+    a = dict(re.findall(r"(\S+)=\"([^\"]*)\"", m.group(1)))
+    return "<path\n   " + "\n   ".join(f"{k}=\"{a[k]}\"" for k in ("action", "prop-mods", "text-mods", "kind") if k in a) + ">"
+sys.stdout.write(re.sub(r"<path\s+([^>]*?)>", fix, sys.stdin.read()))' > "$OUT/svn-tiny.log"
 # --- hg
 H=$W/hg; mkdir "$H"; cd "$H"; hg init; export HGUSER=x
 mkdir sub; echo a > a.txt; echo b > sub/b.txt; hg add -q; hg commit -q -u alice -d "2020-01-01 10:00:00 +0000" -m one

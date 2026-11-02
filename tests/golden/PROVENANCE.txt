@@ -1,5 +1,5 @@
 image: debian@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4 (trixie-slim), amd64
 built image id: sha256:4f15fd20db679f7001ceefc23feaf5313084f5ee8b7c98fb8839b2357211a752
-source sha: 9830aa7d04eb4009b5917709f55447715eeeeb0e (src/ must be unmodified at this commit)
+source sha: 5cdac2f059ae0222cb9f273294d5d6ecd4667dbc (src/ must be unmodified at this commit)
 oracle: clang++ Debian clang version 19.1.7 (3+b1), CXXFLAGS=-O1 -fsigned-char -ffp-contract=off
 regenerate: docs/rust-rewrite/discovery/golden/scripts/regen.sh

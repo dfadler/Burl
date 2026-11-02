@@ -546,3 +546,66 @@ fn deviation_d5_ignored_options() {
         assert_bytes(opt, &out.stderr, &base.stderr);
     }
 }
+
+/// `tests/golden/{edge,real}/NAME.case` (ticket #17): each case runs as written and with
+/// `--log-format X` removed (auto-detect, a required test) against goldens captured from the
+/// oracle in the pinned image by `golden/scripts/gen-cases.sh`.
+#[test]
+fn scripted_cases() {
+    let mut cases = 0;
+    for dir in ["edge", "real"] {
+        let d = repo_root().join("tests/golden").join(dir);
+        let mut files: Vec<_> = std::fs::read_dir(&d)
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .collect();
+        files.sort();
+        for case in files
+            .iter()
+            .filter(|p| p.extension().is_some_and(|e| e == "case"))
+        {
+            let base = case.with_extension("");
+            if base.with_extension("pending").exists() {
+                continue; // oracle golden exists, Burl cannot match it yet; see the .pending file
+            }
+            let name = base.file_name().unwrap().to_str().unwrap().to_string();
+            let words = String::from_utf8(read(case)).unwrap();
+            let (mut envs, mut opts) = (Vec::new(), Vec::new());
+            for w in words.split_whitespace() {
+                match w.split_once('=') {
+                    Some((k, v)) if opts.is_empty() => envs.push((k.to_string(), v.to_string())),
+                    _ => opts.push(w.to_string()),
+                }
+            }
+            let mut auto = Vec::new();
+            let mut it = opts.iter();
+            while let Some(o) = it.next() {
+                if o == "--log-format" {
+                    it.next();
+                } else {
+                    auto.push(o.clone());
+                }
+            }
+            let log = format!("tests/golden/{dir}/{name}.log");
+            for (suffix, base_args) in [("", &opts), (".auto", &auto)] {
+                let mut args: Vec<&str> = base_args.iter().map(String::as_str).collect();
+                args.extend(["--output-custom-log", "-", &log]);
+                let env_refs: Vec<(&str, &str)> =
+                    envs.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+                let out = run_with(&args, None, &env_refs);
+                let want = |ext: &str| read(&d.join(format!("{name}{suffix}.{ext}")));
+                let what = format!("{dir}/{name}{suffix}");
+                let rc: i32 = String::from_utf8(want("rc"))
+                    .unwrap()
+                    .trim()
+                    .parse()
+                    .unwrap();
+                assert_eq!(out.code, rc, "{what} exit code");
+                assert_bytes(&format!("{what} stdout"), &out.stdout, &want("out"));
+                assert_named(&format!("{what} stderr"), &out.stderr, &want("err"));
+                cases += 1;
+            }
+        }
+    }
+    assert!(cases >= 2 * 12, "only {cases} runs");
+}

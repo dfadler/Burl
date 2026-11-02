@@ -1,0 +1,1399 @@
+user:Andrew Caudwell
+1252643112
+:000000 100644 0000000 959ac03 A	.gitignore
+:000000 100644 0000000 94a9ed0 A	COPYING
+:000000 100644 0000000 d3c5b40 A	INSTALL
+:000000 100644 0000000 170f694 A	Makefile.in
+:000000 100644 0000000 76930e7 A	README
+:000000 100644 0000000 4d36ca9 A	README-SDL
+:000000 100644 0000000 0636814 A	THANKS
+:000000 100644 0000000 8b62873 A	aclocal.m4
+:000000 100755 0000000 6fdfdba A	configure
+:000000 100644 0000000 3946cba A	configure.ac
+:000000 100644 0000000 65f5b1b A	gource.win32.cbp
+:000000 100644 0000000 eb09f5a A	m4/acx_pthread.m4
+:000000 100644 0000000 89702e6 A	m4/ax_check_gl.m4
+:000000 100644 0000000 f5201e2 A	m4/ax_check_glu.m4
+:000000 100644 0000000 577059d A	m4/ax_check_glut.m4
+:000000 100644 0000000 1c85d77 A	m4/ax_lang_compiler_ms.m4
+:000000 100644 0000000 7cc626a A	m4/freetype2.m4
+:000000 100644 0000000 cc00087 A	src/.gitignore
+:000000 100644 0000000 0851bb9 A	src/Makefile.in
+:000000 100644 0000000 42dcf5c A	src/action.cpp
+:000000 100644 0000000 a3b757e A	src/action.h
+:000000 100644 0000000 249e4d6 A	src/commitlog.cpp
+:000000 100644 0000000 827a622 A	src/commitlog.h
+:000000 100644 0000000 cc00087 A	src/core/.gitignore
+:000000 100644 0000000 0cfb7c2 A	src/core/Makefile.in
+:000000 100644 0000000 9e73f53 A	src/core/bounds.h
+:000000 100644 0000000 c9c413e A	src/core/camera.cpp
+:000000 100644 0000000 397f9e9 A	src/core/camera.h
+:000000 100644 0000000 1a26da2 A	src/core/display.cpp
+:000000 100644 0000000 254c9d5 A	src/core/display.h
+:000000 100644 0000000 b2bb840 A	src/core/extensions.cpp
+:000000 100644 0000000 1176298 A	src/core/extensions.h
+:000000 100644 0000000 bd74800 A	src/core/frustum.cpp
+:000000 100644 0000000 57fda63 A	src/core/frustum.h
+:000000 100644 0000000 231dd5c A	src/core/fxfont.cpp
+:000000 100644 0000000 a2f2c44 A	src/core/fxfont.h
+:000000 100644 0000000 ee2d2da A	src/core/logger.cpp
+:000000 100644 0000000 f3d021a A	src/core/logger.h
+:000000 100644 0000000 b2ceb04 A	src/core/pi.h
+:000000 100644 0000000 f5320a2 A	src/core/plane.cpp
+:000000 100644 0000000 22ef53d A	src/core/plane.h
+:000000 100644 0000000 20ad782 A	src/core/quadtree.cpp
+:000000 100644 0000000 0bffcb8 A	src/core/quadtree.h
+:000000 100644 0000000 b18cbd7 A	src/core/regex.cpp
+:000000 100644 0000000 929914b A	src/core/regex.h
+:000000 100644 0000000 56bd7c8 A	src/core/resource.cpp
+:000000 100644 0000000 b415a81 A	src/core/resource.h
+:000000 100644 0000000 0e00e3d A	src/core/sdlapp.cpp
+:000000 100644 0000000 81e8a0d A	src/core/sdlapp.h
+:000000 100644 0000000 04eb665 A	src/core/seeklog.cpp
+:000000 100644 0000000 9cdf1b9 A	src/core/seeklog.h
+:000000 100644 0000000 8405d40 A	src/core/stringhash.cpp
+:000000 100644 0000000 3fec1bf A	src/core/stringhash.h
+:000000 100644 0000000 99cff98 A	src/core/texture.cpp
+:000000 100644 0000000 61c4b49 A	src/core/texture.h
+:000000 100644 0000000 88e9124 A	src/core/vectors.h
+:000000 100644 0000000 c2c3f7b A	src/custom.cpp
+:000000 100644 0000000 3951214 A	src/custom.h
+:000000 100644 0000000 f4f27df A	src/cvs-exp.cpp
+:000000 100644 0000000 82da33a A	src/cvs-exp.h
+:000000 100644 0000000 9b5ae90 A	src/dirnode.cpp
+:000000 100644 0000000 6c9f3f5 A	src/dirnode.h
+:000000 100644 0000000 c5c8e8c A	src/file.cpp
+:000000 100644 0000000 64dc9f3 A	src/file.h
+:000000 100644 0000000 71e5e05 A	src/git.cpp
+:000000 100644 0000000 adaa921 A	src/git.h
+:000000 100644 0000000 9af2e1f A	src/gource.cpp
+:000000 100644 0000000 a058261 A	src/gource.h
+:000000 100644 0000000 12d1c84 A	src/main.cpp
+:000000 100644 0000000 02e7c94 A	src/main.h
+:000000 100644 0000000 122fd8f A	src/pawn.cpp
+:000000 100644 0000000 8b126f6 A	src/pawn.h
+:000000 100644 0000000 a941582 A	src/slider.cpp
+:000000 100644 0000000 a87cae8 A	src/slider.h
+:000000 100644 0000000 959205a A	src/spline.cpp
+:000000 100644 0000000 ea4ce4c A	src/spline.h
+:000000 100644 0000000 dff0aba A	src/user.cpp
+:000000 100644 0000000 8fcada3 A	src/user.h
+:000000 100644 0000000 e72eb97 A	src/zoomcamera.cpp
+:000000 100644 0000000 6da8f10 A	src/zoomcamera.h
+
+user:unknown
+1252663673
+:000000 100644 0000000 c7a5fdd A	data/gource.1
+
+user:unknown
+1252663705
+:000000 100644 0000000 1250c53 A	data/beam.png
+:000000 100644 0000000 59fd3be A	data/file.png
+:000000 100644 0000000 24d8638 A	data/no_photo.png
+
+user:unknown
+1252663845
+:000000 100644 0000000 9d51347 A	data/fonts/FreeSans.ttf
+:000000 100644 0000000 60e67f2 A	data/fonts/README
+:100644 100644 c5c8e8c f14fcdc M	src/file.cpp
+:100644 100644 9af2e1f af86d5d M	src/gource.cpp
+:100644 100644 a058261 4f00791 M	src/gource.h
+:100644 100644 a941582 58768d4 M	src/slider.cpp
+:100644 100644 dff0aba 599b655 M	src/user.cpp
+
+user:Andrew Caudwell
+1252664414
+:100644 100644 959ac03 c6a7f11 M	.gitignore
+
+user:Andrew Caudwell
+1252664562
+:100644 100644 65f5b1b f29218e M	gource.win32.cbp
+
+user:Andrew Caudwell
+1252887720
+:100644 100644 170f694 3e4adaa M	Makefile.in
+
+user:Andrew Caudwell
+1252891208
+:000000 100755 0000000 f32079a A	config.guess
+:000000 100755 0000000 6759825 A	config.sub
+:000000 100755 0000000 a5897de A	install-sh
+
+user:Andrew Caudwell
+1252891232
+:100644 100644 c6a7f11 f2fc8e7 M	.gitignore
+
+user:Brenda Wallace
+1252894038
+:100644 100644 76930e7 b2fcf79 M	README
+
+user:Andrew Caudwell
+1252897132
+:100644 100644 af86d5d 91513d5 M	src/gource.cpp
+
+user:Andrew Caudwell
+1252897241
+user:Andrew Caudwell
+1252897490
+:100644 100644 b2fcf79 1405a3f M	README
+
+user:Andrew Caudwell
+1252898680
+:100644 100644 1405a3f 7c9c918 M	README
+:100644 100644 c7a5fdd 93ddf08 M	data/gource.1
+
+user:Andrew Caudwell
+1252901581
+:100644 100644 7c9c918 78ff00a M	README
+:100644 100644 93ddf08 0adf71d M	data/gource.1
+
+user:Andrew Caudwell
+1253053036
+:100644 100644 78ff00a c5c51d5 M	README
+:100644 100644 0adf71d 5ea189c M	data/gource.1
+
+user:Andrew Caudwell
+1253073291
+:000000 100644 0000000 6b9b3d3 A	debian/changelog
+:000000 100644 0000000 7f8f011 A	debian/compat
+:000000 100644 0000000 9b2c9e1 A	debian/control
+:000000 100644 0000000 11e2879 A	debian/copyright
+:000000 100644 0000000 e772481 A	debian/dirs
+:000000 100644 0000000 3a1b968 A	debian/docs
+:000000 100755 0000000 48a7236 A	debian/rules
+
+user:Andrew Caudwell
+1253080227
+:100644 100644 71e5e05 206378e M	src/git.cpp
+:100644 100644 adaa921 e75a909 M	src/git.h
+
+user:Andrew Caudwell
+1253080620
+:100644 100644 91513d5 812663b M	src/gource.cpp
+
+user:Andrew Caudwell
+1253080645
+:100644 100644 c5c51d5 98be3e2 M	README
+:100644 100644 5ea189c 383821f M	data/gource.1
+
+user:Andrew Caudwell
+1253081398
+:100644 100644 812663b bab26a3 M	src/gource.cpp
+
+user:Andrew Caudwell
+1253082096
+:100644 100644 6b9b3d3 88e1397 M	debian/changelog
+
+user:Andrew Caudwell
+1253090049
+:100644 100644 af86d5d da250cd M	src/gource.cpp
+
+user:Andrew Caudwell
+1253090891
+user:Johannes Schindelin
+1253091870
+:100644 100644 1a26da2 524fa04 M	src/core/display.cpp
+:100644 100644 254c9d5 d699517 M	src/core/display.h
+
+user:Johannes Schindelin
+1253091937
+:100644 100644 231dd5c 5b03cdc M	src/core/fxfont.cpp
+
+user:Andrew Caudwell
+1253091954
+:100644 100644 99cff98 d4cd841 M	src/core/texture.cpp
+
+user:Johannes Schindelin
+1253103236
+:100644 100644 0c51408 6bd219b M	src/gource.cpp
+:100644 100644 12d1c84 d9dc561 M	src/main.cpp
+
+user:Johannes Schindelin
+1253103237
+:100644 100644 d9dc561 74ab8d7 M	src/main.cpp
+
+user:Johannes Schindelin
+1253111993
+:100644 100644 206378e eb79472 M	src/git.cpp
+
+user:Johannes Schindelin
+1253111993
+:100644 100644 f2fc8e7 68430a1 M	.gitignore
+
+user:Andrew Caudwell
+1253160337
+:100644 100644 74ab8d7 d1e3829 M	src/main.cpp
+
+user:Andrew Caudwell
+1253162099
+:100644 100644 98be3e2 04dd1c9 M	README
+:100644 100644 383821f 25ff6b3 M	data/gource.1
+:100644 100644 6bd219b 44f63df M	src/gource.cpp
+
+user:Andrew Caudwell
+1253162477
+:100644 100644 04dd1c9 5cb7481 M	README
+
+user:Andrew Caudwell
+1253171500
+:100644 100644 5cb7481 7b7b082 M	README
+:100644 100644 eb79472 206378e M	src/git.cpp
+
+user:Andrew Caudwell
+1253174249
+:100644 100644 7b7b082 8d5ba8e M	README
+
+user:Andrew Caudwell
+1253174334
+:000000 100644 0000000 d7d2cfc A	README.win32.txt
+
+user:Johannes Schindelin
+1253224105
+:100644 100644 8d5ba8e 250da1f M	README
+:100644 100644 206378e eb79472 M	src/git.cpp
+
+user:Johannes Schindelin
+1253224129
+:100644 100644 eb79472 d9ef83f M	src/git.cpp
+
+user:Andrew Caudwell
+1253224133
+:100644 100644 d9ef83f 0dfccc1 M	src/git.cpp
+
+user:Andrew Caudwell
+1253224921
+:100644 100644 0dfccc1 ca84ec4 M	src/git.cpp
+:100644 100644 e75a909 792f064 M	src/git.h
+
+user:Alex Riesen
+1253233190
+:100644 100644 0851bb9 2e8c9ef M	src/Makefile.in
+:100644 100644 0cfb7c2 704cc47 M	src/core/Makefile.in
+
+user:Alex Riesen
+1253233232
+:100644 100644 2e8c9ef a3c29fe M	src/Makefile.in
+:100644 100644 704cc47 d98e1a8 M	src/core/Makefile.in
+
+user:Andrew Caudwell
+1253237290
+:100644 100644 44f63df ac244d7 M	src/gource.cpp
+
+user:Andrew Caudwell
+1253237368
+:100644 100644 ac244d7 2f71b13 M	src/gource.cpp
+
+user:Andrew Caudwell
+1253242529
+:100644 100644 d1e3829 73cd047 M	src/main.cpp
+
+user:Andrew Caudwell
+1253242585
+:100644 100644 249e4d6 dbbd76f M	src/commitlog.cpp
+:100644 100644 2f71b13 7c44b75 M	src/gource.cpp
+
+user:Andrew Caudwell
+1253262823
+:100644 100644 250da1f 1c9dbcb M	README
+:100644 100644 25ff6b3 69ffc94 M	data/gource.1
+:100644 100644 dbbd76f c5f7e54 M	src/commitlog.cpp
+:100644 100644 04eb665 029217b M	src/core/seeklog.cpp
+:100644 100644 9cdf1b9 59ab401 M	src/core/seeklog.h
+:100644 100644 7c44b75 2282bd6 M	src/gource.cpp
+:100644 100644 4f00791 85c8b1e M	src/gource.h
+:100644 100644 73cd047 544b226 M	src/main.cpp
+
+user:Andrew Caudwell
+1253264030
+:100644 100644 1c9dbcb 344f9d7 M	README
+:100644 100644 69ffc94 56e737e M	data/gource.1
+
+user:Andrew Caudwell
+1253264358
+:100644 100644 344f9d7 550f2ce M	README
+
+user:Andrew Caudwell
+1253275081
+:100644 100644 ca84ec4 6f85160 M	src/git.cpp
+
+user:Andrew Caudwell
+1253276287
+:100644 100644 6f85160 cc73b2a M	src/git.cpp
+
+user:Andrew Caudwell
+1253276566
+:100644 100644 d7d2cfc 0e2c2f1 M	README.win32.txt
+
+user:Andrew Caudwell
+1253276922
+:100644 100644 cc73b2a e36e968 M	src/git.cpp
+
+user:Andrew Caudwell
+1253278558
+:100644 100644 e36e968 085612a M	src/git.cpp
+
+user:Andrew Caudwell
+1253314352
+:100644 100644 2282bd6 767e0a1 M	src/gource.cpp
+
+user:Andrew Caudwell
+1253314395
+:100644 000000 0e2c2f1 0000000 D	README.win32.txt
+:100644 100644 544b226 b1b5a13 M	src/main.cpp
+
+user:Andrew Caudwell
+1253328589
+:000000 100644 0000000 6ef8582 A	README.win32.txt
+
+user:Andrew Caudwell
+1253338305
+:100644 100644 b1b5a13 cedd840 M	src/main.cpp
+
+user:Andrew Caudwell
+1253338469
+:100644 100644 767e0a1 7df20b4 M	src/gource.cpp
+:100644 100644 85c8b1e c5fb838 M	src/gource.h
+
+user:Andrew Caudwell
+1253338559
+:100644 100644 c5f7e54 13d0bbe M	src/commitlog.cpp
+
+user:Andrew Caudwell
+1253338694
+:100644 000000 6ef8582 0000000 D	README.win32.txt
+
+user:Andrew Caudwell
+1253340423
+:100644 100644 7df20b4 0a61c41 M	src/gource.cpp
+:100644 100644 cedd840 f2b72de M	src/main.cpp
+
+user:Andrew Caudwell
+1253399061
+:100644 100644 085612a e94c45b M	src/git.cpp
+
+user:Andrew Caudwell
+1253399144
+:100644 100644 f2b72de cbec464 M	src/main.cpp
+
+user:Ferry Huberts
+1253400239
+:100644 100644 68430a1 f8629b4 M	.gitignore
+
+user:Andrew Caudwell
+1253435659
+:100644 100644 f4f27df 9a77774 M	src/cvs-exp.cpp
+
+user:Andrew Caudwell
+1253435771
+:000000 100644 0000000 ae6a1f1 A	src/gitraw.cpp
+:000000 100644 0000000 422e08e A	src/gitraw.h
+
+user:Andrew Caudwell
+1253436057
+:100644 100644 550f2ce 4dd975b M	README
+:100644 100644 56e737e 0fe2cde M	data/gource.1
+:100644 100644 cbec464 072cd46 M	src/main.cpp
+
+user:Andrew Caudwell
+1253436077
+:100644 100644 0a61c41 32b8417 M	src/gource.cpp
+:100644 100644 c5fb838 2afef43 M	src/gource.h
+
+user:Andrew Caudwell
+1253436189
+:100644 100644 13d0bbe 4f338af M	src/commitlog.cpp
+:100644 100644 827a622 5469ca5 M	src/commitlog.h
+:100644 100644 e94c45b 3f5cf15 M	src/git.cpp
+:100644 100644 792f064 5473996 M	src/git.h
+
+user:Andrew Caudwell
+1253436512
+:100644 100644 4dd975b 88df345 M	README
+
+user:Andrew Caudwell
+1253436958
+:100644 100644 a3c29fe 824fbe5 M	src/Makefile.in
+
+user:Andrew Caudwell
+1253437152
+:100644 100644 f29218e 14ade3d M	gource.win32.cbp
+
+user:Andrew Caudwell
+1253449800
+:100644 100644 88df345 f158278 M	README
+:100644 100644 0fe2cde b610648 M	data/gource.1
+:100644 100644 32b8417 792f44c M	src/gource.cpp
+:100644 100644 072cd46 22618ab M	src/main.cpp
+:100644 100644 e72eb97 c05f3f5 M	src/zoomcamera.cpp
+:100644 100644 6da8f10 f135926 M	src/zoomcamera.h
+
+user:Andrew Caudwell
+1253513107
+:100644 100644 3f5cf15 3abc9f6 M	src/git.cpp
+
+user:Andrew Caudwell
+1253574195
+:100644 100644 11e2879 292545c M	debian/copyright
+:100644 100644 4f338af ebc93af M	src/commitlog.cpp
+:100644 100644 5469ca5 c900a44 M	src/commitlog.h
+:000000 100644 0000000 16bab4d A	src/core/utf8/checked.h
+:000000 100644 0000000 557ab0f A	src/core/utf8/core.h
+:000000 100644 0000000 84207a5 A	src/core/utf8/unchecked.h
+:000000 100644 0000000 98aaba3 A	src/core/utf8/utf8.h
+
+user:Andrew Caudwell
+1253574518
+:100644 100644 f158278 cf43095 M	README
+
+user:Andrew Caudwell
+1253591044
+:100644 100644 3e4adaa 46ac924 M	Makefile.in
+:100644 100644 cf43095 9cec467 M	README
+:100755 100755 6fdfdba 56600a8 M	configure
+:100644 100644 3946cba 0ce5319 M	configure.ac
+:100644 100644 88e1397 84c382d M	debian/changelog
+:100644 100644 d98e1a8 8ab4c80 M	src/core/Makefile.in
+:100644 100644 524fa04 cd5876a M	src/core/display.cpp
+
+user:Andrew Caudwell
+1253602221
+:100644 100644 f8629b4 e3cb4e9 M	.gitignore
+:000000 100644 0000000 29e0566 A	dev/.gitignore
+:000000 100755 0000000 2e21450 A	dev/bin/build_tar.pl
+
+user:Andrew Caudwell
+1253602298
+:100644 100644 98aaba3 48adf92 M	src/core/utf8/utf8.h
+
+user:Andrew Caudwell
+1253602535
+user:Andrew Caudwell
+1253604345
+:100644 100644 22618ab a67d09f M	src/main.cpp
+
+user:Andrew Caudwell
+1253604384
+:100644 100644 792f44c c243618 M	src/gource.cpp
+
+user:Andrew Caudwell
+1253604513
+:100644 100644 14ade3d 2e0d6ab M	gource.win32.cbp
+
+user:Andrew Caudwell
+1253605753
+:000000 100644 0000000 20ec9d4 A	dev/bin/build_win32.pl
+
+user:Andrew Caudwell
+1253697475
+:100644 100644 20ec9d4 6bf1b2e M	dev/bin/build_win32.pl
+
+user:Francois Marier
+1253763643
+:100644 100644 b610648 4a12dd0 M	data/gource.1
+
+user:Andrew Caudwell
+1253763688
+user:Sebastian Hahn
+1253764253
+:100644 100644 9cec467 e6f0e7a M	README
+
+user:Andrew Caudwell
+1253772147
+:100644 100644 3abc9f6 8a9e365 M	src/git.cpp
+
+user:Andrew Caudwell
+1253772267
+:100644 100644 e6f0e7a fe92108 M	README
+:100644 100644 4a12dd0 fb0305f M	data/gource.1
+
+user:Andrew Caudwell
+1253772386
+:100644 100644 84c382d 386b3b2 M	debian/changelog
+:100755 100755 2e21450 f7e4030 M	dev/bin/build_tar.pl
+:100644 100644 6bf1b2e 34f9f0d M	dev/bin/build_win32.pl
+
+user:Andrew Caudwell
+1253782586
+:100644 100644 fe92108 87a176b M	README
+:100644 100644 fb0305f ec9ab25 M	data/gource.1
+
+user:Andrew Caudwell
+1253784836
+:100644 100644 87a176b 4dd6f21 M	README
+:100644 100644 ec9ab25 08280f1 M	data/gource.1
+
+user:Andrew Caudwell
+1253785245
+:100755 100755 f7e4030 2ad2759 M	dev/bin/build_tar.pl
+:100644 100644 34f9f0d bb33152 M	dev/bin/build_win32.pl
+
+user:Andrew Caudwell
+1253785371
+:100644 100644 386b3b2 cf2757e M	debian/changelog
+
+user:Andrew Caudwell
+1254092513
+:100644 100644 4dd6f21 29dddfa M	README
+:100644 100644 08280f1 d6ed33c M	data/gource.1
+
+user:Andrew Caudwell
+1254214153
+:100644 100644 42dcf5c cb97315 M	src/action.cpp
+:100644 100644 a3b757e 98bf3fa M	src/action.h
+:100644 100644 c243618 7c4b3de M	src/gource.cpp
+:100644 100644 2afef43 8a0f295 M	src/gource.h
+:100644 100644 a67d09f eb51b0d M	src/main.cpp
+:100644 100644 599b655 15046d9 M	src/user.cpp
+:100644 100644 8fcada3 3bbd583 M	src/user.h
+
+user:Andrew Caudwell
+1254214985
+:100644 100644 15046d9 d9be869 M	src/user.cpp
+
+user:Andrew Caudwell
+1254215542
+user:Jeff King
+1254269900
+:100644 100644 8a9e365 2a98799 M	src/git.cpp
+
+user:Andrew Caudwell
+1254275903
+:100644 100644 29dddfa cc0d1a8 M	README
+
+user:Andrew Caudwell
+1254290713
+:100644 100644 ebc93af 5f5ace2 M	src/commitlog.cpp
+
+user:Andrew Caudwell
+1254290850
+:100644 100644 cc0d1a8 ff9067a M	README
+:100644 100644 8b62873 1624282 M	aclocal.m4
+:100755 100755 56600a8 a91ec85 M	configure
+:100644 100644 0ce5319 5deb49d M	configure.ac
+:000000 100644 0000000 0928a9d A	m4/sdl.m4
+:100644 100644 824fbe5 a1042b0 M	src/Makefile.in
+:100644 100644 1176298 2059605 M	src/core/extensions.h
+:100644 100644 81e8a0d 279a705 M	src/core/sdlapp.h
+:100644 100644 61c4b49 4f35c33 M	src/core/texture.h
+
+user:Andrew Caudwell
+1254292795
+:100644 100644 ff9067a 60f972b M	README
+:100644 100644 a1042b0 405add8 M	src/Makefile.in
+:100644 100644 8ab4c80 b567d2d M	src/core/Makefile.in
+
+user:Andrew Caudwell
+1254348432
+:100644 100644 cd5876a 12ca80c M	src/core/display.cpp
+
+user:Andrew Caudwell
+1254370804
+:100644 100644 d9be869 4cc1961 M	src/user.cpp
+
+user:Andrew Caudwell
+1254371172
+:100644 100644 60f972b 938f033 M	README
+:100644 100644 1624282 74c82bc M	aclocal.m4
+:100755 100755 a91ec85 e329ffc M	configure
+:100644 100644 5deb49d c7c99cd M	configure.ac
+:000000 100644 0000000 0048a3f A	m4/pkg.m4
+:100644 100644 a2f2c44 b4aabf2 M	src/core/fxfont.h
+
+user:Andrew Caudwell
+1254431913
+:100644 100644 938f033 a9a3281 M	README
+:100755 100755 e329ffc 9d448b2 M	configure
+:100644 100644 c7c99cd 2c3c4cd M	configure.ac
+
+user:Andrew Caudwell
+1254436132
+:100644 100644 a9a3281 bf0de02 M	README
+
+user:Andrew Caudwell
+1254529137
+:100644 100644 7c4b3de 7233e42 M	src/gource.cpp
+
+user:Andrew Caudwell
+1254529385
+:100644 100644 2059605 28501e0 M	src/core/extensions.h
+:100644 100644 b4aabf2 a2f2c44 M	src/core/fxfont.h
+:100644 100644 279a705 81e8a0d M	src/core/sdlapp.h
+:100644 100644 4f35c33 61c4b49 M	src/core/texture.h
+
+user:Andrew Caudwell
+1254530890
+:100644 100644 7233e42 bb40c81 M	src/gource.cpp
+:100644 100644 8a0f295 00d66ca M	src/gource.h
+
+user:Andrew Caudwell
+1254784029
+:100644 100644 bf0de02 a0128cc M	README
+:100644 100644 d6ed33c fd3b433 M	data/gource.1
+:100644 100644 bb40c81 5e688e1 M	src/gource.cpp
+:100644 100644 eb51b0d a56fa21 M	src/main.cpp
+:100644 100644 4cc1961 d90270f M	src/user.cpp
+:100644 100644 3bbd583 a63057f M	src/user.h
+
+user:Andrew Caudwell
+1254826112
+:100644 100644 2e0d6ab deefbf8 M	gource.win32.cbp
+:000000 100644 0000000 2cd9062 A	src/apache.cpp
+:000000 100644 0000000 9e8d72d A	src/apache.h
+:100644 100644 bb40c81 d93d910 M	src/gource.cpp
+:100644 100644 00d66ca 3477c1d M	src/gource.h
+:100644 100644 eb51b0d 88850c3 M	src/main.cpp
+
+user:Andrew Caudwell
+1254826470
+user:Andrew Caudwell
+1254874676
+:100644 100644 405add8 6463459 M	src/Makefile.in
+:100644 100644 2cd9062 722bb38 M	src/apache.cpp
+
+user:Andrew Caudwell
+1255302974
+:100644 100644 722bb38 198cb61 M	src/apache.cpp
+
+user:Johannes Schindelin
+1255310262
+:100644 100644 a0128cc 9997197 M	README
+:100755 100755 9d448b2 0e96d27 M	configure
+:100644 100644 2c3c4cd 60ea69b M	configure.ac
+:100644 100644 6463459 270b8ef M	src/Makefile.in
+:000000 100644 0000000 f6c58be A	src/ffmpeg.cpp
+:000000 100644 0000000 34fa851 A	src/ffmpeg.h
+:100644 100644 8011ad3 f363fbd M	src/gource.cpp
+:100644 100644 3477c1d 071fca9 M	src/gource.h
+:100644 100644 e24c4c5 e4e26b6 M	src/main.cpp
+
+user:Andrew Caudwell
+1255312773
+:100644 100644 9997197 272ba11 M	README
+:100755 100755 0e96d27 81e8004 M	configure
+:100644 100644 60ea69b e97d9d3 M	configure.ac
+:100644 100644 f6c58be 732b41c M	src/ffmpeg.cpp
+
+user:Andrew Caudwell
+1255324688
+:100644 100644 272ba11 3bf1be0 M	README
+:100644 100644 fd3b433 d713931 M	data/gource.1
+:100644 100644 732b41c 7b23210 M	src/ffmpeg.cpp
+:100644 100644 34fa851 926055c M	src/ffmpeg.h
+:100644 100644 f363fbd 67a8ef3 M	src/gource.cpp
+:100644 100644 e4e26b6 45c89d4 M	src/main.cpp
+
+user:Andrew Caudwell
+1255471390
+:100644 100644 7b23210 dcf2394 M	src/ffmpeg.cpp
+:100644 100644 926055c 82e2a6f M	src/ffmpeg.h
+:100644 100644 67a8ef3 8ce5f38 M	src/gource.cpp
+:100644 100644 071fca9 3d0f649 M	src/gource.h
+:100644 100644 45c89d4 294b922 M	src/main.cpp
+
+user:Andrew Caudwell
+1255472783
+:100755 100755 81e8004 097e175 M	configure
+:100644 100644 e97d9d3 aa43475 M	configure.ac
+:100644 100644 dcf2394 284099a M	src/ffmpeg.cpp
+:100644 100644 8ce5f38 e9adc72 M	src/gource.cpp
+
+user:Andrew Caudwell
+1255495168
+:100644 100644 3bf1be0 7e0662e M	README
+:100644 100644 d713931 1efee48 M	data/gource.1
+:100644 100644 e9adc72 d4cc921 M	src/gource.cpp
+:100644 100644 3d0f649 66a3fa7 M	src/gource.h
+:100644 100644 294b922 23f11ed M	src/main.cpp
+
+user:Andrew Caudwell
+1255575529
+:100644 100644 7e0662e 1a98886 M	README
+:100644 100644 1efee48 827c25e M	data/gource.1
+:100644 100644 284099a e7898a4 M	src/ffmpeg.cpp
+:100644 100644 82e2a6f 06dce6b M	src/ffmpeg.h
+:100644 100644 d4cc921 5ffd380 M	src/gource.cpp
+:100644 100644 66a3fa7 c6d81fa M	src/gource.h
+:100644 100644 23f11ed 697967c M	src/main.cpp
+
+user:Andrew Caudwell
+1255580160
+:100755 100755 2ad2759 8d8bb6e M	dev/bin/build_tar.pl
+:100644 100644 bb33152 3670f26 M	dev/bin/build_win32.pl
+
+user:Andrew Caudwell
+1255580174
+:100644 100644 1a98886 49c619c M	README
+:100644 100644 827c25e 4dc9881 M	data/gource.1
+:100644 100644 5ffd380 02be78c M	src/gource.cpp
+
+user:Andrew Caudwell
+1255662187
+:100755 100755 097e175 3f338dc M	configure
+:100644 100644 aa43475 987f321 M	configure.ac
+
+user:Andrew Caudwell
+1255998595
+:100644 100644 49c619c 1a65dbf M	README
+:100755 100755 3f338dc 9d448b2 M	configure
+:100644 100644 987f321 2c3c4cd M	configure.ac
+:100644 100644 4dc9881 fb4b0dd M	data/gource.1
+:100644 100644 270b8ef c05794d M	src/Makefile.in
+:100644 000000 e7898a4 0000000 D	src/ffmpeg.cpp
+:100644 000000 06dce6b 0000000 D	src/ffmpeg.h
+:100644 100644 02be78c 7c3fe96 M	src/gource.cpp
+:100644 100644 c6d81fa 07ba8ae M	src/gource.h
+:100644 100644 697967c 6e55aa0 M	src/main.cpp
+:000000 100644 0000000 5d5fff3 A	src/ppm.cpp
+:000000 100644 0000000 490f99e A	src/ppm.h
+
+user:Andrew Caudwell
+1256013482
+:100644 100644 deefbf8 9825036 M	gource.win32.cbp
+
+user:Andrew Caudwell
+1256018404
+:100644 100644 7c3fe96 3179fdc M	src/gource.cpp
+:100644 100644 6e55aa0 9336f08 M	src/main.cpp
+:100644 100644 5d5fff3 8142e08 M	src/ppm.cpp
+
+user:Andrew Caudwell
+1256033644
+:100644 100644 1a65dbf 28aa8e3 M	README
+
+user:Andrew Caudwell
+1256075398
+:100755 100755 8d8bb6e e55827a M	dev/bin/build_tar.pl
+:100644 100644 3670f26 a484ae6 M	dev/bin/build_win32.pl
+:100644 100644 07ba8ae 3695c76 M	src/gource.h
+
+user:Andrew Caudwell
+1256075434
+:100644 100644 cf2757e 38d3d65 M	debian/changelog
+:100644 100644 9b2c9e1 56715a8 M	debian/control
+:100644 100644 292545c cefe9a7 M	debian/copyright
+
+user:Andrew Caudwell
+1256075481
+:100644 100644 28aa8e3 ba3b3fd M	README
+:100644 100644 fb4b0dd 11db01a M	data/gource.1
+:100644 100644 3179fdc 8e4fb32 M	src/gource.cpp
+
+user:Andrew Caudwell
+1256085934
+:100644 100644 8142e08 e41a4bf M	src/ppm.cpp
+
+user:Andrew Caudwell
+1256088176
+:100644 100644 ba3b3fd 52b091c M	README
+:100644 100644 11db01a b75c007 M	data/gource.1
+:100644 100644 8e4fb32 955e7b1 M	src/gource.cpp
+:100644 100644 3695c76 2cec89e M	src/gource.h
+:100644 100644 9336f08 359e132 M	src/main.cpp
+
+user:Andrew Caudwell
+1256088731
+:100644 100644 52b091c 66341d5 M	README
+
+user:Andrew Caudwell
+1256092704
+:100644 100644 d4cd841 ef69569 M	src/core/texture.cpp
+
+user:Andrew Caudwell
+1256095737
+:100644 100644 66341d5 8a7db8e M	README
+:100644 100644 b75c007 59d624f M	data/gource.1
+
+user:Andrew Caudwell
+1256158570
+:100644 100644 8a7db8e 579b743 M	README
+:100644 100644 59d624f 44bb4f3 M	data/gource.1
+
+user:Andrew Caudwell
+1256252030
+:100755 100755 9d448b2 88e96aa M	configure
+:100644 100644 2c3c4cd 8c826eb M	configure.ac
+
+user:Andrew Caudwell
+1256698540
+:100644 100644 029217b 3cee625 M	src/core/seeklog.cpp
+
+user:Andrew Caudwell
+1256863241
+:100755 100755 88e96aa 9d448b2 M	configure
+:100644 100644 8c826eb 2c3c4cd M	configure.ac
+
+user:Andrew Caudwell
+1256864429
+:100644 100644 579b743 14fb829 M	README
+:100644 100644 44bb4f3 2e84f94 M	data/gource.1
+:100644 100644 955e7b1 b71e31f M	src/gource.cpp
+:100644 100644 359e132 849b50d M	src/main.cpp
+:100644 100644 122fd8f fddc19e M	src/pawn.cpp
+:100644 100644 8b126f6 817ec4d M	src/pawn.h
+:100644 100644 d90270f 7faa801 M	src/user.cpp
+:100644 100644 a63057f e5e10ce M	src/user.h
+
+user:Andrew Caudwell
+1257201636
+:100755 100755 9d448b2 6f81afc M	configure
+:100644 100644 2c3c4cd e415a45 M	configure.ac
+
+user:Andrew Caudwell
+1257202022
+:100644 100644 14fb829 89aaa6f M	README
+:100644 100644 2cec89e 082840b M	src/gource.h
+
+user:Andrew Caudwell
+1257281383
+:100755 100755 e55827a 62dcdf1 M	dev/bin/build_tar.pl
+
+user:Andrew Caudwell
+1257546544
+:100644 100644 89aaa6f 4b2ae65 M	README
+:100644 100644 c900a44 5ee9ee6 M	src/commitlog.h
+:100644 100644 2a98799 6990aa6 M	src/git.cpp
+:100644 100644 b71e31f 2b408a0 M	src/gource.cpp
+
+user:Andrew Caudwell
+1257575481
+:100644 100644 28501e0 13ffb61 M	src/core/extensions.h
+:100644 100644 81e8a0d cbe111e M	src/core/sdlapp.h
+:100644 100644 61c4b49 6b784b3 M	src/core/texture.h
+
+user:Andrew Caudwell
+1257819288
+:100755 100755 6f81afc f958e05 M	configure
+:100644 100644 e415a45 5261f6c M	configure.ac
+
+user:Andrew Caudwell
+1257825965
+:100644 100644 4b2ae65 28ef152 M	README
+
+user:Pat Notz
+1257980295
+:100644 100644 28ef152 f3614f1 M	README
+:100644 100644 2b408a0 00ecc46 M	src/gource.cpp
+:100644 100644 082840b 838d3ca M	src/gource.h
+:100644 100644 849b50d 9c361dd M	src/main.cpp
+
+user:Andrew Caudwell
+1258018448
+:100644 100644 f3614f1 edba639 M	README
+:100644 100644 2e84f94 11dbb54 M	data/gource.1
+:100644 100644 00ecc46 8ea7ccc M	src/gource.cpp
+:100644 100644 9c361dd c57cbaf M	src/main.cpp
+
+user:Andrew Caudwell
+1258166187
+:100644 100644 edba639 3e54a03 M	README
+:100644 100644 11dbb54 bbb711b M	data/gource.1
+
+user:Andrew Caudwell
+1258166765
+:100644 100644 38d3d65 6c22753 M	debian/changelog
+
+user:Andrew Caudwell
+1258347501
+:100644 100644 3e54a03 45071ad M	README
+:100644 100644 9a77774 7ede99e M	src/cvs-exp.cpp
+
+user:Andrew Caudwell
+1258355286
+:100755 100755 f958e05 37f41d8 M	configure
+:100644 100644 5261f6c 949140b M	configure.ac
+
+user:Cameron Hart
+1258408132
+:100644 100644 8ea7ccc 9eb56b9 M	src/gource.cpp
+:100644 100644 838d3ca 4c0e1e4 M	src/gource.h
+
+user:Andrew Caudwell
+1258410238
+:100644 100644 45071ad 441e5b0 M	README
+:100644 100644 bbb711b 440a3ea M	data/gource.1
+:100644 100644 9eb56b9 6a3b711 M	src/gource.cpp
+
+user:Andrew Caudwell
+1258959749
+:100644 100644 8ea7ccc b180b76 M	src/gource.cpp
+:100644 100644 838d3ca 7925b43 M	src/gource.h
+
+user:Andrew Caudwell
+1258959937
+user:Andrew Caudwell
+1259114939
+:100644 100644 6c22753 f1ef85d M	debian/changelog
+:100644 100644 b3e7195 fbc93cd M	src/gource.h
+
+user:Andrew Caudwell
+1259116054
+:100644 100644 441e5b0 a56b3f3 M	README
+:100644 100644 440a3ea dbdbe5c M	data/gource.1
+
+user:Andrew Caudwell
+1259293132
+:100644 100644 a56b3f3 f13d284 M	README
+:100644 100644 f1ef85d ff3db0b M	debian/changelog
+:100644 100644 16cf250 4d58573 M	src/gource.cpp
+:100644 100644 fbc93cd d7da976 M	src/gource.h
+
+user:Andrew Caudwell
+1259616329
+:000000 100644 0000000 1e5169e A	contrib/svn-gource.py
+
+user:Andrew Caudwell
+1259616429
+:000000 100644 0000000 e8b760e A	contrib/mercurial-gource.py
+
+user:Andrew Caudwell
+1259616514
+:100755 100755 62dcdf1 2adf626 M	dev/bin/build_tar.pl
+
+user:Andrew Caudwell
+1259617898
+:100644 100644 f13d284 bbdf2d5 M	README
+:100644 100644 5ee9ee6 13d81d4 M	src/commitlog.h
+:100644 100644 4d58573 944c2b7 M	src/gource.cpp
+:100644 100644 d7da976 be1da70 M	src/gource.h
+
+user:Andrew Caudwell
+1260432921
+:100644 100644 9b5ae90 1fc8e5a M	src/dirnode.cpp
+:100644 100644 6c9f3f5 06544f5 M	src/dirnode.h
+:100644 100644 4d58573 5745c51 M	src/gource.cpp
+:100644 100644 d7da976 a8503d9 M	src/gource.h
+:100644 100644 c57cbaf 7849031 M	src/main.cpp
+
+user:Andrew Caudwell
+1260433116
+user:Andrew Caudwell
+1260492099
+:000000 100644 0000000 f7812c3 A	data/bloom.tga
+:100644 100644 1fc8e5a dab85a2 M	src/dirnode.cpp
+:100644 100644 06544f5 821361d M	src/dirnode.h
+:100644 100644 7967c02 215f52b M	src/gource.cpp
+:100644 100644 13bb42c c04b3c3 M	src/gource.h
+:100644 100644 7849031 c442fcf M	src/main.cpp
+
+user:Andrew Caudwell
+1260503876
+:000000 100644 0000000 7d4aed1 A	ChangeLog
+:100644 100644 bbdf2d5 38fdcda M	README
+
+user:Andrew Caudwell
+1260503927
+:100644 100644 949140b 8337366 M	configure.ac
+
+user:Andrew Caudwell
+1260503978
+:100755 100755 2adf626 687b180 M	dev/bin/build_tar.pl
+:100644 100644 a484ae6 19e789e M	dev/bin/build_win32.pl
+
+user:Andrew Caudwell
+1260504802
+:100644 100644 38fdcda edac898 M	README
+:100644 100644 dbdbe5c 8b5815d M	data/gource.1
+
+user:Andrew Caudwell
+1260505038
+:100644 100644 46ac924 856e47a M	Makefile.in
+
+user:Andrew Caudwell
+1260505078
+:100644 100644 cb97315 dbd8052 M	src/action.cpp
+
+user:Andrew Caudwell
+1260505105
+:100644 100644 c442fcf 729162f M	src/main.cpp
+
+user:Andrew Caudwell
+1260505160
+:100644 100644 dab85a2 770be07 M	src/dirnode.cpp
+:100644 100644 821361d 5752df3 M	src/dirnode.h
+:100644 100644 215f52b be3f76e M	src/gource.cpp
+:100644 100644 c04b3c3 bbd3c34 M	src/gource.h
+
+user:Andrew Caudwell
+1260509178
+:100644 100644 7d4aed1 b7710a3 M	ChangeLog
+:100644 100644 be3f76e a882325 M	src/gource.cpp
+
+user:Andrew Caudwell
+1260576735
+:100755 100755 37f41d8 363bba6 M	configure
+
+user:Andrew Caudwell
+1260576858
+:100644 100644 12ca80c f828683 M	src/core/display.cpp
+:100644 100644 d699517 09a3efb M	src/core/display.h
+:100644 100644 0e00e3d 876a16b M	src/core/sdlapp.cpp
+:100644 100644 cbe111e 03f92b0 M	src/core/sdlapp.h
+
+user:Andrew Caudwell
+1260577085
+:100644 100644 5f5ace2 b853d12 M	src/commitlog.cpp
+:100644 100644 13d81d4 5258d17 M	src/commitlog.h
+:100644 100644 6990aa6 8b365d2 M	src/git.cpp
+
+user:Andrew Caudwell
+1260577202
+:000000 100644 0000000 333e032 A	data/gource.style
+
+user:Andrew Caudwell
+1260577262
+:100644 100644 c2c3f7b c2f7bcf M	src/custom.cpp
+
+user:Andrew Caudwell
+1260577290
+:100644 100644 c05794d 2838022 M	src/Makefile.in
+:100644 100644 a882325 8e7be88 M	src/gource.cpp
+:100644 100644 bbd3c34 7e831f6 M	src/gource.h
+:000000 100644 0000000 3ed46db A	src/hg.cpp
+:000000 100644 0000000 b3010db A	src/hg.h
+:100644 100644 729162f 0e63cdf M	src/main.cpp
+
+user:Andrew Caudwell
+1260578387
+:100755 100755 687b180 12aea0c M	dev/bin/build_tar.pl
+:100644 100644 19e789e f4e08b9 M	dev/bin/build_win32.pl
+
+user:Andrew Caudwell
+1260578427
+:100644 100644 b7710a3 3a9a5b6 M	ChangeLog
+:100644 100644 edac898 882f183 M	README
+:100644 100644 8b5815d aaac113 M	data/gource.1
+
+user:Andrew Caudwell
+1260579011
+:100644 100644 856e47a 82b0f6d M	Makefile.in
+
+user:Andrew Caudwell
+1260579147
+:100644 100644 ff3db0b aa077db M	debian/changelog
+
+user:Andrew Caudwell
+1260582201
+:100644 100644 882f183 79230a4 M	README
+:100644 100644 aaac113 f62e400 M	data/gource.1
+:100644 100644 770be07 83b9493 M	src/dirnode.cpp
+:100644 100644 5752df3 d39448e M	src/dirnode.h
+:100644 100644 8e7be88 a7d48d4 M	src/gource.cpp
+:100644 100644 0e63cdf 04c75b2 M	src/main.cpp
+
+user:Andrew Caudwell
+1260583048
+:100644 100644 c2f7bcf 762bb74 M	src/custom.cpp
+
+user:Andrew Caudwell
+1260587168
+:100644 100644 3a9a5b6 589e709 M	ChangeLog
+:100644 100644 79230a4 5f78d6b M	README
+:100755 100755 363bba6 e75b54c M	configure
+:100644 100644 8337366 749164e M	configure.ac
+:100644 100644 f62e400 8c2e377 M	data/gource.1
+:100644 100644 a7d48d4 18c74f0 M	src/gource.cpp
+:100644 100644 7e831f6 3b288bc M	src/gource.h
+
+user:Andrew Caudwell
+1260587282
+:100644 100644 aa077db 7444a1a M	debian/changelog
+
+user:Andrew Caudwell
+1260592509
+:100644 100644 589e709 a02e2ee M	ChangeLog
+:100644 100644 876a16b 36cf6ff M	src/core/sdlapp.cpp
+:100644 100644 18c74f0 b86c020 M	src/gource.cpp
+:100644 100644 3b288bc 53bab4e M	src/gource.h
+
+user:Andrew Caudwell
+1260592546
+:100644 100644 1e5169e c964d34 M	contrib/svn-gource.py
+
+user:Andrew Caudwell
+1260593013
+:100644 100644 a02e2ee 81258e5 M	ChangeLog
+:100644 100644 9825036 77b7c80 M	gource.win32.cbp
+:100644 100644 53bab4e 446fd40 M	src/gource.h
+
+user:Justin Love
+1260631135
+:100644 100644 3ed46db 7582667 M	src/hg.cpp
+
+user:Andrew Caudwell
+1260645684
+:100644 100644 81258e5 ebc5d76 M	ChangeLog
+:100644 100644 749164e a663d89 M	configure.ac
+:100644 100644 7444a1a 7ac72e1 M	debian/changelog
+:100644 100644 446fd40 3b35898 M	src/gource.h
+
+user:Andrew Caudwell
+1260645895
+:100755 100755 e75b54c 0008d11 M	configure
+
+user:Andrew Caudwell
+1261007486
+:100644 100644 c964d34 464aa65 M	contrib/svn-gource.py
+
+user:Andrew Caudwell
+1261087002
+:100644 100644 464aa65 00df2f5 M	contrib/svn-gource.py
+
+user:Andrew Caudwell
+1261370380
+:100644 100644 ebc5d76 50762af M	ChangeLog
+:100755 100755 0008d11 c3b493e M	configure
+:100644 100644 a663d89 2c2afdc M	configure.ac
+:100644 100644 83b9493 15b9b6d M	src/dirnode.cpp
+:100644 100644 f14fcdc 93c4a73 M	src/file.cpp
+:100644 100644 64dc9f3 3ccbfd0 M	src/file.h
+:100644 100644 b86c020 dbddb8b M	src/gource.cpp
+:100644 100644 3b35898 157fe68 M	src/gource.h
+
+user:Andrew Caudwell
+1261430123
+:100644 100644 50762af e3949e5 M	ChangeLog
+:100644 100644 dbddb8b f4f1880 M	src/gource.cpp
+
+user:Andrew Caudwell
+1261433612
+:100644 100644 5f78d6b 688b88a M	README
+:100644 100644 8c2e377 34671d0 M	data/gource.1
+
+user:Andrew Caudwell
+1261437355
+:100644 100644 e3949e5 f9c5176 M	ChangeLog
+:100644 100644 688b88a e43bbfe M	README
+:100644 100644 34671d0 8cbb067 M	data/gource.1
+:100644 100644 f4f1880 927eead M	src/gource.cpp
+:100644 100644 157fe68 fe5ed44 M	src/gource.h
+:100644 100644 04c75b2 a33b80a M	src/main.cpp
+
+user:Andrew Caudwell
+1261437570
+:100644 100644 7ac72e1 00e8987 M	debian/changelog
+
+user:Andrew Caudwell
+1262157500
+:100644 100644 f4e08b9 13ef1a5 M	dev/bin/build_win32.pl
+:100644 100644 77b7c80 959f5aa M	gource.win32.cbp
+
+user:Andrew Caudwell
+1262937527
+:100644 100644 927eead 105e9b2 M	src/gource.cpp
+:100644 100644 fe5ed44 ff537d0 M	src/gource.h
+
+user:Andrew Caudwell
+1263001990
+:100644 100644 105e9b2 ad6dfe8 M	src/gource.cpp
+
+user:Andrew Caudwell
+1263005759
+:100644 100644 a33b80a e5321d7 M	src/main.cpp
+:100644 100644 e41a4bf 191e90d M	src/ppm.cpp
+:100644 100644 490f99e b9ecca8 M	src/ppm.h
+
+user:Andrew Caudwell
+1263446361
+:100644 100644 f9c5176 c9e2091 M	ChangeLog
+:100644 100644 b415a81 8de83e1 M	src/core/resource.h
+:100644 100644 ef69569 4a8fa36 M	src/core/texture.cpp
+:100644 100644 6b784b3 79f8e2d M	src/core/texture.h
+:100644 100644 ad6dfe8 3393670 M	src/gource.cpp
+:100644 100644 ff537d0 c1334ad M	src/gource.h
+:100644 100644 e5321d7 d56bdce M	src/main.cpp
+
+user:Andrew Caudwell
+1263504338
+:100644 100644 03f92b0 940b318 M	src/core/sdlapp.h
+:100644 100644 3cee625 687d36e M	src/core/seeklog.cpp
+:100644 100644 59ab401 dd616bb M	src/core/seeklog.h
+
+user:Diego Elio 'Flameeyes' Pettenò
+1263785083
+:100644 100644 e3cb4e9 ab90830 M	.gitignore
+:000000 100644 0000000 9213d81 A	Makefile.am
+:100644 000000 82b0f6d 0000000 D	Makefile.in
+:100644 000000 74c82bc 0000000 D	aclocal.m4
+:100755 000000 f32079a 0000000 D	config.guess
+:100755 000000 6759825 0000000 D	config.sub
+:100755 000000 c3b493e 0000000 D	configure
+:100644 100644 2c2afdc b07253c M	configure.ac
+:100755 000000 a5897de 0000000 D	install-sh
+:100644 000000 2838022 0000000 D	src/Makefile.in
+:100644 000000 b567d2d 0000000 D	src/core/Makefile.in
+
+user:Diego Elio 'Flameeyes' Pettenò
+1263785357
+:100644 100644 9213d81 b058caf M	Makefile.am
+
+user:Diego Elio 'Flameeyes' Pettenò
+1263785464
+:100644 100644 b058caf 9ceec87 M	Makefile.am
+
+user:Howard Chu
+1264281623
+:100644 100644 191e90d 3a6c7d1 M	src/ppm.cpp
+:100644 100644 b9ecca8 1149685 M	src/ppm.h
+
+user:Andrew Caudwell
+1264285603
+:100644 100644 3a6c7d1 6ebd25d M	src/ppm.cpp
+:100644 100644 1149685 71f61dd M	src/ppm.h
+
+user:Andrew Caudwell
+1264469810
+:100644 000000 e8b760e 0000000 D	contrib/mercurial-gource.py
+
+user:Andrew Caudwell
+1264470608
+:100644 100644 c9e2091 de3fac5 M	ChangeLog
+:100644 100644 9ceec87 0f35dcf M	Makefile.am
+:100644 100644 b07253c 6eadea4 M	configure.ac
+:100644 100644 00e8987 161d686 M	debian/changelog
+:100755 100755 12aea0c 73d1806 M	dev/bin/build_tar.pl
+:100644 100644 c1334ad 4039182 M	src/gource.h
+
+user:Andrew Caudwell
+1264471954
+:100644 100644 0f35dcf ac60179 M	Makefile.am
+:100644 100644 36cf6ff 56cf41b M	src/core/sdlapp.cpp
+:100644 100644 940b318 2c292a8 M	src/core/sdlapp.h
+
+user:Andrew Caudwell
+1264575861
+:100644 100644 de3fac5 76f873e M	ChangeLog
+:100644 100644 3393670 9abbc1c M	src/gource.cpp
+:100644 100644 4039182 62e5381 M	src/gource.h
+:100644 100644 d56bdce 2108e0e M	src/main.cpp
+
+user:Howard Chu
+1264629744
+:100644 100644 191e90d 3a6c7d1 M	src/ppm.cpp
+:100644 100644 b9ecca8 1149685 M	src/ppm.h
+
+user:Andrew Caudwell
+1264629744
+:100644 100644 3a6c7d1 6ebd25d M	src/ppm.cpp
+:100644 100644 1149685 71f61dd M	src/ppm.h
+
+user:Andrew Caudwell
+1264632025
+:100644 100644 6ebd25d 6551acf M	src/ppm.cpp
+:100644 100644 71f61dd abd4827 M	src/ppm.h
+
+user:Andrew Caudwell
+1264646094
+:100644 100644 f828683 54f02ff M	src/core/display.cpp
+:100644 100644 09a3efb 0ed79c3 M	src/core/display.h
+
+user:Andrew Caudwell
+1264646403
+:100644 100644 76f873e f5d93c8 M	ChangeLog
+:100644 100644 6551acf 14e5dba M	src/ppm.cpp
+:100644 100644 abd4827 aefead8 M	src/ppm.h
+
+user:Andrew Caudwell
+1264646650
+user:Andrew Caudwell
+1264646803
+:100644 100644 6383671 58ba884 M	src/ppm.cpp
+
+user:Andrew Caudwell
+1264652647
+:100644 100644 76f873e edeaa04 M	ChangeLog
+:100644 100644 2108e0e 41dba99 M	src/main.cpp
+
+user:Andrew Caudwell
+1264654845
+:100644 100644 f828683 de032a9 M	src/core/display.cpp
+:100644 100644 09a3efb f6a946b M	src/core/display.h
+:100644 100644 5b03cdc 9b9a348 M	src/core/fxfont.cpp
+:100644 100644 a2f2c44 09f7758 M	src/core/fxfont.h
+:100644 100644 ee2d2da d23efcc M	src/core/logger.cpp
+:100644 100644 b18cbd7 eec3b21 M	src/core/regex.cpp
+:100644 100644 929914b 00254e7 M	src/core/regex.h
+:100644 100644 41dba99 0373dc4 M	src/main.cpp
+:100644 100644 191e90d fb3e807 M	src/ppm.cpp
+:100644 100644 b9ecca8 9258fce M	src/ppm.h
+
+user:Andrew Caudwell
+1264719594
+:100644 100644 eec3b21 05a78cc M	src/core/regex.cpp
+
+user:Andrew Caudwell
+1264719622
+:100644 100644 687d36e 8768950 M	src/core/seeklog.cpp
+:100644 100644 dd616bb c2da1ef M	src/core/seeklog.h
+
+user:Andrew Caudwell
+1264719651
+:100644 100644 56cf41b d9692c7 M	src/core/sdlapp.cpp
+:100644 100644 2c292a8 e025dcb M	src/core/sdlapp.h
+:100644 100644 9abbc1c 3573935 M	src/gource.cpp
+:100644 100644 62e5381 e220753 M	src/gource.h
+:100644 100644 0373dc4 984ce18 M	src/main.cpp
+
+user:Andrew Caudwell
+1264727667
+:100644 100644 ac60179 68c310f M	Makefile.am
+
+user:Andrew Caudwell
+1264734381
+:100644 100644 68c310f 8d4aa2a M	Makefile.am
+
+user:Andrew Caudwell
+1264818334
+:100644 100644 d9692c7 94030a5 M	src/core/sdlapp.cpp
+:100644 100644 984ce18 52817ff M	src/main.cpp
+
+user:Andrew Caudwell
+1264886695
+:100644 100644 8768950 050f532 M	src/core/seeklog.cpp
+:100644 100644 c2da1ef afb6a4d M	src/core/seeklog.h
+
+user:Andrew Caudwell
+1264887317
+:100644 100644 050f532 424d2f1 M	src/core/seeklog.cpp
+:100644 100644 afb6a4d eb5c4c7 M	src/core/seeklog.h
+:100644 100644 3573935 8a85ad9 M	src/gource.cpp
+
+user:Andrew Caudwell
+1264888939
+user:Andrew Caudwell
+1264892185
+:100644 100644 1c63e1d 391f68e M	ChangeLog
+:100644 100644 b853d12 2628671 M	src/commitlog.cpp
+:100644 100644 5258d17 a0995c3 M	src/commitlog.h
+:100644 100644 762bb74 1efb8c2 M	src/custom.cpp
+:100644 100644 3951214 be8d0ff M	src/custom.h
+
+user:Andrew Caudwell
+1264894382
+:100644 100644 8d4aa2a 29ad85b M	Makefile.am
+:100755 100755 73d1806 d9ae23c M	dev/bin/build_tar.pl
+
+user:Andrew Caudwell
+1264894465
+:100644 100644 29ad85b 15e700f M	Makefile.am
+
+user:Andrew Caudwell
+1264894701
+:100644 100644 15e700f 703a0e6 M	Makefile.am
+
+user:Andrew Caudwell
+1264894999
+:100644 100644 703a0e6 dfc8f93 M	Makefile.am
+
+user:Andrew Caudwell
+1264975528
+:100644 100644 8a85ad9 633fd87 M	src/gource.cpp
+
+user:Andrew Caudwell
+1264975573
+:100644 100644 391f68e 7b2c616 M	ChangeLog
+:100644 100644 2628671 689a100 M	src/commitlog.cpp
+:100644 100644 424d2f1 908ff37 M	src/core/seeklog.cpp
+
+user:Andrew Caudwell
+1264976643
+:100644 100644 6eadea4 cb5ad0a M	configure.ac

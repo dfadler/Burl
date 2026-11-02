@@ -140,7 +140,7 @@ fn parse_args(arguments: &[Vec<u8>], p: &mut Phase1) {
         let Some(ty) = arg_type(&name) else {
             quit(&format!("unknown option {}", name))
         };
-        let value: Vec<u8> = if ty == ArgType::Bool {
+        let value: Vec<u8> = if matches!(ty, ArgType::Bool | ArgType::Ignored) {
             b"true".to_vec()
         } else if i + 1 < arguments.len() {
             i += 1;

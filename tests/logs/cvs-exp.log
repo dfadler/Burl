@@ -1,0 +1,14 @@
+000001:
+(date: 2004-01-02 03:04:05;  author: bob;  state: Exp;  lines: +1 -0)
+| src/a.c,v:1.1,
+
+first
+
+==========
+000002:
+(date: 2004-01-03 03:04:05;  author: amy;  state: dead;  lines: +0 -0)
+| src/a.c,v:1.2,
+
+second
+
+==========

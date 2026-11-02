@@ -1,6 +1,6 @@
-//! `src/formats/cvs-exp.cpp`: output of `cvs-exp.pl -notree`. Reachable only through
-//! auto-detection: `--log-format cvs-exp` is accepted by settings but `fetchLog` matches
-//! the string `"cvs"`, which settings reject (log-formats.md sec. 1 item 7; kept for parity).
+//! `src/formats/cvs-exp.cpp`: output of `cvs-exp.pl -notree`. Gource only reached it through
+//! auto-detection (`fetchLog` matched `"cvs"`, which settings reject); Burl also accepts an
+//! explicit `--log-format cvs-exp` (decision D5, log-formats.md sec. 1 item 7).
 
 use crate::commit::RCommit;
 use crate::commitlog::{CommitLog, CommitLogBase};

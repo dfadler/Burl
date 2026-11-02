@@ -65,8 +65,8 @@ fn fetch(logfile: &str, log_format: &str, s: &Arc<LogSettings>) -> Attempt {
             }
             "hg" => attempt!(hg::MercurialLog::new(logfile, s.clone())),
             "bzr" => attempt!(bzr::BazaarLog::new(logfile, s.clone())),
-            // only "cvs" reaches cvs-exp here, and settings reject "cvs": preserved C++ bug
-            "cvs" => attempt!(cvs_exp::CVSEXPCommitLog::new(logfile, s.clone())),
+            // D5: C++ matched "cvs" here, which settings reject, so explicit cvs-exp never worked
+            "cvs-exp" => attempt!(cvs_exp::CVSEXPCommitLog::new(logfile, s.clone())),
             "custom" => attempt!(custom::CustomLog::new(logfile, s.clone())),
             "apache" => attempt!(apache::ApacheCombinedLog::new(logfile, s.clone())),
             "svn" => attempt!(svn::SVNCommitLog::new(logfile, s.clone())),

@@ -110,7 +110,7 @@ Extended Options:
   --file-filter REGEX      Ignore file paths matching this regex
   --file-show-filter REGEX Show only file paths matching this regex
 
-  --user-friction SECONDS  Change the rate users slow down (default: 0.67)
+  --user-friction SECONDS  Change the rate users slow down (default: 1.0)
   --user-scale SCALE       Change scale of users (default: 1.0)
   --max-user-speed UNITS   Speed users can travel per second (default: 500)
 
@@ -126,7 +126,7 @@ Extended Options:
 
   --dir-name-depth DEPTH    Draw names of directories down to a specific depth.
   --dir-name-position FLOAT Position along edge of the directory name
-                            (between 0.0 and 1.0, default is 0.5).
+                            (between 0.1 and 1.0, default is 0.5).
 
   --filename-time SECONDS  Duration to keep filenames on screen (default: 4.0)
 

@@ -1,12 +1,12 @@
-//! `src/formats/cvs-exp.cpp`: output of `cvs-exp.pl -notree`. Reachable only through
-//! auto-detection: `--log-format cvs-exp` is accepted by settings but `fetchLog` matches
-//! the string `"cvs"`, which settings reject (log-formats.md sec. 1 item 7; kept for parity).
+//! `src/formats/cvs-exp.cpp`: output of `cvs-exp.pl -notree`. Gource only reached it through
+//! auto-detection (`fetchLog` matched `"cvs"`, which settings reject); Burl also accepts an
+//! explicit `--log-format cvs-exp` (decision D5, log-formats.md sec. 1 item 7).
 
 use crate::commit::RCommit;
 use crate::commitlog::{CommitLog, CommitLogBase};
+use crate::formats::svn::tm_from_entries;
 use crate::seeklog::SeekLogError;
 use crate::settings::LogSettings;
-use crate::formats::svn::tm_from_entries;
 use burl_util::regex::Regex;
 use burl_util::timeparse::mktime_local;
 use std::sync::{Arc, LazyLock};
@@ -16,9 +16,12 @@ pub const LOG_COMMAND: &str = "cvs-exp.pl -notree";
 static COMMITNO: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"^([0-9]{6}):"));
 static BRANCH: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"^BRANCH \[(.+)\]$"));
 static DATE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::must(r"^\(date: ([0-9]{4})[-/]([0-9]{2})[-/]([0-9]{2}) ([0-9]{2}):([0-9]{2}):([0-9]{2})(?: [+-][0-9]{4})?;(.+)$")
+    Regex::must(
+        r"^\(date: ([0-9]{4})[-/]([0-9]{2})[-/]([0-9]{2}) ([0-9]{2}):([0-9]{2}):([0-9]{2})(?: [+-][0-9]{4})?;(.+)$",
+    )
 });
-static DETAIL: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"author: ([^;]+);  state: ([^;]+);(.+)$"));
+static DETAIL: LazyLock<Regex> =
+    LazyLock::new(|| Regex::must(r"author: ([^;]+);  state: ([^;]+);(.+)$"));
 static ENTRY: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"\| (.+),v:([0-9.]+),?"));
 static END: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"^(=+)$"));
 
@@ -28,7 +31,9 @@ pub struct CVSEXPCommitLog {
 
 impl CVSEXPCommitLog {
     pub fn new(logfile: &str, settings: Arc<LogSettings>) -> Result<CVSEXPCommitLog, SeekLogError> {
-        Ok(CVSEXPCommitLog { base: CommitLogBase::open(logfile, None, settings)? })
+        Ok(CVSEXPCommitLog {
+            base: CommitLogBase::open(logfile, None, settings)?,
+        })
     }
 }
 
@@ -63,10 +68,14 @@ impl CommitLog for CVSEXPCommitLog {
                 return false;
             }
         }
-        let Some(entries) = DATE.captures(&line) else { return false };
+        let Some(entries) = DATE.captures(&line) else {
+            return false;
+        };
         commit.timestamp = mktime_local(&tm_from_entries(&entries));
         let rest = entries[6].clone();
-        let Some(entries) = DETAIL.captures(&rest) else { return false };
+        let Some(entries) = DETAIL.captures(&rest) else {
+            return false;
+        };
         commit.username = entries[0].clone();
         let commit_action = if entries[1] == b"dead" { "D" } else { "M" };
         if !self.base.raw_next_line(&mut line) {

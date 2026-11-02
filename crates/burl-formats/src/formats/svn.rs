@@ -15,12 +15,21 @@ use std::sync::{Arc, LazyLock};
 static XML_TAG: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"^<\??xml"));
 static LOGENTRY_START: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"^<logentry"));
 static LOGENTRY_END: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"^</logentry>"));
-static TIMESTAMP: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})"));
+static TIMESTAMP: LazyLock<Regex> =
+    LazyLock::new(|| Regex::must(r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})"));
 
 /// `SVNCommitLog::logCommand()`.
 pub fn log_command(settings: &LogSettings) -> String {
-    let start = if settings.start_date.is_empty() { "1".to_string() } else { format!("{{{}}}", settings.start_date) };
-    let stop = if settings.stop_date.is_empty() { "HEAD".to_string() } else { format!("{{{}}}", settings.stop_date) };
+    let start = if settings.start_date.is_empty() {
+        "1".to_string()
+    } else {
+        format!("{{{}}}", settings.start_date)
+    };
+    let stop = if settings.stop_date.is_empty() {
+        "HEAD".to_string()
+    } else {
+        format!("{{{}}}", settings.stop_date)
+    };
     format!("svn log -r {}:{} --xml --verbose --quiet", start, stop)
 }
 
@@ -33,7 +42,10 @@ impl SVNCommitLog {
         let mut base = CommitLogBase::open(logfile, Some(b'<'), settings)?;
         if base.logf.is_none() && base.is_dir {
             let svndir = Path::new(logfile).join(".svn");
-            if std::fs::metadata(&svndir).map(|m| m.is_dir()).unwrap_or(false) {
+            if std::fs::metadata(&svndir)
+                .map(|m| m.is_dir())
+                .unwrap_or(false)
+            {
                 let cmd = log_command(&base.settings);
                 base.run_log_command(&cmd, Some(Path::new(logfile)))?;
             }
@@ -98,17 +110,27 @@ impl CommitLog for SVNCommitLog {
     super::impl_base!(SVNCommitLog);
 
     fn parse_commit(&mut self, commit: &mut RCommit) -> bool {
-        let Some(logentry) = read_entry(&mut self.base, &LOGENTRY_START, &LOGENTRY_END) else { return false };
+        let Some(logentry) = read_entry(&mut self.base, &LOGENTRY_START, &LOGENTRY_END) else {
+            return false;
+        };
         let settings = self.base.settings.clone();
-        let Some(doc) = xml::parse_fragment(&logentry) else { return false };
+        let Some(doc) = xml::parse_fragment(&logentry) else {
+            return false;
+        };
         let root = doc.root_element();
         if root.tag_name().name() != "logentry" {
             return false;
         }
         // date (a <date> without text would crash the C++; treat as failure)
-        let Some(date) = xml::first_child_element(root, "date") else { return false };
-        let Some(ts) = xml::get_text(date) else { return false };
-        let Some(entries) = TIMESTAMP.captures(ts.as_bytes()) else { return false };
+        let Some(date) = xml::first_child_element(root, "date") else {
+            return false;
+        };
+        let Some(ts) = xml::get_text(date) else {
+            return false;
+        };
+        let Some(entries) = TIMESTAMP.captures(ts.as_bytes()) else {
+            return false;
+        };
         commit.timestamp = timegm(&tm_from_entries(&entries));
         // author
         if let Some(author) = xml::first_child_element(root, "author") {
@@ -119,10 +141,14 @@ impl CommitLog for SVNCommitLog {
             commit.username = name.into_bytes();
         }
         // log entries sometimes dont have any paths
-        let Some(paths) = xml::first_child_element(root, "paths") else { return true };
+        let Some(paths) = xml::first_child_element(root, "paths") else {
+            return true;
+        };
         for path in xml::sibling_elements_from(paths, "path") {
             let kind = path.attribute("kind");
-            let Some(action) = path.attribute("action") else { continue };
+            let Some(action) = path.attribute("action") else {
+                continue;
+            };
             let mut is_dir = false;
             if kind == Some("dir") {
                 // accept only deletes for directories
@@ -131,7 +157,9 @@ impl CommitLog for SVNCommitLog {
                 }
                 is_dir = true;
             }
-            let Some(mut file) = xml::get_text(path) else { return false };
+            let Some(mut file) = xml::get_text(path) else {
+                return false;
+            };
             if file.is_empty() || action.is_empty() {
                 continue;
             }
@@ -154,8 +182,18 @@ mod tests {
 
     #[test]
     fn command_string() {
-        assert_eq!(log_command(&LogSettings::default()), "svn log -r 1:HEAD --xml --verbose --quiet");
-        let s = LogSettings { start_date: "2020-01-01".into(), stop_date: "2020-02-02".into(), ..LogSettings::default() };
-        assert_eq!(log_command(&s), "svn log -r {2020-01-01}:{2020-02-02} --xml --verbose --quiet");
+        assert_eq!(
+            log_command(&LogSettings::default()),
+            "svn log -r 1:HEAD --xml --verbose --quiet"
+        );
+        let s = LogSettings {
+            start_date: "2020-01-01".into(),
+            stop_date: "2020-02-02".into(),
+            ..LogSettings::default()
+        };
+        assert_eq!(
+            log_command(&s),
+            "svn log -r {2020-01-01}:{2020-02-02} --xml --verbose --quiet"
+        );
     }
 }

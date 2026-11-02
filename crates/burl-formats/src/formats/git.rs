@@ -10,7 +10,8 @@ use burl_util::regex::Regex;
 use std::path::Path;
 use std::sync::{Arc, LazyLock, Mutex};
 
-static GIT_VERSION_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"([0-9]+)(?:\.([0-9]+))?(?:\.([0-9]+))?"));
+static GIT_VERSION_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::must(r"([0-9]+)(?:\.([0-9]+))?(?:\.([0-9]+))?"));
 static GIT_VERSION: Mutex<(i32, i32, i32)> = Mutex::new((0, 0, 0));
 
 /// `readGitVersion`: `git --version > tmp`, cached once the major is known.
@@ -19,7 +20,9 @@ fn read_git_version() -> (i32, i32, i32) {
     if cached.0 != 0 {
         return *cached;
     }
-    let Some(temp) = CommitLogBase::create_temp_file() else { return *cached };
+    let Some(temp) = CommitLogBase::create_temp_file() else {
+        return *cached;
+    };
     let rc = std::process::Command::new("sh")
         .arg("-c")
         .arg(format!("git --version > {}", temp.display()))
@@ -31,8 +34,12 @@ fn read_git_version() -> (i32, i32, i32) {
     if !matches!(rc, Ok(st) if st.success()) {
         return *cached;
     }
-    let Some(line) = first_line else { return *cached };
-    let Some(entries) = GIT_VERSION_REGEX.captures(&line) else { return *cached };
+    let Some(line) = first_line else {
+        return *cached;
+    };
+    let Some(entries) = GIT_VERSION_REGEX.captures(&line) else {
+        return *cached;
+    };
     cached.0 = atoi(&entries[0]);
     if entries.len() > 1 {
         cached.1 = atoi(&entries[1]);
@@ -84,7 +91,9 @@ impl GitCommitLog {
         let mut base = CommitLogBase::open(logfile, Some(b'u'), settings)?;
         if base.logf.is_none() && base.is_dir {
             let gitdir = Path::new(logfile).join(".git");
-            let generatable = std::fs::metadata(&gitdir).map(|m| m.is_dir() || m.is_file()).unwrap_or(false);
+            let generatable = std::fs::metadata(&gitdir)
+                .map(|m| m.is_dir() || m.is_file())
+                .unwrap_or(false);
             if generatable {
                 let cmd = log_command(&base.settings);
                 base.run_log_command(&cmd, Some(Path::new(logfile)))?;
@@ -118,7 +127,9 @@ impl CommitLog for GitCommitLog {
             if commit.username.is_empty() {
                 return false;
             }
-            let Some(tab) = line.iter().position(|&b| b == b'\t') else { continue };
+            let Some(tab) = line.iter().position(|&b| b == b'\t') else {
+                continue;
+            };
             if tab == 0 || tab == line.len() - 1 {
                 continue;
             }
@@ -177,7 +188,12 @@ mod tests {
     #[test]
     fn parses_blank_line_delimited_commits() {
         let text = b"user:Bob Smith\n1277787455\n:000000 100644 0000000 abcdef0 A\tpath/a.txt\n:100644 100644 abcdef0 1234567 M\t\"quoted name\"\n\nuser:Merge\n1277787460\n\nuser:Ann\n1277787470\n:000000 100644 0 1 D\tb\n";
-        let mut base = CommitLogBase::open("/nonexistent/gource-test", Some(b'u'), Arc::new(LogSettings::default())).unwrap();
+        let mut base = CommitLogBase::open(
+            "/nonexistent/gource-test",
+            Some(b'u'),
+            Arc::new(LogSettings::default()),
+        )
+        .unwrap();
         base.logf = Some(LogSource::Seek(SeekLog::from_bytes(text.to_vec())));
         base.seekable = true;
         base.success = true;

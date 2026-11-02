@@ -15,34 +15,49 @@ const MONTHS: [&[u8]; 12] = [
     b"Jan", b"Feb", b"Mar", b"Apr", b"May", b"Jun", b"Jul", b"Aug", b"Sep", b"Oct", b"Nov", b"Dec",
 ];
 
-static ENTRY_START: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"^(?:[^ ]+ )?([^ ]+) +[^ ]+ +([^ ]+) +\[(.*?)\] +(.*)$"));
-static ENTRY_DATE: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"(\d+)/([A-Za-z]+)/(\d+):(\d+):(\d+):(\d+) ([+-])(\d+)"));
-static ENTRY_REQUEST: LazyLock<Regex> = LazyLock::new(|| Regex::must(r#""([^ ]+) +([^ ]+) +([^ ]+)" +([^ ]+) +([^\s+]+)(.*)"#));
+static ENTRY_START: LazyLock<Regex> =
+    LazyLock::new(|| Regex::must(r"^(?:[^ ]+ )?([^ ]+) +[^ ]+ +([^ ]+) +\[(.*?)\] +(.*)$"));
+static ENTRY_DATE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::must(r"(\d+)/([A-Za-z]+)/(\d+):(\d+):(\d+):(\d+) ([+-])(\d+)"));
+static ENTRY_REQUEST: LazyLock<Regex> =
+    LazyLock::new(|| Regex::must(r#""([^ ]+) +([^ ]+) +([^ ]+)" +([^ ]+) +([^\s+]+)(.*)"#));
 
 pub struct ApacheCombinedLog {
     base: CommitLogBase,
 }
 
 impl ApacheCombinedLog {
-    pub fn new(logfile: &str, settings: Arc<LogSettings>) -> Result<ApacheCombinedLog, SeekLogError> {
-        Ok(ApacheCombinedLog { base: CommitLogBase::open(logfile, None, settings)? })
+    pub fn new(
+        logfile: &str,
+        settings: Arc<LogSettings>,
+    ) -> Result<ApacheCombinedLog, SeekLogError> {
+        Ok(ApacheCombinedLog {
+            base: CommitLogBase::open(logfile, None, settings)?,
+        })
     }
 }
 
 /// `parseCommit` on one line (pure, for tests).
 pub fn parse_line(line: &[u8], commit: &mut RCommit, settings: &LogSettings) -> bool {
-    let Some(matches) = ENTRY_START.captures(line) else { return false };
+    let Some(matches) = ENTRY_START.captures(line) else {
+        return false;
+    };
     if matches.len() != 4 {
         return false;
     }
     commit.username = matches[0].clone();
     let request_str = matches[3].clone();
     let datestr = matches[2].clone();
-    let Some(m) = ENTRY_DATE.captures(&datestr) else { return false };
+    let Some(m) = ENTRY_DATE.captures(&datestr) else {
+        return false;
+    };
     if m.len() != 8 {
         return false;
     }
-    let month = MONTHS.iter().position(|&name| name == m[1].as_slice()).unwrap_or(0);
+    let month = MONTHS
+        .iter()
+        .position(|&name| name == m[1].as_slice())
+        .unwrap_or(0);
     let tm = Tm {
         year: atoi(&m[2]) as i64,
         mon: month as i64,
@@ -52,7 +67,9 @@ pub fn parse_line(line: &[u8], commit: &mut RCommit, settings: &LogSettings) -> 
         sec: atoi(&m[5]) as i64,
     };
     commit.timestamp = mktime_local(&tm);
-    let Some(m) = ENTRY_REQUEST.captures(&request_str) else { return false };
+    let Some(m) = ENTRY_REQUEST.captures(&request_str) else {
+        return false;
+    };
     if m.len() < 5 {
         return false;
     }

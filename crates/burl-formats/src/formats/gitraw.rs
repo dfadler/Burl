@@ -13,9 +13,12 @@ pub const LOG_COMMAND: &str = "git log --reverse --raw --pretty=raw";
 static COMMIT: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"^commit ([0-9a-z]+)"));
 static TREE: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"^tree ([0-9a-z]+)"));
 static PARENT: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"^parent ([0-9a-z]+)"));
-static AUTHOR: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"^author (.+) <([^@>]+)@?([^>]*)> (\d+) ([-+]\d+)"));
-static COMMITTER: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"^committer (.+) <([^@>]+)@?([^>]*)> (\d+) ([-+]\d+)"));
-static FILE: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"^:[0-9]+ [0-9]+ [0-9a-z]+\.* ([0-9a-z]+)\.* ([A-Z])[ \t]+(.+)"));
+static AUTHOR: LazyLock<Regex> =
+    LazyLock::new(|| Regex::must(r"^author (.+) <([^@>]+)@?([^>]*)> (\d+) ([-+]\d+)"));
+static COMMITTER: LazyLock<Regex> =
+    LazyLock::new(|| Regex::must(r"^committer (.+) <([^@>]+)@?([^>]*)> (\d+) ([-+]\d+)"));
+static FILE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::must(r"^:[0-9]+ [0-9]+ [0-9a-z]+\.* ([0-9a-z]+)\.* ([A-Z])[ \t]+(.+)"));
 
 pub struct GitRawCommitLog {
     base: CommitLogBase,
@@ -23,7 +26,9 @@ pub struct GitRawCommitLog {
 
 impl GitRawCommitLog {
     pub fn new(logfile: &str, settings: Arc<LogSettings>) -> Result<GitRawCommitLog, SeekLogError> {
-        Ok(GitRawCommitLog { base: CommitLogBase::open(logfile, Some(b'c'), settings)? })
+        Ok(GitRawCommitLog {
+            base: CommitLogBase::open(logfile, Some(b'c'), settings)?,
+        })
     }
 }
 
@@ -51,13 +56,17 @@ impl CommitLog for GitRawCommitLog {
             }
         }
         // author - used for display name
-        let Some(entries) = AUTHOR.captures(&line) else { return false };
+        let Some(entries) = AUTHOR.captures(&line) else {
+            return false;
+        };
         commit.username = entries[0].clone();
         // committer - used for time
         if !self.base.raw_next_line(&mut line) {
             return false;
         }
-        let Some(entries) = COMMITTER.captures(&line) else { return false };
+        let Some(entries) = COMMITTER.captures(&line) else {
+            return false;
+        };
         commit.timestamp = atoll(&entries[3]);
         // blank line before message
         if !self.base.raw_next_line(&mut line) {

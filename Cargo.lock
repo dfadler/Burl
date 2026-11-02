@@ -74,6 +74,7 @@ name = "burl-util"
 version = "0.57.0"
 dependencies = [
  "chrono",
+ "glam",
  "pcre2",
  "regex",
 ]
@@ -153,6 +154,12 @@ dependencies = [
  "libc",
  "r-efi",
 ]
+
+[[package]]
+name = "glam"
+version = "0.34.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54af5066834d6c2d404eb26ea036a15b15d9ff80db510b9a73ff95ab07f30831"
 
 [[package]]
 name = "iana-time-zone"

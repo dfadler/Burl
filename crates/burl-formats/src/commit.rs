@@ -22,7 +22,11 @@ impl RCommitFile {
         if !filename.starts_with('/') {
             filename.insert(0, '/');
         }
-        RCommitFile { filename, action: action.to_string(), colour }
+        RCommitFile {
+            filename,
+            action: action.to_string(),
+            colour,
+        }
     }
 }
 
@@ -62,11 +66,21 @@ impl RCommit {
     }
 
     /// `addFile(filename, action, colour)`: file filters run on the raw filename.
-    pub fn add_file_coloured(&mut self, filename: &[u8], action: &str, colour: Vec3, settings: &LogSettings) {
+    pub fn add_file_coloured(
+        &mut self,
+        filename: &[u8],
+        action: &str,
+        colour: Vec3,
+        settings: &LogSettings,
+    ) {
         if settings.file_filters.iter().any(|r| r.is_match(filename)) {
             return;
         }
-        if settings.file_show_filters.iter().any(|r| !r.is_match(filename)) {
+        if settings
+            .file_show_filters
+            .iter()
+            .any(|r| !r.is_match(filename))
+        {
             return;
         }
         self.files.push(RCommitFile::new(filename, action, colour));
@@ -79,10 +93,18 @@ impl RCommit {
 
     /// `isValid`: user filters, then at least one file.
     pub fn is_valid(&self, settings: &LogSettings) -> bool {
-        if settings.user_filters.iter().any(|r| r.is_match(&self.username)) {
+        if settings
+            .user_filters
+            .iter()
+            .any(|r| r.is_match(&self.username))
+        {
             return false;
         }
-        if settings.user_show_filters.iter().any(|r| !r.is_match(&self.username)) {
+        if settings
+            .user_show_filters
+            .iter()
+            .any(|r| !r.is_match(&self.username))
+        {
             return false;
         }
         !self.files.is_empty()
@@ -100,8 +122,14 @@ mod tests {
         assert_eq!(f.filename, "/path/to/1.txt");
         assert_eq!(RCommitFile::new(b"/x", "D", [0.0; 3]).filename, "/x");
         assert_eq!(RCommitFile::new(b"", "A", [0.0; 3]).filename, "/");
-        assert_eq!(RCommitFile::new(b"a\xffb/", "A", [0.0; 3]).filename, "/a?b/");
-        assert_eq!(RCommitFile::new(b".\\x//y/", "A", [0.0; 3]).filename, "/.\\x//y/");
+        assert_eq!(
+            RCommitFile::new(b"a\xffb/", "A", [0.0; 3]).filename,
+            "/a?b/"
+        );
+        assert_eq!(
+            RCommitFile::new(b".\\x//y/", "A", [0.0; 3]).filename,
+            "/.\\x//y/"
+        );
     }
 
     #[test]
@@ -110,7 +138,10 @@ mod tests {
         assert_eq!(RCommit::file_colour(b"a/b", 31), white);
         assert_eq!(RCommit::file_colour(b"a.txt/b", 31), white);
         assert_eq!(RCommit::file_colour(b"a/b.", 31), white);
-        assert_eq!(RCommit::file_colour(b"a/b.txt", 31), colour_hash(b"txt", 31));
+        assert_eq!(
+            RCommit::file_colour(b"a/b.txt", 31),
+            colour_hash(b"txt", 31)
+        );
         assert_eq!(RCommit::file_colour(b".txt", 31), colour_hash(b"txt", 31));
     }
 

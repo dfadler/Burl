@@ -70,7 +70,9 @@ pub fn mktime_local(tm: &Tm) -> i64 {
 }
 
 static TIMESTAMP_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::must(r"^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{1,2}):(\d{2})(?::(\d{2}(?:\.\d+)?))?)?(Z| ?([+-])(\d{1,2})(?::?(\d{2}))?)?$")
+    Regex::must(
+        r"^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{1,2}):(\d{2})(?::(\d{2}(?:\.\d+)?))?)?(Z| ?([+-])(\d{1,2})(?::?(\d{2}))?)?$",
+    )
 });
 
 /// `parseDateTime` with an explicit local zone.
@@ -96,7 +98,11 @@ pub fn parse_date_time_tz<Tz: TimeZone>(datetime: &[u8], local: &Tz) -> Option<i
         timegm(&tm)
     } else if results.len() >= 9 {
         let tz_hour = atoi(&results[8]) as i64;
-        let tz_min = if results.len() >= 10 { atoi(&results[9]) as i64 } else { 0 };
+        let tz_min = if results.len() >= 10 {
+            atoi(&results[9]) as i64
+        } else {
+            0
+        };
         let mut tz_offset = tz_hour * 3600 + tz_min * 60;
         if results[7] == b"-" {
             tz_offset = -tz_offset;
@@ -120,22 +126,80 @@ mod tests {
 
     #[test]
     fn timegm_normalises() {
-        assert_eq!(timegm(&Tm { year: 1970, mon: 0, mday: 1, ..Tm::default() }), 0);
-        assert_eq!(timegm(&Tm { year: 2021, mon: 10, mday: 1, ..Tm::default() }), 1635724800);
+        assert_eq!(
+            timegm(&Tm {
+                year: 1970,
+                mon: 0,
+                mday: 1,
+                ..Tm::default()
+            }),
+            0
+        );
+        assert_eq!(
+            timegm(&Tm {
+                year: 2021,
+                mon: 10,
+                mday: 1,
+                ..Tm::default()
+            }),
+            1635724800
+        );
         // month 13 -> next January; day 0 -> last day of previous month; hour 25 -> next day
         assert_eq!(
-            timegm(&Tm { year: 2021, mon: 12, mday: 1, ..Tm::default() }),
-            timegm(&Tm { year: 2022, mon: 0, mday: 1, ..Tm::default() })
+            timegm(&Tm {
+                year: 2021,
+                mon: 12,
+                mday: 1,
+                ..Tm::default()
+            }),
+            timegm(&Tm {
+                year: 2022,
+                mon: 0,
+                mday: 1,
+                ..Tm::default()
+            })
         );
         assert_eq!(
-            timegm(&Tm { year: 2021, mon: 2, mday: 0, ..Tm::default() }),
-            timegm(&Tm { year: 2021, mon: 1, mday: 28, ..Tm::default() })
+            timegm(&Tm {
+                year: 2021,
+                mon: 2,
+                mday: 0,
+                ..Tm::default()
+            }),
+            timegm(&Tm {
+                year: 2021,
+                mon: 1,
+                mday: 28,
+                ..Tm::default()
+            })
         );
         assert_eq!(
-            timegm(&Tm { year: 2021, mon: 0, mday: 1, hour: 25, ..Tm::default() }),
-            timegm(&Tm { year: 2021, mon: 0, mday: 2, hour: 1, ..Tm::default() })
+            timegm(&Tm {
+                year: 2021,
+                mon: 0,
+                mday: 1,
+                hour: 25,
+                ..Tm::default()
+            }),
+            timegm(&Tm {
+                year: 2021,
+                mon: 0,
+                mday: 2,
+                hour: 1,
+                ..Tm::default()
+            })
         );
-        assert_eq!(timegm(&Tm { year: 2010, mon: 0, mday: 20, hour: 8, min: 35, sec: 18 }), 1263976518);
+        assert_eq!(
+            timegm(&Tm {
+                year: 2010,
+                mon: 0,
+                mday: 20,
+                hour: 8,
+                min: 35,
+                sec: 18
+            }),
+            1263976518
+        );
     }
 
     /// The 28 vectors from src/test/datetime_tests.cpp (unit-tests.md). Row 1 runs with
@@ -175,7 +239,11 @@ mod tests {
             ("2021-11-01T12:01:59.123+5:30", 1635748319),
         ];
         for (input, expected) in rows {
-            assert_eq!(parse_date_time_tz(input.as_bytes(), &nz), Some(expected), "{input}");
+            assert_eq!(
+                parse_date_time_tz(input.as_bytes(), &nz),
+                Some(expected),
+                "{input}"
+            );
         }
     }
 
@@ -184,6 +252,9 @@ mod tests {
         assert_eq!(parse_date_time_tz(b"", &Utc), None);
         assert_eq!(parse_date_time_tz(b"2021-11-01x", &Utc), None);
         assert_eq!(parse_date_time_tz(b"1277787455", &Utc), None);
-        assert_eq!(parse_date_time_tz(b"2010-06-29 16:57:45", &Utc), Some(1277830665));
+        assert_eq!(
+            parse_date_time_tz(b"2010-06-29 16:57:45", &Utc),
+            Some(1277830665)
+        );
     }
 }

@@ -16,13 +16,20 @@ use std::sync::{Arc, LazyLock};
 
 const EXEC: &str = "burl";
 
-static VIEWPORT_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::must(r"^([0-9.]+)x([0-9.]+)(!)?$"));
+static VIEWPORT_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::must(r"^([0-9.]+)x([0-9.]+)(!)?$"));
 
 /// `SDLAppQuit`: stderr `gource: <msg>` + the Try line + a blank line, exit 1.
 fn quit(msg: &str) -> ! {
     let _ = std::io::stdout().flush();
     let mut err = std::io::stderr().lock();
-    let _ = write!(err, "{}: {}\nTry '{}--help' for more information.\n\n", EXEC, msg, format_args!("{} ", EXEC));
+    let _ = write!(
+        err,
+        "{}: {}\nTry '{}--help' for more information.\n\n",
+        EXEC,
+        msg,
+        format_args!("{} ", EXEC)
+    );
     let _ = err.flush();
     std::process::exit(1);
 }
@@ -130,7 +137,9 @@ fn parse_args(arguments: &[Vec<u8>], p: &mut Phase1) {
             i += 1;
             continue;
         }
-        let Some(ty) = arg_type(&name) else { quit(&format!("unknown option {}", name)) };
+        let Some(ty) = arg_type(&name) else {
+            quit(&format!("unknown option {}", name))
+        };
         let value: Vec<u8> = if ty == ArgType::Bool {
             b"true".to_vec()
         } else if i + 1 < arguments.len() {
@@ -163,7 +172,10 @@ fn import(p: &Phase1) -> (String, String) {
         if log_format == "cvs" {
             quit("please use either 'cvs2cl' or 'cvs-exp'");
         }
-        if !matches!(log_format.as_str(), "git" | "cvs-exp" | "cvs2cl" | "svn" | "custom" | "hg" | "bzr" | "apache") {
+        if !matches!(
+            log_format.as_str(),
+            "git" | "cvs-exp" | "cvs2cl" | "svn" | "custom" | "hg" | "bzr" | "apache"
+        ) {
             quit("invalid 'log-format' value");
         }
     }
@@ -185,7 +197,10 @@ fn import(p: &Phase1) -> (String, String) {
 
 /// `Gource::writeCustomLog`.
 fn write_custom_log(path: &str, output_file: &[u8], log_format: String) {
-    let settings = Arc::new(LogSettings { log_format, ..LogSettings::default() });
+    let settings = Arc::new(LogSettings {
+        log_format,
+        ..LogSettings::default()
+    });
     let mut commitlog = match fetch_log(path, settings) {
         Ok(l) => l,
         Err(e) => {
@@ -230,7 +245,10 @@ fn raw_args() -> Vec<Vec<u8>> {
     }
     #[cfg(not(unix))]
     {
-        std::env::args_os().skip(1).map(|a| a.to_string_lossy().into_owned().into_bytes()).collect()
+        std::env::args_os()
+            .skip(1)
+            .map(|a| a.to_string_lossy().into_owned().into_bytes())
+            .collect()
     }
 }
 
@@ -246,6 +264,9 @@ fn main() {
         }
     }
     // Not a C++ message: the display path does not exist yet.
-    eprintln!("{}: phase 1 build: only --output-custom-log is implemented", EXEC);
+    eprintln!(
+        "{}: phase 1 build: only --output-custom-log is implemented",
+        EXEC
+    );
     std::process::exit(1);
 }

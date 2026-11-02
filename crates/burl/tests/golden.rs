@@ -158,7 +158,7 @@ fn exit_codes_txt_rows() {
             assert_named(
                 &format!("{name} stdout"),
                 &out.stdout,
-                &read(&dir.join(name)),
+                &golden_with_expected_diff(name),
             );
         } else {
             assert_bytes(
@@ -310,7 +310,7 @@ fn error_shapes() {
             ],
             "unsupported log format (you may need to regenerate your log file)",
         ),
-        // explicit cvs-exp never matches in fetchLog (preserved C++ bug)
+        // explicit cvs-exp works in Burl (D5); a non-cvs-exp file is rejected by its parser
         (
             &[
                 "--log-format",
@@ -443,6 +443,35 @@ fn output_to_file_and_silent_open_failure() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A golden with its `expected-diffs/<file>.diff` (deviation register, DEVIATIONS.md) applied;
+/// the golden itself is never edited. No diff file means the golden is used as is.
+fn golden_with_expected_diff(file: &str) -> Vec<u8> {
+    let diff = golden_dir()
+        .join("expected-diffs")
+        .join(format!("{}.diff", file.trim_end_matches(".txt")));
+    if !diff.exists() {
+        return read(&golden_dir().join(file));
+    }
+    static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp = std::env::temp_dir().join(format!("burl-golden-{}-{n}-{file}", std::process::id()));
+    std::fs::copy(golden_dir().join(file), &tmp).unwrap();
+    let st = Command::new("patch")
+        .arg("-s")
+        .arg(&tmp)
+        .arg(&diff)
+        .status()
+        .expect("patch(1) is required");
+    assert!(
+        st.success(),
+        "expected diff {} does not apply",
+        diff.display()
+    );
+    let out = read(&tmp);
+    let _ = std::fs::remove_file(&tmp);
+    out
+}
+
 #[test]
 fn help_text_matches_golden() {
     for (flag, file) in [
@@ -453,7 +482,67 @@ fn help_text_matches_golden() {
     ] {
         let out = run(&[flag]);
         assert_eq!(out.code, 0);
-        assert_named(flag, &out.stdout, &read(&golden_dir().join(file)));
+        assert_named(flag, &out.stdout, &golden_with_expected_diff(file));
         assert!(out.stderr.is_empty());
+    }
+}
+
+/// D5: explicit `--log-format cvs-exp` selects the CVS-EXP parser (Gource: "unsupported log
+/// format"). Burl-only test, no oracle golden.
+#[test]
+fn deviation_d5_cvs_exp_explicit() {
+    let envs = [("TZ", "UTC")];
+    let explicit = run_with(
+        &[
+            "--log-format",
+            "cvs-exp",
+            "--output-custom-log",
+            "-",
+            "tests/logs/cvs-exp.log",
+        ],
+        None,
+        &envs,
+    );
+    let detected = run_with(
+        &["--output-custom-log", "-", "tests/logs/cvs-exp.log"],
+        None,
+        &envs,
+    );
+    assert_eq!(
+        explicit.code,
+        0,
+        "{}",
+        String::from_utf8_lossy(&explicit.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&explicit.stdout),
+        "1073012645|bob|M|/src/a.c\n1073099045|amy|D|/src/a.c\n"
+    );
+    assert_bytes("detected", &detected.stdout, &explicit.stdout);
+}
+
+/// D5: `--stop-on-idle` and `--ffp` are accepted and have no effect.
+#[test]
+fn deviation_d5_ignored_options() {
+    let base = run(&[
+        "--output-custom-log",
+        "-",
+        "--log-format",
+        "custom",
+        "tests/logs/utf8.log",
+    ]);
+    assert_eq!(base.code, 0);
+    for opt in ["--stop-on-idle", "--ffp"] {
+        let out = run(&[
+            opt,
+            "--output-custom-log",
+            "-",
+            "--log-format",
+            "custom",
+            "tests/logs/utf8.log",
+        ]);
+        assert_eq!(out.code, 0, "{opt}");
+        assert_bytes(opt, &out.stdout, &base.stdout);
+        assert_bytes(opt, &out.stderr, &base.stderr);
     }
 }

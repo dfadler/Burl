@@ -10,6 +10,8 @@ pub enum ArgType {
     Float,
     Str,
     MultiValue,
+    /// Accepted like a bool (no value taken) and then discarded: `--ffp`, `--stop-on-idle`.
+    Ignored,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -92,7 +94,7 @@ pub const ARG_TYPES: &[(&str, ArgType)] = &[
     // gource options (gource_settings.cpp:252-345)
     ("help", ArgType::Bool),
     ("extended-help", ArgType::Bool),
-    ("stop-on-idle", ArgType::Bool),
+    ("stop-on-idle", ArgType::Ignored),
     ("stop-at-end", ArgType::Bool),
     ("dont-stop", ArgType::Bool),
     ("loop", ArgType::Bool),
@@ -117,7 +119,7 @@ pub const ARG_TYPES: &[(&str, ArgType)] = &[
     ("fixed-user-size", ArgType::Bool),
     ("author-time", ArgType::Bool),
     ("key", ArgType::Bool),
-    ("ffp", ArgType::Bool),
+    ("ffp", ArgType::Ignored),
     ("disable-auto-rotate", ArgType::Bool),
     ("disable-auto-skip", ArgType::Bool),
     ("disable-input", ArgType::Bool),

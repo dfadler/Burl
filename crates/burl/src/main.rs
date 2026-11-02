@@ -137,10 +137,15 @@ fn parse_args(arguments: &[Vec<u8>], p: &mut Phase1) {
             i += 1;
             continue;
         }
+<<<<<<< HEAD
         let Some(ty) = arg_type(&name) else {
             quit(&format!("unknown option {}", name))
         };
         let value: Vec<u8> = if ty == ArgType::Bool {
+=======
+        let Some(ty) = arg_type(&name) else { quit(&format!("unknown option {}", name)) };
+        let value: Vec<u8> = if matches!(ty, ArgType::Bool | ArgType::Ignored) {
+>>>>>>> lane-a/d5-code-fixes
             b"true".to_vec()
         } else if i + 1 < arguments.len() {
             i += 1;

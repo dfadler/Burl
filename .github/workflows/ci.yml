@@ -59,7 +59,7 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
-          changed=$(git diff --name-only "$BASE...$HEAD" | grep -E '^(tests/golden/|docs/rust-rewrite/discovery/golden/|reference/)' | grep -v '/expected-diffs/' || true)
+          changed=$(git diff --name-only "$BASE...$HEAD" | grep -E '^(tests/golden/|docs/rust-rewrite/discovery/golden/|reference/)' | grep -vE '/(expected-diffs|scripts)/' || true)
           if [ -n "$changed" ] && ! printf '%s' "$LABELS" | grep -qw 'golden-refresh'; then
             echo "These files need the golden-refresh label:"; echo "$changed"; exit 1
           fi

@@ -1,0 +1,19 @@
+# Heavy tier (ticket #13): Docker golden, simulation and visual gates. Stub until goldens and
+# the pinned image exist; it only records the triggers.
+name: heavy
+on:
+  pull_request:
+    paths: ["tests/golden/**", "reference/**", "docker/**", "crates/burl-sim/**", "crates/burl-render/**"]
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stub:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - run: echo "heavy tier not implemented yet (needs committed goldens and the pinned image)"

@@ -1,0 +1,65 @@
+# Fast tier (ticket #13): runs on every PR. The checks live in `cargo xtask ci`, the same
+# command a human runs locally.
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fast:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux, os: ubuntu-24.04, args: "" }
+          - { name: linux-pcre2, os: ubuntu-24.04, args: "--pcre2" }
+          - { name: macos, os: macos-15, args: "" }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: cargo xtask ci ${{ matrix.args }}
+
+  deny:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+
+  golden-label:
+    # Goldens and the reference fork change only in a PR labelled golden-refresh (#13).
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          changed=$(git diff --name-only "$BASE...$HEAD" | grep -E '^(tests/golden/|docs/rust-rewrite/discovery/golden/|reference/)' | grep -v '/expected-diffs/' || true)
+          if [ -n "$changed" ] && ! printf '%s' "$LABELS" | grep -qw 'golden-refresh'; then
+            echo "These files need the golden-refresh label:"; echo "$changed"; exit 1
+          fi

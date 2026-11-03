@@ -5,3 +5,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 publish = false
+
+[dependencies]
+burl-sim.workspace = true
+# preserve_order: reports name the first divergent field in file order, not sorted order.
+serde_json = { version = "1", features = ["preserve_order"] }

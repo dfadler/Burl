@@ -3,6 +3,10 @@ name = "burl-sim"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Gource rewrite: sim crate (empty in phase 1)"
+description = "Burl: the simulation (Gource::logic and the scene it drives) and its state dump"
 
 [dependencies]
+burl-util.workspace = true
+burl-formats.workspace = true
+# Same pin as burl-util so the lockfile keeps one glam.
+glam = "=0.34.2"

@@ -1,0 +1,6 @@
+# Differences the sim comparator accepts, one `ID path` per line. The id must be a row of
+# docs/rust-rewrite/DEVIATIONS.md; the path is a normalised field path (see xtask/src/simcmp.rs).
+# D2: Burl blocks on log load, so it reports loaded_frame0 = 0; the fork reports the frame its async
+# load finished and the comparator aligns on frame - loaded_frame0.
+D2 g.loaded_frame0
+D2 g.runtime_at_load

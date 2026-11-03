@@ -7,9 +7,14 @@
 use burl_conf::args::parse_args;
 use burl_conf::conffile::{ConfError, ConfFile};
 use burl_conf::help::{HELP_LONG, HELP_SHORT};
-use burl_conf::settings::{import_all_gource_settings, import_display_settings, DebugOptions};
+use burl_conf::settings::{
+    import_all_gource_settings, import_display_settings, DebugOptions, DisplaySettings,
+    GourceSettings, PrngMode,
+};
 use burl_formats::formats::{bzr, cvs2cl, cvs_exp, git, hg, svn};
 use burl_formats::{fetch_log, LogSettings, RCommit};
+use burl_sim::{DumpOptions, Sim, SimSettings};
+use burl_util::prng::{parse_script, PrngMode as SimPrngMode, SimRng};
 use std::io::{BufRead, Write};
 use std::sync::Arc;
 
@@ -53,8 +58,7 @@ struct CommandLine {
     load_config: String,
     save_config: String,
     output_custom_filename: String,
-    /// Hidden test-only controls (ticket #22), parsed and recorded here; the sim lanes act on them.
-    #[allow(dead_code)]
+    /// Hidden test-only controls (ticket #22): `--debug-dump-*`, `--prng`, `--rand-script`.
     debug: DebugOptions,
 }
 
@@ -166,6 +170,121 @@ fn write_custom_log(path: &str, output_file: &str, settings: LogSettings) {
     let _ = out.flush();
 }
 
+/// The `LogSettings` the log layer needs from one section (moves the filters out).
+fn log_settings(first: &mut GourceSettings) -> LogSettings {
+    LogSettings {
+        log_format: first.log_format.clone(),
+        file_filters: std::mem::take(&mut first.file_filters),
+        file_show_filters: std::mem::take(&mut first.file_show_filters),
+        user_filters: std::mem::take(&mut first.user_filters),
+        user_show_filters: std::mem::take(&mut first.user_show_filters),
+        hash_seed: first.hash_seed,
+        start_date: first.start_date.clone(),
+        stop_date: first.stop_date.clone(),
+        start_timestamp: first.start_timestamp,
+        stop_timestamp: first.stop_timestamp,
+        git_branch: first.git_branch.clone(),
+        author_time: first.author_time,
+        ..LogSettings::default()
+    }
+}
+
+/// What the simulation reads, from one imported section. `--debug-dump-state` implies the
+/// fixed-`dt` export path (the fork needs `-o /dev/null` for the same effect).
+fn sim_settings(d: &DisplaySettings, g: &GourceSettings, repo_count: i32) -> SimSettings {
+    SimSettings {
+        display_width: d.width,
+        display_height: d.height,
+        output_framerate: d.output_framerate,
+        exporting: true,
+        stop_at_time: g.stop_at_time,
+        stop_at_end: g.stop_at_end,
+        stop_position: g.stop_position,
+        stop_timestamp: g.stop_timestamp,
+        start_position: g.start_position,
+        days_per_second: g.days_per_second,
+        auto_skip_seconds: g.auto_skip_seconds,
+        no_time_travel: g.no_time_travel,
+        loop_: g.loop_,
+        file_idle_time: g.file_idle_time,
+        file_idle_time_at_end: g.file_idle_time_at_end,
+        user_idle_time: g.user_idle_time,
+        time_scale: g.time_scale,
+        max_files: g.max_files,
+        max_user_speed: g.max_user_speed,
+        max_file_lag: g.max_file_lag,
+        user_friction: g.user_friction,
+        user_scale: g.user_scale,
+        elasticity: g.elasticity,
+        filename_time: g.filename_time,
+        hash_seed: g.hash_seed,
+        camera_zoom_default: g.camera_zoom_default,
+        camera_zoom_max: g.camera_zoom_max,
+        padding: g.padding,
+        crop_vertical: g.crop_vertical,
+        crop_horizontal: g.crop_horizontal,
+        disable_auto_rotate: g.disable_auto_rotate,
+        track_users: g.camera_mode == "track",
+        highlight_all_users: g.highlight_all_users,
+        highlight_users: g.highlight_users.clone(),
+        follow_users: g.follow_users.clone(),
+        caption_file: g.caption_file.clone(),
+        repo_count,
+        path: g.path.clone(),
+    }
+}
+
+/// `--debug-dump-state FILE`: load the log, run the simulation to its end and write the JSONL
+/// dump (ticket #11). Errors are the message `quit` prints.
+fn run_state_dump(
+    display: &DisplaySettings,
+    g: &mut GourceSettings,
+    debug: &DebugOptions,
+    dump_path: &str,
+) -> Result<(), String> {
+    // GourceShell::getNext, exporter case
+    g.apply_shell_fixups(1, true);
+    let settings = sim_settings(display, g, 1);
+
+    let (rng, prng_name) = match &debug.prng {
+        PrngMode::Script(file) => {
+            let text =
+                std::fs::read_to_string(file).map_err(|_| format!("could not read '{file}'"))?;
+            let values = parse_script(&text)?;
+            (SimRng::from_script(values)?, "script")
+        }
+        mode => {
+            let (m, name) = match mode {
+                PrngMode::Glibc => (SimPrngMode::Glibc, "glibc"),
+                PrngMode::Park => (SimPrngMode::Park, "park"),
+                _ => (SimPrngMode::Default, "default"),
+            };
+            let seed = match debug.prng_seed {
+                Some(s) => {
+                    Some(u32::try_from(s).map_err(|_| "invalid prng-seed value".to_string())?)
+                }
+                None => None,
+            };
+            (SimRng::new(m, seed), name)
+        }
+    };
+
+    let path = g.path.clone();
+    let log = fetch_log(&path, Arc::new(log_settings(g))).map_err(|e| e.0)?;
+    let mut sim = Sim::new(settings, log, rng).map_err(|e| e.0)?;
+
+    let file = std::fs::File::create(dump_path)
+        .map_err(|_| format!("could not write to '{dump_path}'"))?;
+    let mut out = std::io::BufWriter::new(file);
+    let opts = DumpOptions {
+        every: debug.dump_every,
+        max_frames: debug.dump_max_frames.unwrap_or(0),
+        prng: prng_name.to_string(),
+        prng_seed: debug.prng_seed,
+    };
+    sim.run_dump(&mut out, &opts).map_err(|e| e.0)
+}
+
 fn raw_args() -> Vec<Vec<u8>> {
     #[cfg(unix)]
     {
@@ -213,7 +332,7 @@ fn run() -> Result<(), ConfError> {
             conf.set_entry("gource", "path", path);
         }
     }
-    let _display = import_display_settings(&conf)?;
+    let display = import_display_settings(&conf)?;
     // D1: every [gource] section is validated now, not lazily as each repo starts
     let mut repos = import_all_gource_settings(&mut conf)?;
 
@@ -227,22 +346,17 @@ fn run() -> Result<(), ConfError> {
             // wait for the first byte (or EOF) without consuming it; the C++ polls every 100 ms
             let _ = std::io::stdin().lock().fill_buf();
         }
-        let settings = LogSettings {
-            log_format: first.log_format.clone(),
-            file_filters: std::mem::take(&mut first.file_filters),
-            file_show_filters: std::mem::take(&mut first.file_show_filters),
-            user_filters: std::mem::take(&mut first.user_filters),
-            user_show_filters: std::mem::take(&mut first.user_show_filters),
-            hash_seed: first.hash_seed,
-            start_date: first.start_date.clone(),
-            stop_date: first.stop_date.clone(),
-            start_timestamp: first.start_timestamp,
-            stop_timestamp: first.stop_timestamp,
-            git_branch: first.git_branch.clone(),
-            author_time: first.author_time,
-            ..LogSettings::default()
-        };
+        let settings = log_settings(first);
         write_custom_log(&first.path, &cl.output_custom_filename, settings);
+        std::process::exit(0);
+    }
+    if let Some(dump_path) = cl.debug.dump_state.clone() {
+        if repos.len() > 1 {
+            quit("--debug-dump-state supports a single [gource] section for now");
+        }
+        if let Err(e) = run_state_dump(&display, &mut repos[0], &cl.debug, &dump_path) {
+            quit(&e);
+        }
         std::process::exit(0);
     }
     // Not a C++ message: the display path does not exist yet.

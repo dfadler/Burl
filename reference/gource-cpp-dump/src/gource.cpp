@@ -250,6 +250,11 @@ void Gource::update(float t, float dt) {
 
     gDumpFrame = framecount;
 
+    // state-dump fork: block on the async log load so frame 0 is the load frame (D2), as Burl does
+    if(gDump.out && commitlog == 0) {
+        while(!logmill->isFinished()) SDL_Delay(1);
+    }
+
     float scaled_dt = std::min(dt, max_tick_rate);
 
     //if exporting a video use a fixed tick rate rather than time based

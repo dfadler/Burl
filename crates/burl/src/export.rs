@@ -98,6 +98,9 @@ pub fn run(
         ss.bloom_multiplier = g.bloom_multiplier;
         ss.bloom_intensity = g.bloom_intensity;
         ss.hide_bloom = g.hide_bloom;
+        ss.hide_tree = g.hide_tree;
+        ss.hide_files = g.hide_files;
+        ss.hide_users = g.hide_users;
         ss.user_scale = g.user_scale;
         let bg = g.background_colour;
         let clear = [bg[0], bg[1], bg[2], 1.0];

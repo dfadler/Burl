@@ -4,7 +4,7 @@
 //! (src/spline.cpp) and `RAction::drawToVBO` (src/action.cpp).
 //!
 //! Not ported: the `in_frustum` culling of files and bloom (it only skips off-screen quads, so the
-//! image is unchanged), `hide_*` options other than bloom, `fixed_user_size`, selection.
+//! image is unchanged), `fixed_user_size`, selection.
 
 use crate::{BloomBuf, Camera, Frame, QuadBuf, QuadVertex, TextureId, FULL_TEXCOORD};
 use burl_sim::view::{DirView, SceneView};
@@ -29,6 +29,10 @@ pub struct SceneSettings {
     pub bloom_multiplier: f32,
     pub bloom_intensity: f32,
     pub hide_bloom: bool,
+    /// `--hide tree/files/users`: the edges, the files (and their shadows), the users and actions.
+    pub hide_tree: bool,
+    pub hide_files: bool,
+    pub hide_users: bool,
     /// `--user-scale`, which also scales the user shadow offset.
     pub user_scale: f32,
 }
@@ -41,6 +45,9 @@ impl SceneSettings {
             bloom_multiplier: 1.0,
             bloom_intensity: 0.75,
             hide_bloom: false,
+            hide_tree: false,
+            hide_files: false,
+            hide_users: false,
             user_scale: 1.0,
         }
     }
@@ -121,7 +128,7 @@ pub fn build_frame(scene: &SceneView, tex: &SceneTextures, s: &SceneSettings) ->
     let col = |d: &DirView| Vec4::from_array(d.colour);
 
     // Edges: every visible dir with a parent (an invisible dir has no visible descendants).
-    for (i, d) in scene.dirs.iter().enumerate() {
+    for (i, d) in scene.dirs.iter().enumerate().filter(|_| !s.hide_tree) {
         if let (Some(p), true) = (d.parent, d.visible) {
             let (pp, _) = proj[p];
             let (dp, ds) = proj[i];
@@ -129,7 +136,7 @@ pub fn build_frame(scene: &SceneView, tex: &SceneTextures, s: &SceneSettings) ->
         }
     }
 
-    for d in &scene.dirs {
+    for d in scene.dirs.iter().filter(|_| !s.hide_files) {
         for file in &d.files {
             let dims = Vec2::new(file.size, file.size * tex.file_ratio);
             f.files.add(
@@ -142,7 +149,7 @@ pub fn build_frame(scene: &SceneView, tex: &SceneTextures, s: &SceneSettings) ->
         }
     }
 
-    for u in &scene.users {
+    for u in scene.users.iter().filter(|_| !s.hide_users) {
         let dims = Vec2::new(u.size, u.size * tex.user_ratio);
         f.users.add(
             Some(tex.user),

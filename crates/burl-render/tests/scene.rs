@@ -121,3 +121,26 @@ fn only_visible_dirs_get_edges_and_bloom_and_finished_actions_are_skipped() {
     assert_eq!(f.files.vertices().len(), 4);
     assert_eq!(f.users.vertices().len(), 4);
 }
+
+#[test]
+fn hide_flags_empty_their_buffers() {
+    let tex = SceneTextures {
+        beam: TextureId(1),
+        file: TextureId(2),
+        file_ratio: 1.0,
+        user: TextureId(3),
+        user_ratio: 1.0,
+    };
+    let go = |f: fn(&mut SceneSettings)| {
+        let mut s = SceneSettings::new(640, 480);
+        f(&mut s);
+        build_frame(&scene(), &tex, &s)
+    };
+    assert!(go(|s| s.hide_bloom = true).bloom.vertices.is_empty());
+    assert!(go(|s| s.hide_tree = true).edges.vertices().is_empty());
+    assert!(go(|s| s.hide_files = true).files.vertices().is_empty());
+    let f = go(|s| s.hide_users = true);
+    assert!(f.users.vertices().is_empty() && f.actions.vertices().is_empty());
+    // Each flag leaves the other buffers alone.
+    assert!(!go(|s| s.hide_users = true).files.vertices().is_empty());
+}

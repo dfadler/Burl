@@ -2108,12 +2108,16 @@ mod tests {
     use std::sync::Arc;
 
     fn sim(settings: SimSettings) -> Result<Sim, SimError> {
+        sim_with("1277787455|bob|A|a/b.txt\n", settings)
+    }
+
+    fn sim_with(text: &str, settings: SimSettings) -> Result<Sim, SimError> {
         let path = std::env::temp_dir().join(format!(
             "burl-sim-unit-{}-{:?}.log",
             std::process::id(),
             std::thread::current().id()
         ));
-        std::fs::write(&path, "1277787455|bob|A|a/b.txt\n").unwrap();
+        std::fs::write(&path, text).unwrap();
         let log = fetch_log(
             path.to_str().unwrap(),
             Arc::new(LogSettings {
@@ -2222,7 +2226,11 @@ mod tests {
 
     #[test]
     fn scene_view_walks_dirs_depth_first_with_the_file_and_user() {
-        let mut s = sim(ok_settings()).unwrap();
+        let mut s = sim_with(
+            "1277787455|bob|A|a/b.txt\n1277787456|bob|A|c/d.txt\n1277787457|bob|A|c/e/f.txt\n",
+            ok_settings(),
+        )
+        .unwrap();
         for _ in 0..600 {
             s.update().unwrap();
             s.end_frame();
@@ -2236,8 +2244,14 @@ mod tests {
             .enumerate()
             .skip(1)
             .all(|(i, d)| d.parent.is_some_and(|p| p < i)));
-        let f = v.dirs.iter().flat_map(|d| &d.files).next().unwrap();
-        assert_eq!(f.pos, s.file_abs_pos(0));
+        assert!(v.dirs.len() > 1 && v.dirs.iter().any(|d| d.pos != Vec2::ZERO));
+        // A file's absolute position is its offset plus its directory's position.
+        let moved = v
+            .dirs
+            .iter()
+            .find(|d| d.pos != Vec2::ZERO && !d.files.is_empty());
+        let f = &moved.expect("a moved dir holds a file").files[0];
+        assert!(s.file_map.values().any(|&id| s.file_abs_pos(id) == f.pos));
         assert!(f.alpha > 0.0 && f.alpha <= 1.0);
         assert_eq!(v.users.len(), 1);
         assert_eq!(v.camera.max_distance, s.s.camera_zoom_max);

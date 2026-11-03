@@ -14,6 +14,7 @@ dump (Script-mode PRNG, `reference/gource-cpp-dump/tests/dump/rand-script.txt`).
 | fixture | exercises |
 |---|---|
 | `small-repo` | 5 users, nested dirs (fork and common-prefix nodes), a 10-file ring layout, modify, file removal, directory delete, file-to-directory, user overlap (`rand`) |
+| `small-repo-idle` | the same log with `--file-idle-time 2 --file-idle-time-at-end 1 --hash-seed 7` (idle fade, expiry, `gGourceRemovedFiles`) |
 | `file-removal` | removal actions, file fade-out, user fade-out, `appFinished` |
 | `file-to-dir` | a file turning into a directory (`forced_removal`) |
 | `custom-dir-delete` | `D` on a directory path removing every file below it |

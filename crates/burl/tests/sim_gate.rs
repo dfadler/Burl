@@ -103,3 +103,9 @@ fn sim_gate_file_to_dir() {
 fn sim_gate_custom_dir_delete() {
     gate("custom-dir-delete");
 }
+
+/// The second input set of the spec (2.1): file idle fade, `--file-idle-time-at-end`, hash seed 7.
+#[test]
+fn sim_gate_small_repo_idle() {
+    gate("small-repo-idle");
+}

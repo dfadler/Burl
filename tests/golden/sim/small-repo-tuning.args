@@ -1,0 +1,1 @@
+--user-friction 0.5 --user-scale 2 --max-user-speed 100 --max-file-lag 0.5 --filename-time 2 --highlight-all-users --debug-dump-every 5

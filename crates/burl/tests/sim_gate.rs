@@ -23,6 +23,18 @@ fn options(root: &Path) -> Options {
     }
 }
 
+/// Script mode unless the fixture picks a generator itself with `--prng` (dump-run.sh does the same).
+fn rand_args(root: &Path, extra: &str) -> Vec<std::ffi::OsString> {
+    if extra.split_whitespace().any(|a| a == "--prng") {
+        return Vec::new();
+    }
+    vec![
+        "--rand-script".into(),
+        root.join("reference/gource-cpp-dump/tests/dump/rand-script.txt")
+            .into(),
+    ]
+}
+
 /// Burl's dump of `name`, run with dump-run.sh's fixed inputs (no `-o`: the dump flag implies
 /// the fixed tick) and the fixture's extra arguments.
 fn burl_dump(root: &Path, name: &str, out: &Path) -> String {
@@ -55,8 +67,7 @@ fn burl_dump(root: &Path, name: &str, out: &Path) -> String {
             "1",
         ])
         .args(["--hide", "mouse"])
-        .arg("--rand-script")
-        .arg(root.join("reference/gource-cpp-dump/tests/dump/rand-script.txt"))
+        .args(rand_args(root, &extra))
         .arg("--debug-dump-state")
         .arg(out)
         .args(["--debug-dump-max-frames", "4000"])
@@ -115,4 +126,45 @@ fn sim_gate_small_repo_idle() {
 #[test]
 fn sim_gate_real_burl_git_250() {
     gate("real-burl-git-250");
+}
+
+/// Slice 3 fixtures: each exercises one sim setting the first five did not.
+#[test]
+fn sim_gate_small_repo_glibc() {
+    gate("small-repo-glibc");
+}
+
+#[test]
+fn sim_gate_small_repo_max_files() {
+    gate("small-repo-max-files");
+}
+
+#[test]
+fn sim_gate_small_repo_elasticity() {
+    gate("small-repo-elasticity");
+}
+
+#[test]
+fn sim_gate_small_repo_tuning() {
+    gate("small-repo-tuning");
+}
+
+#[test]
+fn sim_gate_small_repo_stop_position() {
+    gate("small-repo-stop-position");
+}
+
+#[test]
+fn sim_gate_auto_skip() {
+    gate("auto-skip");
+}
+
+#[test]
+fn sim_gate_time_travel() {
+    gate("time-travel");
+}
+
+#[test]
+fn sim_gate_no_time_travel() {
+    gate("no-time-travel");
 }

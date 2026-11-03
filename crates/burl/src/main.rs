@@ -191,7 +191,12 @@ fn log_settings(first: &mut GourceSettings) -> LogSettings {
 
 /// What the simulation reads, from one imported section. `--debug-dump-state` implies the
 /// fixed-`dt` export path (the fork needs `-o /dev/null` for the same effect).
-fn sim_settings(d: &DisplaySettings, g: &GourceSettings, repo_count: i32) -> SimSettings {
+fn sim_settings(
+    d: &DisplaySettings,
+    g: &GourceSettings,
+    section: i32,
+    repo_count: i32,
+) -> SimSettings {
     SimSettings {
         display_width: d.width,
         display_height: d.height,
@@ -229,23 +234,23 @@ fn sim_settings(d: &DisplaySettings, g: &GourceSettings, repo_count: i32) -> Sim
         highlight_users: g.highlight_users.clone(),
         follow_users: g.follow_users.clone(),
         caption_file: g.caption_file.clone(),
+        caption_duration: g.caption_duration,
+        section,
         repo_count,
         path: g.path.clone(),
     }
 }
 
-/// `--debug-dump-state FILE`: load the log, run the simulation to its end and write the JSONL
-/// dump (ticket #11). Errors are the message `quit` prints.
+/// `--debug-dump-state FILE`: load each section's log in turn, run its simulation to the end and
+/// write the JSONL dump (tickets #11, #18). One generator serves the whole run, as in the fork;
+/// the frame counter, the clock and the scene restart with each section. Errors are the message
+/// `quit` prints.
 fn run_state_dump(
     display: &DisplaySettings,
-    g: &mut GourceSettings,
+    repos: &mut [GourceSettings],
     debug: &DebugOptions,
     dump_path: &str,
 ) -> Result<(), String> {
-    // GourceShell::getNext, exporter case
-    g.apply_shell_fixups(1, true);
-    let settings = sim_settings(display, g, 1);
-
     let (rng, prng_name) = match &debug.prng {
         PrngMode::Script(file) => {
             let text =
@@ -269,10 +274,6 @@ fn run_state_dump(
         }
     };
 
-    let path = g.path.clone();
-    let log = fetch_log(&path, Arc::new(log_settings(g))).map_err(|e| e.0)?;
-    let mut sim = Sim::new(settings, log, rng).map_err(|e| e.0)?;
-
     let file = std::fs::File::create(dump_path)
         .map_err(|_| format!("could not write to '{dump_path}'"))?;
     let mut out = std::io::BufWriter::new(file);
@@ -282,7 +283,22 @@ fn run_state_dump(
         prng: prng_name.to_string(),
         prng_seed: debug.prng_seed,
     };
-    sim.run_dump(&mut out, &opts).map_err(|e| e.0)
+    burl_sim::dump::write_header(&mut out, &opts).map_err(|e| e.0)?;
+
+    let repo_count = repos.len();
+    let mut carry = (rng, -1i64);
+    for (i, g) in repos.iter_mut().enumerate() {
+        // GourceShell::getNext, exporter case
+        g.apply_shell_fixups(repo_count, true);
+        let settings = sim_settings(display, g, i as i32 + 1, repo_count as i32);
+        let path = g.path.clone();
+        let log = fetch_log(&path, Arc::new(log_settings(g))).map_err(|e| e.0)?;
+        let mut sim = Sim::new(settings, log, carry.0).map_err(|e| e.0)?;
+        sim.carry_first_rand_frame(carry.1);
+        sim.run_section(&mut out, &opts).map_err(|e| e.0)?;
+        carry = sim.into_carry();
+    }
+    Ok(())
 }
 
 fn raw_args() -> Vec<Vec<u8>> {
@@ -351,10 +367,7 @@ fn run() -> Result<(), ConfError> {
         std::process::exit(0);
     }
     if let Some(dump_path) = cl.debug.dump_state.clone() {
-        if repos.len() > 1 {
-            quit("--debug-dump-state supports a single [gource] section for now");
-        }
-        if let Err(e) = run_state_dump(&display, &mut repos[0], &cl.debug, &dump_path) {
+        if let Err(e) = run_state_dump(&display, &mut repos, &cl.debug, &dump_path) {
             quit(&e);
         }
         std::process::exit(0);

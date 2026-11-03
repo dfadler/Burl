@@ -1,0 +1,14 @@
+1277787000|too early, ignored
+1277787455|At the start
+1277788955|Second | with a bar
+﻿1277790455|BOM prefixed
+1277789000|out of order, ignored
+1277793455|Ünïcödé 💩 � bad byte
+not a caption line
+1277794955|
+|no timestamp
+abc|bad timestamp
+0|zero, older than the clock
+1277795000|trailing spaces   	
+2010-06-29 08:00:00|date string
+1278900000|still queued at the end

@@ -35,12 +35,22 @@ pub const FULL_TEXCOORD: Vec4 = Vec4::new(0.0, 0.0, 1.0, 1.0);
 /// Port of `quadbuf`: four vertices per quad plus the per-texture runs (`quadbuf_tex`).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct QuadBuf {
-    pub vertices: Vec<QuadVertex>,
+    vertices: Vec<QuadVertex>,
     /// `(first vertex, texture)`; a run lasts until the next run starts.
-    pub runs: Vec<(usize, TextureId)>,
+    runs: Vec<(usize, TextureId)>,
 }
 
 impl QuadBuf {
+    pub fn vertices(&self) -> &[QuadVertex] {
+        &self.vertices
+    }
+
+    /// `quadbuf::reset`. Both fields go together so a run can never point past the vertices.
+    pub fn clear(&mut self) {
+        self.vertices.clear();
+        self.runs.clear();
+    }
+
     /// `quadbuf::add(textureid, pos, dims, colour, texcoord)`. A zero texture id starts no run.
     pub fn add(
         &mut self,
@@ -178,7 +188,7 @@ pub struct Batch {
 pub const SHADOW_STRENGTH: f32 = 0.5;
 
 /// The per-pass buffers of one frame, as `Gource::updateVBOs` leaves them.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Frame {
     pub edges: QuadBuf,
     pub actions: QuadBuf,
@@ -284,6 +294,22 @@ impl Frame {
     }
 }
 
+impl Default for Frame {
+    fn default() -> Self {
+        Self {
+            edges: QuadBuf::default(),
+            actions: QuadBuf::default(),
+            files: QuadBuf::default(),
+            users: QuadBuf::default(),
+            bloom: BloomBuf::default(),
+            beam: None,
+            file_graphic: None,
+            // Settings default (and reject <= 0), so an omitted scale must not zero the shadow offset.
+            user_scale: 1.0,
+        }
+    }
+}
+
 /// `glOrtho(0, w, h, 0, -1, 1)` (`Display::mode2D`): pixels, y down.
 pub fn ortho_2d(width: f32, height: f32) -> Mat4 {
     // glOrtho(l, r, b, t, n, f) with l=0, r=w, b=h, t=0, n=-1, f=1: x' = 2x/w - 1, y' = 1 - 2y/h, z' = -z.
@@ -318,5 +344,8 @@ pub fn quad_indices(quads: usize) -> Vec<u32> {
 pub fn flip_rows(pixels: &[u8], width: usize, height: usize, bytes_per_pixel: usize) -> Vec<u8> {
     let row = width * bytes_per_pixel;
     assert_eq!(pixels.len(), row * height, "buffer is not width*height*bpp");
+    if row == 0 {
+        return Vec::new();
+    }
     pixels.chunks_exact(row).rev().flatten().copied().collect()
 }

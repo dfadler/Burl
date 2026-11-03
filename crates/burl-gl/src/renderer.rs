@@ -141,6 +141,7 @@ impl<C: GlContext> Renderer<C> {
                 rgba.len()
             ));
         }
+        self.ctx.make_current()?;
         let gl = self.ctx.gl();
         // SAFETY: the slice length was checked against the dimensions above.
         unsafe {
@@ -166,6 +167,14 @@ impl<C: GlContext> Renderer<C> {
             if mipmaps {
                 gl.generate_mipmap(glow::TEXTURE_2D);
             }
+            let err = gl.get_error();
+            if err != glow::NO_ERROR {
+                gl.delete_texture(t);
+                return Err(format!(
+                    "texture {}: GL error 0x{err:x} during upload",
+                    id.0
+                ));
+            }
             gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, min as i32);
             gl.tex_parameter_i32(
                 glow::TEXTURE_2D,
@@ -182,7 +191,9 @@ impl<C: GlContext> Renderer<C> {
                 glow::TEXTURE_WRAP_T,
                 glow::CLAMP_TO_EDGE as i32,
             );
-            self.textures.insert(id, t);
+            if let Some(old) = self.textures.insert(id, t) {
+                gl.delete_texture(old);
+            }
         }
         Ok(())
     }
@@ -255,10 +266,13 @@ impl<C: GlContext> Renderer<C> {
                     gl.get_uniform_location(prog, "shadow_strength").as_ref(),
                     burl_render::SHADOW_STRENGTH,
                 );
-                let tex = b
-                    .texture
-                    .and_then(|t| self.textures.get(&t).copied())
-                    .unwrap_or(self.white);
+                let tex = match b.texture {
+                    Some(t) => *self
+                        .textures
+                        .get(&t)
+                        .ok_or_else(|| format!("texture {} not uploaded", t.0))?,
+                    None => self.white,
+                };
                 gl.bind_texture(glow::TEXTURE_2D, Some(tex));
 
                 gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.vbo));
@@ -313,15 +327,16 @@ impl<C: GlContext> Renderer<C> {
         Ok(flip_rows(&px, w, h, 4))
     }
 
-    pub fn gl_info(&self) -> String {
+    pub fn gl_info(&self) -> Result<String> {
+        self.ctx.make_current()?;
         let gl = self.ctx.gl();
         // SAFETY: parameter queries on the current context.
         unsafe {
-            format!(
+            Ok(format!(
                 "{} | {}",
                 gl.get_parameter_string(glow::VERSION),
                 gl.get_parameter_string(glow::RENDERER)
-            )
+            ))
         }
     }
 }

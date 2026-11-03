@@ -22,22 +22,34 @@ fn main() -> Result<(), String> {
                     h.parse().map_err(|e| format!("{e}"))?,
                 );
             }
-            "--frames" => frames = value()?.parse().map_err(|e| format!("{e}"))?,
+            "--frames" => {
+                frames = value()?.parse().map_err(|e| format!("{e}"))?;
+                if frames == 0 {
+                    return Err("--frames must be at least 1".into());
+                }
+            }
             "--out" => out = Some(value()?),
             _ => return Err(format!("unknown argument {a}")),
         }
     }
     let (w, h) = size;
+    // The pixel checks need the red block (w/4 x h/4) to cover pixel (1,1) and the corners distinct.
+    if w < 8 || h < 8 {
+        return Err("--size must be at least 8x8".into());
+    }
     let mut r = Renderer::new(HeadlessEgl::new(w, h)?)?;
-    println!("GL: {}", r.gl_info());
+    println!("GL: {}", r.gl_info()?);
 
     let (wf, hf) = (w as f32, h as f32);
+    // A 1x1 magenta texture on the white file quad exercises upload, binding and sampling.
+    let magenta = burl_render::TextureId(1);
+    r.upload_texture(magenta, 1, 1, &[255, 0, 255, 255], false)?;
     let mut f = Frame {
-        user_scale: 1.0,
+        file_graphic: Some(magenta),
         ..Frame::default()
     };
     let tex = burl_render::FULL_TEXCOORD;
-    // Top-left red block (edges pass, screen space), a green "file" with its shadow, and a bloom.
+    // Top-left red block (edges pass, screen space), a textured "file" with its shadow, and a bloom.
     f.edges.add(
         None,
         Vec2::ZERO,
@@ -49,7 +61,7 @@ fn main() -> Result<(), String> {
         None,
         Vec2::new(wf / 2.0, hf / 2.0),
         Vec2::new(wf / 8.0, hf / 8.0),
-        Vec4::new(0.0, 1.0, 0.0, 1.0),
+        Vec4::ONE,
         tex,
     );
     f.bloom.add(
@@ -81,6 +93,11 @@ fn main() -> Result<(), String> {
     };
     let checks = [
         ("top-left is the red block", at(1, 1), [255, 0, 0, 255]),
+        (
+            "file quad samples its texture",
+            at(w / 2 + w / 16, h / 2 + h / 16),
+            [255, 0, 255, 255],
+        ),
         (
             "bottom-right is the clear colour",
             at(w - 1, h - 1),

@@ -96,7 +96,7 @@ fn synthetic_frame_matches_snapshot() {
         env!("CARGO_MANIFEST_DIR"),
         "/tests/snapshots/synthetic_frame.txt"
     );
-    if std::env::var_os("BURL_BLESS").is_some() {
+    if matches!(std::env::var("BURL_BLESS").as_deref(), Ok("1")) {
         std::fs::write(path, &got).unwrap();
     }
     assert_eq!(got, std::fs::read_to_string(path).unwrap());
@@ -135,7 +135,7 @@ fn quad_corners_follow_quadbuf_add() {
         Vec4::ONE,
         Vec4::new(0.1, 0.2, 0.3, 0.4),
     );
-    let c: Vec<_> = q.vertices.iter().map(|v| (v.pos, v.uv)).collect();
+    let c: Vec<_> = q.vertices().iter().map(|v| (v.pos, v.uv)).collect();
     assert_eq!(
         c,
         [

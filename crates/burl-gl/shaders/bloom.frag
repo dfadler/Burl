@@ -14,7 +14,9 @@ void main()
     float intensity = min(1.0, cos((length(v_pos * 2.0) + offset) / v_tc.x));
     float gradient  = intensity * smoothstep(0.0, 2.0, intensity);
 
-    gradient *= smoothstep(1.0, 0.67 + r * 0.33, 1.0 - intensity);
+    // The C++ writes smoothstep(1.0, 0.67 + r * 0.33, 1.0 - intensity): reversed edges, which GLSL leaves
+    // undefined. smoothstep(e0, e1, x) = 1 - smoothstep(e1, e0, x), so this ordered form is the same curve.
+    gradient *= 1.0 - smoothstep(0.67 + r * 0.33, 1.0, 1.0 - intensity);
 
     frag = v_colour * gradient;
 }

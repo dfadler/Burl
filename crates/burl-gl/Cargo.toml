@@ -3,6 +3,20 @@ name = "burl-gl"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Gource rewrite: gl crate (empty in phase 1)"
+description = "Burl: GL context trait, headless EGL context and the glow renderer (the only crate allowed unsafe)"
 
 [dependencies]
+burl-render.workspace = true
+glam.workspace = true
+# Pins and features from the headless spike (#15); glow bumped to 0.18.0 by #19 and re-verified.
+glow = "=0.18.0"
+glutin = { version = "=0.32.3", default-features = false, features = ["egl"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+raw-window-handle = "=0.6.2"
+
+[dev-dependencies]
+png = "0.18"
+
+[[example]]
+name = "smoke"

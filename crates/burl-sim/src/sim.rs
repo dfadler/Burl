@@ -266,7 +266,7 @@ pub struct Sim {
     dirs: Vec<Option<Dir>>,
     /// `gGourceDirMap`.
     pub(crate) dir_map: BTreeMap<String, DirId>,
-    root: DirId,
+    pub(crate) root: DirId,
     /// `gGourceRemovedFiles`.
     pub(crate) removed: Vec<FileId>,
 
@@ -1120,7 +1120,7 @@ impl Sim {
 
     // ---- files ------------------------------------------------------------------------
 
-    fn file_abs_pos(&self, f: FileId) -> Vec2 {
+    pub(crate) fn file_abs_pos(&self, f: FileId) -> Vec2 {
         let file = self.file(f);
         file.pos + self.dir(file.dir.expect("file attached to a dir")).pos
     }
@@ -1427,7 +1427,7 @@ impl Sim {
     }
 
     /// `isVisible`: caches `true` from any visible child (a mutation the dump must observe).
-    fn dir_is_visible(&mut self, d: DirId) -> bool {
+    pub(crate) fn dir_is_visible(&mut self, d: DirId) -> bool {
         if self.dir(d).visible {
             return true;
         }
@@ -2108,12 +2108,16 @@ mod tests {
     use std::sync::Arc;
 
     fn sim(settings: SimSettings) -> Result<Sim, SimError> {
+        sim_with("1277787455|bob|A|a/b.txt\n", settings)
+    }
+
+    fn sim_with(text: &str, settings: SimSettings) -> Result<Sim, SimError> {
         let path = std::env::temp_dir().join(format!(
             "burl-sim-unit-{}-{:?}.log",
             std::process::id(),
             std::thread::current().id()
         ));
-        std::fs::write(&path, "1277787455|bob|A|a/b.txt\n").unwrap();
+        std::fs::write(&path, text).unwrap();
         let log = fetch_log(
             path.to_str().unwrap(),
             Arc::new(LogSettings {
@@ -2218,5 +2222,38 @@ mod tests {
         assert!(s.dir_map.contains_key("/a/"));
         // the clock starts at the first commit and has advanced by one tick
         assert!(s.currtime >= 1277787455 && s.currtime < 1277787455 + 1000);
+    }
+
+    #[test]
+    fn scene_view_walks_dirs_depth_first_with_the_file_and_user() {
+        let mut s = sim_with(
+            "1277787455|bob|A|a/b.txt\n1277787456|bob|A|c/d.txt\n1277787457|bob|A|c/e/f.txt\n",
+            ok_settings(),
+        )
+        .unwrap();
+        for _ in 0..600 {
+            s.update().unwrap();
+            s.end_frame();
+        }
+        let v = s.scene_view();
+        // The root is first and parentless; every other dir points at an earlier one.
+        assert_eq!(v.dirs[0].parent, None);
+        assert!(v
+            .dirs
+            .iter()
+            .enumerate()
+            .skip(1)
+            .all(|(i, d)| d.parent.is_some_and(|p| p < i)));
+        assert!(v.dirs.len() > 1 && v.dirs.iter().any(|d| d.pos != Vec2::ZERO));
+        // A file's absolute position is its offset plus its directory's position.
+        let moved = v
+            .dirs
+            .iter()
+            .find(|d| d.pos != Vec2::ZERO && !d.files.is_empty());
+        let f = &moved.expect("a moved dir holds a file").files[0];
+        assert!(s.file_map.values().any(|&id| s.file_abs_pos(id) == f.pos));
+        assert!(f.alpha > 0.0 && f.alpha <= 1.0);
+        assert_eq!(v.users.len(), 1);
+        assert_eq!(v.camera.max_distance, s.s.camera_zoom_max);
     }
 }

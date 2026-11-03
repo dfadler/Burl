@@ -253,6 +253,8 @@ pub struct Sim {
     active_user_bounds: Bounds2D,
     pub(crate) dir_bounds: Bounds2D,
     pub(crate) camera: Camera,
+    /// Set by a zoom command (`manual_zoom`): the camera stops fitting the bounds' distance.
+    pub(crate) manual_zoom: bool,
     pub(crate) app_finished: bool,
     /// `file_idle_time` is overwritten once the log ends (`file_idle_time_at_end`).
     file_idle_time: f32,
@@ -344,6 +346,7 @@ impl Sim {
             active_user_bounds: Bounds2D::default(),
             dir_bounds: Bounds2D::default(),
             camera,
+            manual_zoom: false,
             app_finished: false,
             file_idle_time,
             first_rand_frame: -1,
@@ -421,8 +424,18 @@ impl Sim {
     /// `Gource::update` minus the draw: one fixed-`dt` tick. The caller dumps between this
     /// and the next call, as the fork's hook sits after `logic`.
     pub fn update(&mut self) -> Result<(), SimError> {
+        self.step(self.max_tick_rate)
+    }
+
+    /// The interactive tick: `scaled_dt = min(dt, max_tick_rate)` for the wall-clock `dt` of the
+    /// frame (`Gource::update`); [`Sim::update`] is the exporter's fixed tick.
+    pub fn update_realtime(&mut self, dt: f32) -> Result<(), SimError> {
+        self.step(dt.min(self.max_tick_rate))
+    }
+
+    fn step(&mut self, tick: f32) -> Result<(), SimError> {
         // exporter: scaled_dt = max_tick_rate; then time scale
-        let mut scaled_dt = self.max_tick_rate;
+        let mut scaled_dt = tick;
         scaled_dt *= self.s.time_scale;
 
         // runtime is managed internally (paused is never set here)
@@ -1932,7 +1945,7 @@ impl Sim {
     fn update_camera(&mut self, dt: f32) {
         // camera mode overview: bounds are the visible dirs
         let cambounds = self.dir_bounds;
-        self.camera.adjust(&cambounds, &self.s, true);
+        self.camera.adjust(&cambounds, &self.s, !self.manual_zoom);
         self.camera.logic(dt);
 
         // automatically rotate camera (manual_rotate is input, never set here)

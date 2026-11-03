@@ -6,7 +6,7 @@
 use super::{log_settings, sim_settings};
 use burl_conf::settings::{DebugOptions, DisplaySettings, GourceSettings};
 use burl_formats::fetch_log;
-use burl_gl::{HeadlessEgl, Renderer};
+use burl_gl::{GlContext, HeadlessEgl, Renderer};
 use burl_render::{build_frame, world_matrix, SceneSettings, SceneTextures, TextureId};
 use burl_sim::Sim;
 use burl_util::prng::SimRng;
@@ -50,14 +50,8 @@ fn write_ppm(out: &mut dyn Write, w: u32, h: u32, rgba: &[u8]) -> std::io::Resul
     out.write_all(&rgb)
 }
 
-pub fn run(
-    display: &DisplaySettings,
-    repos: &mut [GourceSettings],
-    rng: SimRng,
-    debug: &DebugOptions,
-) -> Result<(), String> {
-    let (w, h) = (display.width as u32, display.height as u32);
-    let mut r = Renderer::new(HeadlessEgl::new(w, h)?)?;
+/// Upload the beam, file and user graphics (ids 1-3) and return their handles.
+pub fn upload_scene_textures<C: GlContext>(r: &mut Renderer<C>) -> Result<SceneTextures, String> {
     let mut load = |id, bytes| -> Result<f32, String> {
         let (tw, th, px) = decode(bytes)?;
         r.upload_texture(TextureId(id), tw, th, &px, true)?;
@@ -66,13 +60,24 @@ pub fn run(
     load(1, BEAM)?;
     let file_ratio = load(2, FILE)?;
     let user_ratio = load(3, USER)?;
-    let tex = SceneTextures {
+    Ok(SceneTextures {
         beam: TextureId(1),
         file: TextureId(2),
         file_ratio,
         user: TextureId(3),
         user_ratio,
-    };
+    })
+}
+
+pub fn run(
+    display: &DisplaySettings,
+    repos: &mut [GourceSettings],
+    rng: SimRng,
+    debug: &DebugOptions,
+) -> Result<(), String> {
+    let (w, h) = (display.width as u32, display.height as u32);
+    let mut r = Renderer::new(HeadlessEgl::new(w, h)?)?;
+    let tex = upload_scene_textures(&mut r)?;
 
     let name = &display.output_ppm_filename;
     let mut out: Box<dyn Write> = if name == "-" {

@@ -1,10 +1,13 @@
 //! `cargo xtask ci [--pcre2]`: the fast-tier checks, run exactly as `.github/workflows/ci.yml`
 //! runs them (the workflow calls this command, so the two cannot drift).
 //! `cargo xtask sim-compare GOLDEN ACTUAL [--floats exact|report]`: the simulation-gate comparator.
+//! `cargo xtask ssim A B [--min X]`, `ssim-frames STREAM.ppm PREFIX I,J,..`, `ssim-threshold V..`:
+//! the visual-equivalence gate's comparator and helpers (ticket #12).
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 use xtask::simcmp::{self, Floats, Options};
+use xtask::ssim;
 
 /// The fast tier (ticket #13): fmt, clippy with warnings denied, locked tests.
 fn steps(pcre2: bool) -> Vec<Vec<&'static str>> {
@@ -73,8 +76,49 @@ fn sim_compare(args: &[String]) -> ExitCode {
     }
 }
 
+/// The `ssim*` subcommands. Exit 0 ok, 1 below `--min`, 2 on bad input.
+fn ssim_cmd(cmd: &str, args: &[String]) -> Result<ExitCode, String> {
+    let load = |p: &String| ssim::decode(&std::fs::read(p).map_err(|e| format!("{p}: {e}"))?);
+    match (cmd, args) {
+        ("ssim", [a, b, rest @ ..]) => {
+            let min = match rest {
+                [] => None,
+                [f, v] if f == "--min" => Some(v.parse::<f64>().map_err(|e| format!("--min: {e}"))?),
+                _ => return Err("usage: cargo xtask ssim A B [--min X]".into()),
+            };
+            let s = ssim::ssim(&load(a)?, &load(b)?)?;
+            println!("ssim={s:.6}");
+            Ok(ExitCode::from(u8::from(min.is_some_and(|m| s < m))))
+        }
+        ("ssim-frames", [stream, prefix, idx]) => {
+            let bytes = std::fs::read(stream).map_err(|e| format!("{stream}: {e}"))?;
+            let frames = ssim::ppm_frames(&bytes)?;
+            for i in idx.split(',') {
+                let n: usize = i.parse().map_err(|_| format!("bad frame index {i:?}"))?;
+                let &(w, h, rgb) = frames.get(n).ok_or(format!("frame {n} of {}", frames.len()))?;
+                ssim::write_png(Path::new(&format!("{prefix}-{n}.png")), w, h, rgb)?;
+            }
+            println!("frames={}", frames.len());
+            Ok(ExitCode::SUCCESS)
+        }
+        ("ssim-threshold", vals) => {
+            let v: Vec<f64> = vals.iter().map(|s| s.parse().map_err(|e| format!("{s}: {e}"))).collect::<Result<_, _>>()?;
+            let t = ssim::threshold(&v).ok_or("no values")?;
+            println!("runs={} worst={:.6} threshold={t:.6}", v.len(), t + ssim::MARGIN);
+            Ok(ExitCode::SUCCESS)
+        }
+        _ => Err("usage: cargo xtask ssim A B [--min X] | ssim-frames STREAM.ppm PREFIX I,J,.. | ssim-threshold V..".into()),
+    }
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(cmd) = args.first().filter(|c| c.starts_with("ssim")) {
+        return ssim_cmd(cmd, &args[1..]).unwrap_or_else(|e| {
+            eprintln!("{cmd}: {e}");
+            ExitCode::from(2)
+        });
+    }
     if args.first().map(String::as_str) == Some("sim-compare") {
         return sim_compare(&args[1..]);
     }

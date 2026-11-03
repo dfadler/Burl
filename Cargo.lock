@@ -2196,6 +2196,7 @@ name = "xtask"
 version = "0.57.0"
 dependencies = [
  "burl-sim",
+ "png",
  "serde_json",
 ]
 

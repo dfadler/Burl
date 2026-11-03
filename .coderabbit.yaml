@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+reviews:
+  profile: chill
+  path_filters:
+    - "!ChangeLog"
+    - "!COPYING"
+    - "!data/**"
+    - "!resources/**"
+    - "!contrib/**"
+chat:
+  auto_reply: true

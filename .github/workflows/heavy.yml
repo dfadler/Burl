@@ -1,10 +1,10 @@
 # Heavy tier (ticket #13): Docker-based gates. Today: rebuild the oracle in the pinned image
 # and check the committed goldens reproduce, plus the slow Burl-only tests. The simulation goldens are
-# recaptured from the state-dump fork the same way. The visual gate is added with the renderer.
+# recaptured from the state-dump fork the same way. The headless render smoke (#15, #19) runs on llvmpipe; the scene visual gate lands with the scene render.
 name: heavy
 on:
   pull_request:
-    paths: ["tests/golden/**", "docs/rust-rewrite/discovery/golden/**", "docker/**", "reference/**", "src/**"]
+    paths: ["tests/golden/**", "docs/rust-rewrite/discovery/golden/**", "docker/**", "reference/**", "src/**", "crates/burl-gl/**", "crates/burl-render/**", "scripts/render-smoke.sh"]
   schedule:
     - cron: "17 3 * * 1"
   workflow_dispatch:
@@ -57,3 +57,13 @@ jobs:
         with:
           persist-credentials: false
       - run: cargo test --locked --release --workspace -- --ignored
+
+  render-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Headless render smoke (Docker, Mesa llvmpipe)
+        run: bash scripts/render-smoke.sh

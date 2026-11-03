@@ -37,14 +37,13 @@ No x86 hardware was available. What was run: arm64-native oracle (same source an
 so the rasteriser contributes far less than the timing mode. Not measured: a real x86 CPU with a different
 AVX level (the amd64 container is emulated) and a second x86 microarchitecture, so R22 stays open for real
 x86 hosts: CI's ubuntu-24.04 runner is the first real check (run `scripts/visual.sh self 10` there; expect >= 0.959).
-Burl and the fork run under the same warm-up/one-thread settings.
 
 ## Measured: Burl vs oracle (non-blocking, informational)
 
 `burl ... -o` in the same image vs the references at the same frame indices (SSIM): file-removal 0.987-0.993,
 file-to-dir 0.985-0.996, small-repo 0.921-0.956, real-burl-git-250 0.879-0.924. **Not a valid comparison yet**:
 Burl emits ~3x the frames (1051-1080 for fixtures where the oracle emits ~355; 3220 vs 1073 for the real log), so frame
-index N is not the same moment, and Burl's scene draws lack edge beams and glow that the oracle shows. Dark, sparse
+index N is not the same moment, and the one pair of frames I looked at differs visibly in layout. Dark, sparse
 frames score high regardless. The gate needs Burl's export to match the oracle's frame cadence and stop time first
 (proposed deviation or bug for the render owner; not for this PR to decide).
 

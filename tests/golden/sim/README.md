@@ -8,7 +8,7 @@ dump (Script-mode PRNG, `reference/gource-cpp-dump/tests/dump/rand-script.txt`).
   (pinned amd64 Debian image; `PROVENANCE.txt` records the image id and source sha).
 - `crates/burl/tests/sim_gate.rs` runs Burl on each fixture and compares through
   `xtask::simcmp` (also `cargo xtask sim-compare GOLDEN ACTUAL`): integers, bools, strings and
-  topology exact, floats bit-exact f32, `dest` (`sinf`/`cosf`) at 1e-5 relative.
+  topology exact, floats bit-exact f32, `dest` (`sinf`/`cosf`) and file `pos` (which chases `dest`) at 1e-5 relative.
 - `allowlist.txt` lists accepted differences by `DEVIATIONS.md` id; an unknown id is an error.
 
 | fixture | exercises |

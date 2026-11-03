@@ -7,6 +7,9 @@
 //! (reference/gource-cpp-dump/src/core/vbo.cpp, src/bloom.cpp). Row numbers below are the pass
 //! table in docs/rust-rewrite/discovery/output-pipeline.md.
 
+mod camera;
+pub use camera::*;
+
 use glam::{Mat4, Vec2, Vec4};
 
 /// `quadbuf_vertex`: pos, colour, uv (32 bytes).

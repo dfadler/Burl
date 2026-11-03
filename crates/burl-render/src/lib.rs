@@ -9,9 +9,11 @@
 
 mod camera;
 mod font;
+mod labels;
 mod scene;
 pub use camera::*;
 pub use font::*;
+pub use labels::*;
 pub use scene::*;
 
 use glam::{Mat4, Vec2, Vec4};

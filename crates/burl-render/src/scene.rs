@@ -53,6 +53,13 @@ impl SceneSettings {
     }
 }
 
+/// `SplineEdge::label_pos`: where the directory name sits on its edge (`--dir-name-position`).
+pub fn label_pos(pos1: Vec2, pos2: Vec2, spos: Vec2, position: f32) -> Vec2 {
+    let s_quota = 0.5 - (position - 0.5).abs();
+    let p_quota = 1.0 - s_quota;
+    pos1 * (p_quota * (1.0 - position)) + pos2 * (p_quota * position) + spos * s_quota
+}
+
 /// `SplineEdge::update` + `drawToVBO` for one edge, appended to `buf`. Positions are screen pixels.
 fn spline_edge(buf: &mut QuadBuf, pos1: Vec2, col1: Vec4, pos2: Vec2, col2: Vec4, spos: Vec2) {
     let mid = (pos1 - pos2) * 0.5;
@@ -97,7 +104,7 @@ pub fn world_matrix(scene: &SceneView, s: &SceneSettings) -> glam::Mat4 {
     camera(scene).view_projection(s.width, s.height)
 }
 
-fn camera(scene: &SceneView) -> Camera {
+pub(crate) fn camera(scene: &SceneView) -> Camera {
     Camera {
         pos: scene.camera.pos,
         target: scene.camera.target,

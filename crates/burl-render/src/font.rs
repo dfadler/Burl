@@ -91,6 +91,8 @@ struct GlyphSet {
     descender: f32,
     glyphs: HashMap<char, Glyph>,
     pages: Vec<Page>,
+    /// `FXGlyphSet::max_height`: the tallest glyph outline cached so far.
+    max_height: f32,
 }
 
 impl GlyphSet {
@@ -114,6 +116,10 @@ impl GlyphSet {
                     page = Some((i, tc));
                     break;
                 }
+            }
+            if page.is_some() {
+                // FT's metrics->height (outline box, 26.6 fixed point) rounded up.
+                self.max_height = self.max_height.max(m.bounds.height.ceil());
             }
             self.glyphs.insert(
                 c,
@@ -220,6 +226,7 @@ impl FontManager {
                 descender,
                 glyphs: HashMap::new(),
                 pages: Vec::new(),
+                max_height: 0.0,
             };
             for c in PRECACHE.chars() {
                 set.glyph(&self.font, &mut self.next_texture, c);
@@ -256,6 +263,11 @@ impl FontManager {
     pub fn height(&self, f: &Font) -> f32 {
         let s = &self.sets[&f.size];
         (s.ascender + s.descender).ceil()
+    }
+
+    /// `FXFont::getMaxHeight`: grows as taller glyphs are cached.
+    pub fn max_height(&self, f: &Font) -> f32 {
+        self.sets[&f.size].max_height
     }
 
     /// `fontmanager.startBuffer`.

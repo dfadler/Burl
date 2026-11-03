@@ -38,6 +38,9 @@ fn dir(parent: Option<usize>, pos: Vec2, visible: bool, files: Vec<FileView>) ->
         radius: 6.0,
         visible,
         files,
+        name: "d".into(),
+        depth: 1,
+        since_last_node_change: 0.0,
     }
 }
 
@@ -47,6 +50,9 @@ fn scene() -> SceneView {
         size: 8.4,
         colour: Vec3::new(1.0, 0.5, 0.0),
         alpha: 0.5,
+        name: "f.rs".into(),
+        nametime: 4.0,
+        name_interval: 4.0,
     };
     SceneView {
         camera: CameraView {
@@ -65,6 +71,10 @@ fn scene() -> SceneView {
             size: 20.0,
             colour: Vec3::ONE,
             alpha: 1.0,
+            name: "u".into(),
+            nametime: 5.0,
+            name_interval: 5.0,
+            highlighted: false,
             actions: vec![
                 ActionView {
                     src: Vec2::new(5.0, -5.0),

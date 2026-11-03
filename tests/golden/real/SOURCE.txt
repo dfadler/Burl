@@ -1,0 +1,1 @@
+burl-git-250.log: git log --reverse --raw --encoding=UTF-8 --no-renames --no-show-signature --pretty=format:user:%aN%n%ct bbf6850fb1bc7af673dcb59da9c57095a5ac629c (first 250 commits of master, pinned)

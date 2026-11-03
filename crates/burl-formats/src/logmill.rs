@@ -1,6 +1,7 @@
 //! `RLogMill::fetchLog` / `findRepository` / error selection (src/logmill.cpp:65-337),
-//! synchronous. The logmill thread and the `start_timestamp` skip loop come with the sim.
+//! synchronous. The logmill thread comes with the sim.
 
+use crate::commit::RCommit;
 use crate::commitlog::CommitLog;
 use crate::formats::{apache, bzr, custom, cvs2cl, cvs_exp, git, gitraw, hg, svn};
 use crate::seeklog::SeekLogError;
@@ -88,7 +89,22 @@ fn fetch(logfile: &str, log_format: &str, s: &Arc<LogSettings>) -> Attempt {
     Ok(None)
 }
 
-/// `RLogMill::run` minus the thread and the start-date skip: open `logfile` (a path or
+/// The start-timestamp loop of `RLogMill::run`: drop commits before `start`, buffering the first
+/// one at or after it. (No `shutdown` flag yet: that comes with the thread.)
+fn skip_to_start(log: &mut dyn CommitLog, start: i64) {
+    if start == 0 {
+        return;
+    }
+    let mut commit = RCommit::default();
+    while !log.is_finished() {
+        if log.next_commit(&mut commit, true) && commit.timestamp >= start {
+            log.buffer_commit(commit);
+            break;
+        }
+    }
+}
+
+/// `RLogMill::run` minus the thread: open `logfile` (a path or
 /// `"-"`) in `settings.log_format` (empty = detect), or the exact C++ error message.
 pub fn fetch_log(
     logfile: &str,
@@ -103,7 +119,10 @@ pub fn fetch_log(
         }
     }
     match fetch(&logfile, &log_format, &settings) {
-        Ok(Some(log)) => Ok(log),
+        Ok(Some(mut log)) => {
+            skip_to_start(log.as_mut(), settings.start_timestamp);
+            Ok(log)
+        }
         Err(_) => Err(LogMillError("unable to read log file".to_string())),
         Ok(None) => {
             let msg = if Path::new(&logfile).is_dir() {

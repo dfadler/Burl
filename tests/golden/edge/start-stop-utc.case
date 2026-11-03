@@ -1,0 +1,1 @@
+TZ=UTC --log-format custom --start-date 2020-01-02 --stop-date 2020-06-01

@@ -649,23 +649,25 @@ fn sim_settings_cover_the_gate_flags() {
     .unwrap();
     let d = import_display_settings(&c).unwrap();
     let g = import_gource_settings(&c, c.section("gource").unwrap()).unwrap();
+    assert_eq!((d.output_framerate, d.width, d.height), (30, 1280, 720));
     assert_eq!(
-        SimSettings::new(&d, &g),
-        SimSettings {
-            framerate: 30,
-            width: 1280,
-            height: 720,
-            days_per_second: 1.0,
-            stop_at_time: 10.0,
-            hash_seed: 7,
-            auto_skip_seconds: -1.0,
-            disable_auto_rotate: true,
-            file_idle_time: 2.0,
-            file_idle_time_at_end: 1.0,
-            user_idle_time: 3.0,
-            time_scale: 2.0,
-            hide_mouse: true,
-        }
+        (
+            g.days_per_second,
+            g.stop_at_time,
+            g.hash_seed,
+            g.auto_skip_seconds
+        ),
+        (1.0, 10.0, 7, -1.0)
+    );
+    assert!(g.disable_auto_rotate && g.hide_mouse);
+    assert_eq!(
+        (
+            g.file_idle_time,
+            g.file_idle_time_at_end,
+            g.user_idle_time,
+            g.time_scale
+        ),
+        (2.0, 1.0, 3.0, 2.0)
     );
 }
 

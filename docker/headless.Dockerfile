@@ -5,6 +5,7 @@ FROM rust:1-slim-trixie@sha256:b8e062b1c3a80183df83d9ba187cadd2b5ab84bc78d453dbf
 WORKDIR /w
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
+COPY data data
 COPY xtask xtask
 RUN cargo build --release --locked -p burl-gl --example smoke
 

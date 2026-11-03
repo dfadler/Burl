@@ -2,6 +2,9 @@
 all-features = true
 
 [advisories]
+# fontdue (ticket #19 item 3) parses fonts with ttf-parser, which is unmaintained but has no known
+# vulnerability. Replace with skrifa-based text if fontdue does not move off it.
+ignore = ["RUSTSEC-2026-0192"]
 
 [licenses]
 # Burl is GPL-3.0-or-later; only GPL-compatible licences may enter the tree.

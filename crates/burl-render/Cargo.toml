@@ -9,3 +9,4 @@ description = "Burl: CPU-side render batches in Gource's fixed pass order (no GL
 glam.workspace = true
 burl-util.workspace = true
 burl-sim.workspace = true
+fontdue = "0.9.5"

@@ -316,7 +316,9 @@ impl Walker<'_> {
                     gn.as_f64().unwrap_or(f64::NAN) as f32,
                     an.as_f64().unwrap_or(f64::NAN) as f32,
                 );
-                if key.is_some_and(|k| LIBM_KEYS.contains(&k)) {
+                // a file's `pos` chases its libm-derived `dest`, so it carries the same 1-ulp libm noise
+                let file_pos = key == Some("pos") && path.first().is_some_and(|p| p == "files");
+                if file_pos || key.is_some_and(|k| LIBM_KEYS.contains(&k)) {
                     if (gf - af).abs() > 1e-5 * f32::max(1.0, f32::max(gf.abs(), af.abs())) {
                         self.diverge(path, Tier::Tolerance, gn.to_string(), an.to_string());
                     }
@@ -494,10 +496,10 @@ mod tests {
 
     #[test]
     fn one_ulp_float_difference_fails_bit_exact_but_only_warns_in_report_mode() {
-        let g = frame(0, 0, "1", 7, "[0,1]", "[1.5,-2]");
-        let a = frame(0, 0, "1", 7, "[0,1]", "[1.50000012,-2]"); // next f32 above 1.5
+        let g = frame(0, 0, "1.5", 7, "[0,1]", POS);
+        let a = frame(0, 0, "1.50000012", 7, "[0,1]", POS); // next f32 above 1.5
         let r = run(&g, &a, &Options::default());
-        assert_eq!(r.failures[0].path, "files[0].pos[0]");
+        assert_eq!(r.failures[0].path, "g.runtime");
         assert_eq!(r.failures[0].tier, Tier::BitF32);
         let relaxed = Options {
             floats: Floats::Report,
@@ -518,6 +520,15 @@ mod tests {
             (r.failures[0].path.as_str(), r.failures[0].tier),
             ("files[0].dest[0]", Tier::Tolerance)
         );
+    }
+
+    #[test]
+    fn file_pos_follows_dest_tolerance_but_other_floats_stay_bit_exact() {
+        let g = frame(0, 0, "1", 7, "[0.5,0.5]", "[-6.2732182,1]");
+        let ulp = frame(0, 0, "1", 7, "[0.5,0.5]", "[-6.2732186,1]");
+        assert!(run(&g, &ulp, &Options::default()).ok());
+        let rt = frame(0, 0, "1.0000001", 7, "[0.5,0.5]", "[-6.2732182,1]");
+        assert!(!run(&g, &rt, &Options::default()).ok());
     }
 
     #[test]

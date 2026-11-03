@@ -8,7 +8,7 @@ dump (Script-mode PRNG, `reference/gource-cpp-dump/tests/dump/rand-script.txt`).
   (pinned amd64 Debian image; `PROVENANCE.txt` records the image id and source sha).
 - `crates/burl/tests/sim_gate.rs` runs Burl on each fixture and compares through
   `xtask::simcmp` (also `cargo xtask sim-compare GOLDEN ACTUAL`): integers, bools, strings and
-  topology exact, floats bit-exact f32, `dest` (`sinf`/`cosf`) at 1e-5 relative.
+  topology exact, floats bit-exact f32, `dest` (`sinf`/`cosf`) and file `pos` (which chases `dest`) at 1e-5 relative.
 - `allowlist.txt` lists accepted differences by `DEVIATIONS.md` id; an unknown id is an error.
 
 | fixture | exercises |
@@ -18,3 +18,6 @@ dump (Script-mode PRNG, `reference/gource-cpp-dump/tests/dump/rand-script.txt`).
 | `file-removal` | removal actions, file fade-out, user fade-out, `appFinished` |
 | `file-to-dir` | a file turning into a directory (`forced_removal`) |
 | `custom-dir-delete` | `D` on a directory path removing every file below it |
+| `real-burl-git-250` | slice 2 real-repo run (#11 item 7): this repository's first 250 commits as a git log (`tests/golden/real/burl-git-250.log`, copied), `--stop-at-time 60`, dumped every 30 frames; ~110 files, quadtree forces over 2 to 7 users |
+
+The fork blocks on the async log load when dumping (`Gource::update`, dump mode only), so its frame 0 is the load frame, as in Burl (D2). Without that, a real log loaded one frame late (`loaded_frame0` 1), which shifts the fork's `runtime` and stop time by that frame and the every-N sampling by one.

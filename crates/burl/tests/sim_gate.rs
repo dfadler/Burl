@@ -109,3 +109,10 @@ fn sim_gate_custom_dir_delete() {
 fn sim_gate_small_repo_idle() {
     gate("small-repo-idle");
 }
+
+/// The pinned real-repo run (#11 item 7, risk R13): this repository's first 250 commits as a git
+/// log, `--stop-at-time 60`, dumped every 30 frames.
+#[test]
+fn sim_gate_real_burl_git_250() {
+    gate("real-burl-git-250");
+}

@@ -1,8 +1,8 @@
 #![forbid(unsafe_code)]
 //! Entry point: the `main.cpp` flow from argument parsing through settings import,
 //! `--save-config` and `--output-custom-log`. Arguments become a `ConfFile` (`burl-conf`), which
-//! is imported and validated for every `[gource]` section up front (deviation D1); there is no
-//! display path yet, so a run that gets that far exits 1.
+//! is imported and validated for every `[gource]` section up front (deviation D1); a run that
+//! gets that far opens the window (`interactive`) or, with `-o`, exports frames (`export`).
 
 use burl_conf::args::parse_args;
 use burl_conf::conffile::{ConfError, ConfFile};
@@ -19,6 +19,7 @@ use std::io::{BufRead, Write};
 use std::sync::Arc;
 
 mod export;
+mod interactive;
 
 const EXEC: &str = "burl";
 
@@ -388,9 +389,13 @@ fn run() -> Result<(), ConfError> {
         }
         std::process::exit(0);
     }
-    // Not a C++ message: the windowed display path does not exist yet.
-    eprintln!("{}: the display path is not implemented yet", EXEC);
-    std::process::exit(1);
+    let rng = make_rng(&cl.debug)
+        .map(|r| r.0)
+        .unwrap_or_else(|e| quit(&e));
+    if let Err(e) = interactive::run(display, repos, rng) {
+        quit(&e);
+    }
+    std::process::exit(0);
 }
 
 fn main() {

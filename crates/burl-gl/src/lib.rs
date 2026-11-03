@@ -4,9 +4,12 @@
 
 mod headless;
 mod renderer;
+mod window;
 
 pub use headless::HeadlessEgl;
 pub use renderer::Renderer;
+pub use window::WindowedGl;
+pub use winit;
 
 pub type Result<T> = std::result::Result<T, String>;
 

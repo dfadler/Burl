@@ -21,3 +21,5 @@ regex = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 roxmltree = "0.20"
 pcre2 = "0.2"
+# Windowed path pins from the headless spike (#15); one winit for the whole tree.
+winit = { version = "=0.30.13", default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen"] }

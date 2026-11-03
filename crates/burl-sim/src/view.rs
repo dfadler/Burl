@@ -1,0 +1,171 @@
+//! A read-only snapshot of what the renderer draws (phase 5, ticket #19): plain data in the order
+//! `Gource::draw` walks it, so the renderer needs no access to the simulation's arenas.
+//! Ported from the draw-side accessors: `RFile::getColour/getAlpha/getAbsolutePos`,
+//! `RUser::getColour/getAlpha`, `Pawn::getAlpha`, `RAction::drawToVBO` inputs and
+//! `RDirNode::isVisible` (src/file.cpp, user.cpp, pawn.h, action.cpp, dirnode.cpp).
+
+use crate::sim::{DirId, Sim};
+use glam::{Vec2, Vec3};
+
+/// `Pawn::fadetime`.
+const FADE_TIME: f32 = 1.0;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CameraView {
+    pub pos: Vec3,
+    pub target: Vec3,
+    /// `ZoomCamera::max_distance` (`zfar` is this plus one).
+    pub max_distance: f32,
+}
+
+/// One directory node. `parent` indexes `SceneView::dirs`, which is in depth-first order from the
+/// root with children in list order, the order `calcEdges`/`updateEdgeVBO`/`updateBloomVBO` visit.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DirView {
+    pub parent: Option<usize>,
+    pub pos: Vec2,
+    pub spos: Vec2,
+    pub colour: [f32; 4],
+    pub radius: f32,
+    /// `isVisible()` (the node or any descendant is visible).
+    pub visible: bool,
+    pub files: Vec<FileView>,
+}
+
+/// A file that is not hidden; `pos` is absolute (`getAbsolutePos`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct FileView {
+    pub pos: Vec2,
+    pub size: f32,
+    pub colour: Vec3,
+    pub alpha: f32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ActionView {
+    pub src: Vec2,
+    pub dest: Vec2,
+    pub target_size: f32,
+    pub progress: f32,
+    pub colour: Vec3,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct UserView {
+    pub pos: Vec2,
+    pub size: f32,
+    pub colour: Vec3,
+    pub alpha: f32,
+    pub actions: Vec<ActionView>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SceneView {
+    pub camera: CameraView,
+    pub dirs: Vec<DirView>,
+    /// In name order (`std::map<std::string, RUser*>`).
+    pub users: Vec<UserView>,
+}
+
+impl Sim {
+    /// Snapshot the scene after `update`. `&mut` because `isVisible` caches `visible = true` on
+    /// ancestors of visible nodes, and the next tick's logic reads that flag, so drawing a frame
+    /// is observable by the simulation exactly as in C++.
+    pub fn scene_view(&mut self) -> SceneView {
+        let mut order = Vec::new();
+        let mut stack = vec![(self.root, None::<usize>)];
+        // Depth-first, children in list order: push them reversed so the first child pops first.
+        while let Some((d, parent)) = stack.pop() {
+            let idx = order.len();
+            order.push((d, parent));
+            for &c in self.dir(d).children.iter().rev() {
+                stack.push((c, Some(idx)));
+            }
+        }
+        let dirs = order
+            .into_iter()
+            .map(|(d, parent)| self.dir_view(d, parent))
+            .collect();
+
+        let users = self
+            .user_map
+            .values()
+            .map(|&u| {
+                let u = self.user(u);
+                let idle = u.elapsed - u.last_action;
+                let mut alpha = (u.elapsed / FADE_TIME).min(1.0);
+                if idle > self.s.user_idle_time {
+                    alpha = 1.0 - (idle - self.s.user_idle_time).min(1.0);
+                }
+                UserView {
+                    pos: u.pos,
+                    size: u.size,
+                    colour: u.usercol,
+                    alpha,
+                    actions: u
+                        .active_actions
+                        .iter()
+                        .map(|a| {
+                            let t = self.file(a.target);
+                            ActionView {
+                                src: u.pos,
+                                dest: self.file_abs_pos(a.target),
+                                target_size: t.size,
+                                progress: a.progress,
+                                colour: a.colour,
+                            }
+                        })
+                        .collect(),
+                }
+            })
+            .collect();
+
+        SceneView {
+            camera: CameraView {
+                pos: self.camera.pos,
+                target: self.camera.target,
+                max_distance: self.s.camera_zoom_max,
+            },
+            dirs,
+            users,
+        }
+    }
+
+    fn dir_view(&mut self, d: DirId, parent: Option<usize>) -> DirView {
+        let visible = self.dir_is_visible(d);
+        let dd = self.dir(d);
+        let files = dd
+            .files
+            .iter()
+            .map(|&f| self.file(f))
+            .filter(|f| !f.hidden)
+            .map(|f| {
+                let lc = f.elapsed - f.last_action;
+                let colour = if lc < 1.0 {
+                    f.touch_colour * (1.0 - lc) + f.file_colour * lc
+                } else {
+                    f.file_colour
+                };
+                let mut alpha = (f.elapsed / FADE_TIME).min(1.0);
+                if f.fade_start > 0.0 {
+                    alpha = 1.0 - (f.elapsed - f.fade_start).clamp(0.0, 1.0);
+                }
+                FileView {
+                    pos: f.pos + dd.pos,
+                    size: f.size,
+                    colour,
+                    alpha,
+                }
+            })
+            .collect();
+        DirView {
+            parent,
+            pos: dd.pos,
+            spos: dd.spos,
+            colour: dd.col,
+            radius: dd.dir_radius,
+            visible,
+            files,
+        }
+    }
+}

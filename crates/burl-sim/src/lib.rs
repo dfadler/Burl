@@ -10,6 +10,7 @@
 pub mod dump;
 pub mod settings;
 pub mod sim;
+pub mod view;
 
 pub use dump::DumpOptions;
 pub use settings::SimSettings;

@@ -7,11 +7,13 @@
 //! narrowing (`f64` where a double literal or `PI` is involved) and the C++ evaluation order,
 //! because the gate compares f32 bit patterns.
 
+pub mod command;
 pub mod dump;
 pub mod settings;
 pub mod sim;
 pub mod view;
 
+pub use command::Command;
 pub use dump::DumpOptions;
 pub use settings::SimSettings;
 pub use sim::{Sim, SimError};

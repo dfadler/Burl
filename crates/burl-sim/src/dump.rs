@@ -3,7 +3,7 @@
 //! form rather than `%.9g`; both parse back to the same f32, which is how the comparator reads
 //! them. Non-finite values are the strings `"nan"`, `"inf"`, `"-inf"`.
 
-use crate::sim::{Kind, Sim};
+use crate::sim::{Caption, Kind, Sim, SimError};
 use burl_util::bounds::Bounds2D;
 use std::fmt::Write;
 
@@ -99,6 +99,24 @@ fn jstr(o: &mut String, s: &str) {
     o.push('"');
 }
 
+/// `dumpCaptions`: `RCaption::dumpJson` per caption.
+fn dump_captions<'a>(o: &mut String, caps: impl Iterator<Item = &'a Caption>) {
+    o.push('[');
+    for (i, c) in caps.enumerate() {
+        if i > 0 {
+            o.push(',');
+        }
+        o.push_str("{\"text\":");
+        jstr(o, &c.text);
+        let _ = write!(o, ",\"timestamp\":{},\"elapsed\":", c.timestamp);
+        flt(o, c.elapsed);
+        o.push_str(",\"alpha\":");
+        flt(o, c.alpha);
+        o.push('}');
+    }
+    o.push(']');
+}
+
 fn jbool(b: bool) -> &'static str {
     if b {
         "true"
@@ -134,13 +152,13 @@ pub fn header(prng: &str, seed: Option<u64>, every: u32, max_frames: u32) -> Str
 }
 
 impl Sim {
-    /// The `section` record (single-section runs: section 1).
+    /// The `section` record (`dumpSectionBoundary`).
     pub fn section_record(&self) -> String {
         let mut o = String::new();
         let _ = write!(
             o,
-            "{{\"schema\":{SCHEMA},\"type\":\"section\",\"section\":1,\"repo_count\":{},\"hash_seed\":{},\"stop_at_time\":",
-            self.s.repo_count, self.s.hash_seed
+            "{{\"schema\":{SCHEMA},\"type\":\"section\",\"section\":{},\"repo_count\":{},\"hash_seed\":{},\"stop_at_time\":",
+            self.s.section, self.s.repo_count, self.s.hash_seed
         );
         flt(&mut o, self.s.stop_at_time);
         o.push_str(",\"stop_position\":");
@@ -170,8 +188,8 @@ impl Sim {
         let mut o = String::with_capacity(4096);
         let _ = write!(
             o,
-            "{{\"schema\":{SCHEMA},\"type\":\"frame\",\"section\":1,\"repo_count\":{},\"frame\":{},\"g\":{{",
-            self.s.repo_count, self.framecount
+            "{{\"schema\":{SCHEMA},\"type\":\"frame\",\"section\":{},\"repo_count\":{},\"frame\":{},\"g\":{{",
+            self.s.section, self.s.repo_count, self.framecount
         );
         let _ = write!(
             o,
@@ -257,7 +275,11 @@ impl Sim {
             }
             self.dump_user(&mut o, u);
         }
-        o.push_str("],\"captions\":{\"queued\":[],\"active\":[]}}\n");
+        o.push_str("],\"captions\":{\"queued\":");
+        dump_captions(&mut o, self.captions.iter());
+        o.push_str(",\"active\":");
+        dump_captions(&mut o, self.active_captions.iter());
+        o.push_str("}}\n");
         o
     }
 
@@ -432,23 +454,32 @@ pub struct DumpOptions {
     pub prng_seed: Option<u64>,
 }
 
+/// The dump header, once per run (the fork writes it at the first section boundary).
+pub fn write_header(out: &mut dyn std::io::Write, o: &DumpOptions) -> Result<(), SimError> {
+    out.write_all(header(&o.prng, o.prng_seed, o.every, o.max_frames).as_bytes())
+        .map_err(write_err)
+}
+
+fn write_err(e: std::io::Error) -> SimError {
+    SimError(format!("could not write the dump: {e}"))
+}
+
 impl Sim {
-    /// Run to the end, writing the header, the section record and every selected frame
-    /// (`Gource::update` with the fork's hook after `logic`).
-    pub fn run_dump(
+    /// Run one section to its end, writing its section record and every selected frame
+    /// (`Gource::update` with the fork's hook after `logic`). The frame counter is the Sim's
+    /// own, so it restarts with each section's Sim.
+    pub fn run_section(
         &mut self,
         out: &mut dyn std::io::Write,
         o: &DumpOptions,
-    ) -> Result<(), crate::sim::SimError> {
-        let io = |e: std::io::Error| crate::sim::SimError(format!("could not write the dump: {e}"));
-        out.write_all(header(&o.prng, o.prng_seed, o.every, o.max_frames).as_bytes())
-            .map_err(io)?;
+    ) -> Result<(), SimError> {
         out.write_all(self.section_record().as_bytes())
-            .map_err(io)?;
+            .map_err(write_err)?;
         while !self.app_finished {
             self.update()?;
             if self.should_dump(o.every, o.max_frames) {
-                out.write_all(self.frame_record().as_bytes()).map_err(io)?;
+                out.write_all(self.frame_record().as_bytes())
+                    .map_err(write_err)?;
             }
             // the cap (or the natural end) finishes the run after its last frame is written
             if self.is_last_frame(o.max_frames) {
@@ -456,7 +487,17 @@ impl Sim {
             }
             self.end_frame();
         }
-        out.flush().map_err(io)
+        out.flush().map_err(write_err)
+    }
+
+    /// A single-section run: the header, then the section.
+    pub fn run_dump(
+        &mut self,
+        out: &mut dyn std::io::Write,
+        o: &DumpOptions,
+    ) -> Result<(), SimError> {
+        write_header(out, o)?;
+        self.run_section(out, o)
     }
 }
 

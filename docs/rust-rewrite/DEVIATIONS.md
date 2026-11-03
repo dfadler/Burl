@@ -33,5 +33,6 @@ A new Change or Gap needs a row in this file **and the user's explicit OK** befo
 | G1 | SIGPIPE behaviour on a closed PPM pipe | Not matched | Not exercised by any golden | Gap | Fix trigger: first user report or phase 5 export tests |
 | G2 | TinyXML quirks (e.g. CDATA handling) in svn logs | `roxmltree` semantics | Edge cases only | Gap | Fix trigger: a real log that parses differently; Burl-only test when found |
 | G3 | High-DPI window sizing on Retina | Small window for a viewport without `--high-dpi` (#20) | Exact-pixel window rule | Gap | Fix trigger: phase 6 manual checklist |
+| G4 | User filters (`--file-filter`, `--user-filter`, ...) use PCRE2: look-around and backreferences work | The default build uses the `regex` crate and rejects such a pattern at import (`invalid file-filter regular expression`); the `pcre2` feature build matches Gource | Plain patterns cover nearly all use; no C library in the default build (#18 item 5) | Gap | Fix trigger: the release build (phase 7) decides whether `pcre2` ships by default; `deviation_g4_default_build_rejects_pcre2_only_filters` (default build), `sim_gate_pcre2_filters` (`pcre2` leg) |
 
 Rows D1, D2, D8, D9 and G1 to G3 are placeholders carried from the decision tickets; their pinning tests and exact wording are filled in by the PR that implements them.

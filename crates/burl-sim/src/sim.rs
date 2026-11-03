@@ -3,12 +3,12 @@
 //! (byte order, like `std::string`). Order-sensitive spots are commented where they occur.
 //!
 //! Not ported, and refused up front by [`Sim::new`] rather than silently ignored: start
-//! position seeks, `--loop`, captions, followed users, auto-rotate. The renderer-only calls in
+//! position seeks, `--loop`, followed users, the track camera mode. The renderer-only calls in
 //! `draw` have no simulation effect.
 
 use burl_formats::{CommitLog, RCommit};
 use burl_util::bounds::Bounds2D;
-use burl_util::math::{normalise_vec2, PI};
+use burl_util::math::{normalise_vec2, rotate_vec2, PI};
 use burl_util::prng::SimRng;
 use burl_util::quadtree::QuadTree;
 use burl_util::strhash::{colour_hash, vec2_hash};
@@ -133,6 +133,14 @@ pub(crate) struct Dir {
     pub quad: Bounds2D,
 }
 
+/// `RCaption`: only the state the dump carries (layout and drawing are renderer matters).
+pub(crate) struct Caption {
+    pub text: String,
+    pub timestamp: i64,
+    pub elapsed: f32,
+    pub alpha: f32,
+}
+
 pub(crate) struct Camera {
     pub pos: Vec3,
     pub dest: Vec3,
@@ -237,6 +245,9 @@ pub struct Sim {
     pub(crate) last_percent: f32,
     pub(crate) rotation_remaining_angle: f32,
     pub(crate) rotate_angle: f32,
+    /// `captions` (queued, in file order) and `active_captions`.
+    pub(crate) captions: VecDeque<Caption>,
+    pub(crate) active_captions: Vec<Caption>,
     pub(crate) tag_seq: i32,
     pub(crate) user_bounds: Bounds2D,
     active_user_bounds: Bounds2D,
@@ -286,14 +297,8 @@ impl Sim {
         if settings.loop_ {
             return nyi("--loop");
         }
-        if !settings.caption_file.is_empty() {
-            return nyi("--caption-file");
-        }
         if !settings.follow_users.is_empty() {
             return nyi("--follow-user");
-        }
-        if !settings.disable_auto_rotate {
-            return nyi("auto-rotate (pass --disable-auto-rotate)");
         }
         if settings.track_users {
             return nyi("--camera-mode track");
@@ -332,6 +337,8 @@ impl Sim {
             last_percent: 0.0,
             rotation_remaining_angle: 0.0,
             rotate_angle: 0.0,
+            captions: VecDeque::new(),
+            active_captions: Vec::new(),
             tag_seq: 1,
             user_bounds: Bounds2D::default(),
             active_user_bounds: Bounds2D::default(),
@@ -354,6 +361,17 @@ impl Sim {
         // reset(): root = new RDirNode(0, "/")
         sim.root = sim.dir_new("/");
         Ok(sim)
+    }
+
+    /// The generator and the fork's global `first_rand_frame`, which outlive a section: the next
+    /// section's Sim continues the same stream (`rand_calls`, script position, libc state).
+    pub fn into_carry(self) -> (SimRng, i64) {
+        (self.rng, self.first_rand_frame)
+    }
+
+    /// Resume the carried `first_rand_frame` (set once, by the first `rand()` of the whole run).
+    pub fn carry_first_rand_frame(&mut self, f: i64) {
+        self.first_rand_frame = f;
     }
 
     pub fn is_finished(&self) -> bool {
@@ -430,6 +448,8 @@ impl Sim {
     }
 
     fn logic(&mut self, t: f32, dt: f32) -> Result<(), SimError> {
+        self.apply_rotation();
+
         // get more entries
         if self.commitqueue.is_empty() {
             self.read_log()?;
@@ -439,6 +459,7 @@ impl Sim {
             self.currtime = self.commitqueue[0].timestamp;
             self.lasttime = self.currtime;
             self.subseconds = 0.0;
+            self.load_captions();
         }
 
         // set current time: `float time_inc = (dt * 86400.0 * days_per_second)` (double math)
@@ -494,7 +515,7 @@ impl Sim {
             self.commitqueue.pop_front();
         }
 
-        // no captions
+        self.update_captions(dt);
 
         self.update_bounds();
         self.interact_users();
@@ -1913,9 +1934,165 @@ impl Sim {
         let cambounds = self.dir_bounds;
         self.camera.adjust(&cambounds, &self.s, true);
         self.camera.logic(dt);
-        // auto-rotate is refused in `new`; with it disabled the remaining angle is zero
-        self.rotation_remaining_angle = 0.0;
+
+        // automatically rotate camera (manual_rotate is input, never set here)
+        if self.s.disable_auto_rotate {
+            self.rotation_remaining_angle = 0.0;
+        } else if self.rotation_remaining_angle > 0.0 {
+            // rotation through 90 degrees, speed peaks at half way. `fabs(x - 0.5)` is a double
+            // (`0.5` literal), so is the product with `2.0f`; the cast narrows it back.
+            let remaining = self.rotation_remaining_angle;
+            let peak = (1.0f32 as f64 - (((remaining / 90.0f32) as f64) - 0.5).abs() * 2.0) as f32;
+            let angle_rate = f32_max(dt, peak) * dt;
+
+            self.rotate_angle = f32::min(remaining, 90.0f32 * angle_rate);
+            self.rotation_remaining_angle -= self.rotate_angle;
+
+            // `float *= double`: the product is a double, narrowed on assignment
+            self.rotate_angle =
+                (self.rotate_angle as f64 * burl_util::math::DEGREES_TO_RADIANS) as f32;
+        } else if self.dir_bounds.area() > 10000.0f32 {
+            let aspect_ratio = self.s.display_width as f32 / self.s.display_height as f32;
+            let b = &self.dir_bounds;
+            let bounds_ratio = if aspect_ratio > 1.0 {
+                b.width() / b.height()
+            } else {
+                b.height() / b.width()
+            };
+            if bounds_ratio < 0.67f32 {
+                self.rotation_remaining_angle = 90.0;
+            }
+        }
     }
+
+    /// The head of `Gource::logic`: apply last frame's `rotate_angle` to the whole tree.
+    fn apply_rotation(&mut self) {
+        if self.rotate_angle == 0.0 {
+            return;
+        }
+        let s = self.rotate_angle.sin();
+        let c = self.rotate_angle.cos();
+        let root = self.root;
+        self.dir_rotate(root, s, c);
+        for &uid in self.user_map.values().copied().collect::<Vec<_>>().iter() {
+            let u = self.user_mut(uid);
+            u.pos = rotate_vec2(u.pos, s, c);
+        }
+        self.rotate_angle = 0.0;
+    }
+
+    /// `RDirNode::rotate(s, c)`.
+    fn dir_rotate(&mut self, d: DirId, s: f32, c: f32) {
+        let dir = self.dir_mut(d);
+        dir.pos = rotate_vec2(dir.pos, s, c);
+        dir.spos = rotate_vec2(dir.spos, s, c);
+        for child in self.dir(d).children.clone() {
+            self.dir_rotate(child, s, c);
+        }
+    }
+
+    /// `Gource::loadCaptions`, called once when the clock starts.
+    fn load_captions(&mut self) {
+        if self.s.caption_file.is_empty() {
+            return;
+        }
+        let Ok(bytes) = std::fs::read(&self.s.caption_file) else {
+            return;
+        };
+        let mut last_timestamp = 0i64;
+        for line in bytes.split(|&b| b == b'\n') {
+            // ConfFile::trim: trailing whitespace only
+            let end = line
+                .iter()
+                .rposition(|b| !b" \t\x0c\x0b\n\r".contains(b))
+                .map_or(0, |i| i + 1);
+            let Some((stamp, text)) = split_caption(&line[..end]) else {
+                continue;
+            };
+            let timestamp = if stamp.len() > 1 && stamp[1..].contains(&b'-') {
+                match burl_util::timeparse::parse_date_time(stamp) {
+                    Some(t) => t,
+                    None => continue,
+                }
+            } else {
+                let t = atoll(stamp);
+                if t == 0 && stamp != b"0" {
+                    continue;
+                }
+                t
+            };
+            // ignore older captions, then out of order ones
+            if timestamp < self.currtime || timestamp < last_timestamp {
+                continue;
+            }
+            last_timestamp = timestamp;
+            self.captions.push_back(Caption {
+                text: burl_util::utf8::filter_utf8(text),
+                timestamp,
+                elapsed: 0.0,
+                alpha: 0.0,
+            });
+        }
+    }
+
+    /// The caption part of `Gource::logic`: queued captions whose time has come become active;
+    /// active ones age and expire. (Their on-screen row, `setPos`, is renderer-only.)
+    fn update_captions(&mut self, dt: f32) {
+        while self
+            .captions
+            .front()
+            .is_some_and(|c| c.timestamp <= self.currtime)
+        {
+            let c = self.captions.pop_front().unwrap();
+            self.active_captions.push(c);
+        }
+        let duration = self.s.caption_duration;
+        self.active_captions.retain_mut(|c| {
+            // RCaption::logic, then isFinished
+            let fade_in = f32::min(2.0, duration / 3.0);
+            c.elapsed += dt;
+            c.alpha = f32::min(
+                1.0,
+                f32::min(c.elapsed, f32::max(0.0, duration - c.elapsed)) / fade_in,
+            );
+            c.elapsed < duration
+        });
+    }
+}
+
+/// `^(?:\xEF\xBB\xBF)?([^|]+)\|(.+)$` on one line: the timestamp and the text. The optional BOM
+/// is tried first, then (as the regex backtracks) not at all.
+fn split_caption(line: &[u8]) -> Option<(&[u8], &[u8])> {
+    let split = |s: &'_ [u8]| -> Option<(usize, usize)> {
+        let bar = s.iter().position(|&b| b == b'|')?;
+        (bar > 0 && bar + 1 < s.len() && !s[bar + 1..].contains(&b'\n')).then_some((bar, bar + 1))
+    };
+    let body = line.strip_prefix(b"\xEF\xBB\xBF".as_slice());
+    for s in body.into_iter().chain(Some(line)) {
+        if let Some((bar, rest)) = split(s) {
+            return Some((&s[..bar], &s[rest..]));
+        }
+    }
+    None
+}
+
+/// C `atoll`: leading whitespace, optional sign, digits; saturates like `strtoll`.
+fn atoll(s: &[u8]) -> i64 {
+    let mut i = 0;
+    while i < s.len() && matches!(s[i], b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r') {
+        i += 1;
+    }
+    let neg = s.get(i) == Some(&b'-');
+    if matches!(s.get(i), Some(b'-' | b'+')) {
+        i += 1;
+    }
+    let mut v: i128 = 0;
+    while let Some(d) = s.get(i).filter(|b| b.is_ascii_digit()) {
+        v = (v * 10 + (d - b'0') as i128).min(1 << 70);
+        i += 1;
+    }
+    let v = if neg { -v } else { v };
+    v.clamp(i64::MIN as i128, i64::MAX as i128) as i64
 }
 
 impl Sim {
@@ -1959,11 +2136,9 @@ mod tests {
     #[test]
     fn unported_options_are_refused_not_ignored() {
         assert!(sim(ok_settings()).is_ok());
+        // auto-rotate and captions are ported
+        assert!(sim(SimSettings::default()).is_ok());
         for bad in [
-            SimSettings {
-                disable_auto_rotate: false,
-                ..ok_settings()
-            },
             SimSettings {
                 loop_: true,
                 ..ok_settings()
@@ -1973,16 +2148,65 @@ mod tests {
                 ..ok_settings()
             },
             SimSettings {
-                caption_file: "c.txt".into(),
+                follow_users: vec!["bob".into()],
                 ..ok_settings()
             },
             SimSettings {
-                follow_users: vec!["bob".into()],
+                track_users: true,
                 ..ok_settings()
             },
         ] {
             assert!(sim(bad).is_err());
         }
+    }
+
+    #[test]
+    fn caption_lines_split_like_the_regex() {
+        assert_eq!(split_caption(b"12|a|b"), Some((&b"12"[..], &b"a|b"[..])));
+        assert_eq!(
+            split_caption(b"\xEF\xBB\xBF12|x"),
+            Some((&b"12"[..], &b"x"[..]))
+        );
+        // BOM then nothing before the bar: the regex backtracks and the BOM becomes the stamp
+        assert_eq!(
+            split_caption(b"\xEF\xBB\xBF|x"),
+            Some((&b"\xEF\xBB\xBF"[..], &b"x"[..]))
+        );
+        assert_eq!(split_caption(b"|x"), None);
+        assert_eq!(split_caption(b"12|"), None);
+        assert_eq!(split_caption(b"no bar"), None);
+    }
+
+    #[test]
+    fn atoll_is_c_atoll() {
+        assert_eq!(atoll(b" -12x"), -12);
+        assert_eq!(atoll(b"+7"), 7);
+        assert_eq!(atoll(b"abc"), 0);
+        assert_eq!(atoll(b"99999999999999999999999"), i64::MAX);
+    }
+
+    #[test]
+    fn captions_activate_age_and_expire() {
+        let mut s = sim(SimSettings {
+            caption_duration: 3.0,
+            ..ok_settings()
+        })
+        .unwrap();
+        s.currtime = 100;
+        for t in [100, 200] {
+            s.captions.push_back(Caption {
+                text: "c".into(),
+                timestamp: t,
+                elapsed: 0.0,
+                alpha: 0.0,
+            });
+        }
+        s.update_captions(1.0);
+        assert_eq!((s.captions.len(), s.active_captions.len()), (1, 1));
+        assert_eq!(s.active_captions[0].alpha, 1.0 / 1.0f32.min(1.0));
+        s.update_captions(1.0);
+        s.update_captions(1.0); // elapsed 3 >= duration
+        assert!(s.active_captions.is_empty());
     }
 
     #[test]

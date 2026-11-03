@@ -3,7 +3,7 @@
 //! `dirnode.cpp`, `file.cpp`, `user.cpp`, `action.cpp`, `pawn.cpp`, `zoomcamera.cpp`), plus the
 //! JSONL state dump the parity gate compares (`dump`, schema 1; see `reference/gource-cpp-dump`).
 //!
-//! No rendering, input or captions. Every float expression keeps the C++ promotion and
+//! No rendering or input. Every float expression keeps the C++ promotion and
 //! narrowing (`f64` where a double literal or `PI` is involved) and the C++ evaluation order,
 //! because the gate compares f32 bit patterns.
 

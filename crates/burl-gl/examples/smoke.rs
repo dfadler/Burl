@@ -4,7 +4,7 @@
 //! With `--frames N` it also prints ms/frame (#19 item 5: llvmpipe's rate, for information).
 
 use burl_gl::{HeadlessEgl, Renderer};
-use burl_render::Frame;
+use burl_render::{Font, FontManager, Frame, FREE_SANS};
 use glam::{Vec2, Vec4};
 use std::time::Instant;
 
@@ -70,6 +70,18 @@ fn main() -> Result<(), String> {
         Vec4::new(1.0, 1.0, 0.0, 1.0),
         Vec4::new(hf / 8.0, wf * 0.6 + hf / 8.0, hf * 0.3 + hf / 8.0, 0.0),
     );
+    // Text: a buffered line (text shader, shadow in the shader) and an immediate line (modulate
+    // shader, separate shadow batch), both white on the blue clear colour, in the bottom half.
+    let mut fm = FontManager::new(FREE_SANS, 10)?;
+    let mut font: Font = fm.grab(h / 10);
+    font.shadow = true;
+    fm.start_buffer();
+    fm.draw_buffered(&font, 4.0, hf * 0.55, "Gource");
+    f.names = std::mem::take(&mut fm.buffer);
+    fm.draw(&font, &mut f.overlay, 4.0, hf * 0.8, "Gource");
+    for u in fm.take_updates() {
+        r.upload_texture(u.id, 512, 512, &u.rgba, false)?;
+    }
     let batches = f.batches();
     // Files are in world space: pixel space here, as if the camera were the 2D ortho.
     let world = burl_render::ortho_2d(wf, hf);
@@ -114,7 +126,27 @@ fn main() -> Result<(), String> {
             [0, 0, 255, 255],
         ),
     ];
+    // Rows holding each text line: the pixels left of the first glyph's right edge.
+    let text_rows = |y0: f32| {
+        let (y0, y1) = (y0 as u32, (y0 + hf / 8.0) as u32);
+        (y0..y1.min(h))
+            .flat_map(|y| (0..w / 2).map(move |x| (x, y)))
+            .map(|(x, y)| at(x, y))
+            .collect::<Vec<_>>()
+    };
+    let (buffered, immediate) = (text_rows(hf * 0.55), text_rows(hf * 0.8));
+    let bright = |p: &[[u8; 4]]| p.iter().any(|c| c[0] > 200 && c[1] > 200);
+    let dark = |p: &[[u8; 4]]| p.iter().any(|c| c[2] < 200);
     let mut failed = false;
+    for (what, ok) in [
+        ("buffered text has white glyph pixels", bright(&buffered)),
+        ("buffered text has a shadow", dark(&buffered)),
+        ("immediate text has white glyph pixels", bright(&immediate)),
+        ("immediate text has a shadow", dark(&immediate)),
+    ] {
+        failed |= !ok;
+        println!("{} {what}", if ok { "ok  " } else { "FAIL" });
+    }
     for (what, got, want) in checks {
         let ok = got == want;
         failed |= !ok;

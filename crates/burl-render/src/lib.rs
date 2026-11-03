@@ -8,8 +8,10 @@
 //! table in docs/rust-rewrite/discovery/output-pipeline.md.
 
 mod camera;
+mod font;
 mod scene;
 pub use camera::*;
+pub use font::*;
 pub use scene::*;
 
 use glam::{Mat4, Vec2, Vec4};
@@ -97,7 +99,7 @@ impl QuadBuf {
 
     /// The `(texture, vertices)` ranges `quadbuf::draw` issues. Without runs the whole buffer is
     /// one untextured range; with runs, anything before the first run is not drawn (as in C++).
-    fn ranges(&self) -> Vec<(Option<TextureId>, &[QuadVertex])> {
+    pub(crate) fn ranges(&self) -> Vec<(Option<TextureId>, &[QuadVertex])> {
         if self.vertices.is_empty() {
             return vec![];
         }
@@ -152,6 +154,10 @@ pub enum Pass {
     UserShadows,
     Users,
     Bloom,
+    /// Dir and user names: `fontmanager.drawBuffer()` under the text shader (gource.cpp:2525).
+    Names,
+    /// Everything drawn after the names in 2D: logo, splash, date, title, captions, key, text boxes.
+    Overlay,
 }
 
 /// Which shader a batch uses.
@@ -163,6 +169,8 @@ pub enum Pipeline {
     Shadow,
     /// bloom.vert/frag.
     Bloom,
+    /// text.vert/frag: coverage in alpha, drop shadow from the texel up and left of the sample.
+    Text,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -211,6 +219,10 @@ pub struct Frame {
     pub files: QuadBuf,
     pub users: QuadBuf,
     pub bloom: BloomBuf,
+    /// `fontmanager.font_vbo`: dir and user names, drawn after the scene under the text shader.
+    pub names: QuadBuf,
+    /// Pre-built batches drawn last, in order (the 2D overlays).
+    pub overlay: Vec<Batch>,
     /// The beam image `edges` and `actions` are textured with.
     pub beam: Option<TextureId>,
     /// The shared file image `files` is textured with.
@@ -306,8 +318,43 @@ impl Frame {
                 vertices: Vertices::Bloom(self.bloom.vertices.clone()),
             });
         }
+        out.extend(quad_batches(
+            Pass::Names,
+            Pipeline::Text,
+            Blend::Alpha,
+            Space::Screen,
+            [0.0; 2],
+            &self.names,
+            None,
+        ));
+        out.extend(self.overlay.iter().cloned());
         out
     }
+}
+
+/// The batches `quadbuf::draw` issues for `buf`: one per texture run.
+pub(crate) fn quad_batches(
+    pass: Pass,
+    pipeline: Pipeline,
+    blend: Blend,
+    space: Space,
+    offset: [f32; 2],
+    buf: &QuadBuf,
+    texture: Option<TextureId>,
+) -> Vec<Batch> {
+    buf.ranges()
+        .into_iter()
+        .map(|(t, v)| Batch {
+            pass,
+            pipeline,
+            blend,
+            space,
+            offset,
+            // A run's own texture wins; otherwise the pass's shared one.
+            texture: t.or(texture),
+            vertices: Vertices::Quads(v.to_vec()),
+        })
+        .collect()
 }
 
 impl Default for Frame {
@@ -318,6 +365,8 @@ impl Default for Frame {
             files: QuadBuf::default(),
             users: QuadBuf::default(),
             bloom: BloomBuf::default(),
+            names: QuadBuf::default(),
+            overlay: Vec::new(),
             beam: None,
             file_graphic: None,
             // Settings default (and reject <= 0), so an omitted scale must not zero the shadow offset.

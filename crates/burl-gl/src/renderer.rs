@@ -12,6 +12,7 @@ use std::collections::HashMap;
 const QUAD_VERT: &str = include_str!("../shaders/quad.vert");
 const PLAIN_FRAG: &str = include_str!("../shaders/plain.frag");
 const SHADOW_FRAG: &str = include_str!("../shaders/shadow.frag");
+const TEXT_FRAG: &str = include_str!("../shaders/text.frag");
 const BLOOM_VERT: &str = include_str!("../shaders/bloom.vert");
 const BLOOM_FRAG: &str = include_str!("../shaders/bloom.frag");
 
@@ -25,6 +26,7 @@ pub struct Renderer<C: GlContext> {
     ctx: C,
     plain: glow::Program,
     shadow: glow::Program,
+    text: glow::Program,
     bloom: glow::Program,
     vao: glow::VertexArray,
     vbo: glow::Buffer,
@@ -70,6 +72,7 @@ impl<C: GlContext> Renderer<C> {
         let (w, h) = (size.0 as i32, size.1 as i32);
         let plain = program(gl, QUAD_VERT, PLAIN_FRAG)?;
         let shadow = program(gl, QUAD_VERT, SHADOW_FRAG)?;
+        let text = program(gl, QUAD_VERT, TEXT_FRAG)?;
         let bloom = program(gl, BLOOM_VERT, BLOOM_FRAG)?;
         // SAFETY: objects are created on the current context and only used with it; the
         // framebuffer completeness is checked before returning.
@@ -109,6 +112,7 @@ impl<C: GlContext> Renderer<C> {
                 ctx,
                 plain,
                 shadow,
+                text,
                 bloom,
                 vao,
                 vbo,
@@ -245,6 +249,7 @@ impl<C: GlContext> Renderer<C> {
                     Pipeline::Plain => self.plain,
                     Pipeline::Shadow => self.shadow,
                     Pipeline::Bloom => self.bloom,
+                    Pipeline::Text => self.text,
                 };
                 gl.use_program(Some(prog));
                 let mvp = match b.space {
@@ -264,7 +269,14 @@ impl<C: GlContext> Renderer<C> {
                 gl.uniform_1_i32(gl.get_uniform_location(prog, "tex").as_ref(), 0);
                 gl.uniform_1_f32(
                     gl.get_uniform_location(prog, "shadow_strength").as_ref(),
-                    burl_render::SHADOW_STRENGTH,
+                    match b.pipeline {
+                        Pipeline::Text => burl_render::TEXT_SHADOW_STRENGTH,
+                        _ => burl_render::SHADOW_STRENGTH,
+                    },
+                );
+                gl.uniform_1_f32(
+                    gl.get_uniform_location(prog, "texel_size").as_ref(),
+                    1.0 / burl_render::PAGE_SIZE as f32,
                 );
                 let tex = match b.texture {
                     Some(t) => *self

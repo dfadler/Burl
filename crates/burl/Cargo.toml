@@ -14,6 +14,9 @@ burl-util.workspace = true
 burl-conf.workspace = true
 burl-formats.workspace = true
 burl-sim.workspace = true
+burl-render.workspace = true
+burl-gl.workspace = true
+png = "0.18"
 
 [features]
 # PCRE2 for the user filters (look-around, backreferences); the CI pcre2 leg runs the gate with it.

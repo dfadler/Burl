@@ -85,13 +85,22 @@ fn spline_edge(buf: &mut QuadBuf, pos1: Vec2, col1: Vec4, pos2: Vec2, col2: Vec4
     }
 }
 
-/// `Gource::updateVBOs` plus the edge/bloom buffers: everything `drawScene` draws.
-pub fn build_frame(scene: &SceneView, tex: &SceneTextures, s: &SceneSettings) -> Frame {
-    let cam = Camera {
+/// The camera's projection * view for the scene's world-space batches.
+pub fn world_matrix(scene: &SceneView, s: &SceneSettings) -> glam::Mat4 {
+    camera(scene).view_projection(s.width, s.height)
+}
+
+fn camera(scene: &SceneView) -> Camera {
+    Camera {
         pos: scene.camera.pos,
         target: scene.camera.target,
         max_distance: scene.camera.max_distance,
-    };
+    }
+}
+
+/// `Gource::updateVBOs` plus the edge/bloom buffers: everything `drawScene` draws.
+pub fn build_frame(scene: &SceneView, tex: &SceneTextures, s: &SceneSettings) -> Frame {
+    let cam = camera(scene);
     let mut f = Frame {
         beam: Some(tex.beam),
         file_graphic: Some(tex.file),

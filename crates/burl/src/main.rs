@@ -18,6 +18,8 @@ use burl_util::prng::{parse_script, PrngMode as SimPrngMode, SimRng};
 use std::io::{BufRead, Write};
 use std::sync::Arc;
 
+mod export;
+
 const EXEC: &str = "burl";
 
 /// `SDLAppQuit`: stderr `gource: <msg>` + the Try line + a blank line, exit 1.
@@ -241,17 +243,9 @@ fn sim_settings(
     }
 }
 
-/// `--debug-dump-state FILE`: load each section's log in turn, run its simulation to the end and
-/// write the JSONL dump (tickets #11, #18). One generator serves the whole run, as in the fork;
-/// the frame counter, the clock and the scene restart with each section. Errors are the message
-/// `quit` prints.
-fn run_state_dump(
-    display: &DisplaySettings,
-    repos: &mut [GourceSettings],
-    debug: &DebugOptions,
-    dump_path: &str,
-) -> Result<(), String> {
-    let (rng, prng_name) = match &debug.prng {
+/// The generator the debug options select (and its name for the dump header).
+fn make_rng(debug: &DebugOptions) -> Result<(SimRng, &'static str), String> {
+    Ok(match &debug.prng {
         PrngMode::Script(file) => {
             let text =
                 std::fs::read_to_string(file).map_err(|_| format!("could not read '{file}'"))?;
@@ -272,7 +266,20 @@ fn run_state_dump(
             };
             (SimRng::new(m, seed), name)
         }
-    };
+    })
+}
+
+/// `--debug-dump-state FILE`: load each section's log in turn, run its simulation to the end and
+/// write the JSONL dump (tickets #11, #18). One generator serves the whole run, as in the fork;
+/// the frame counter, the clock and the scene restart with each section. Errors are the message
+/// `quit` prints.
+fn run_state_dump(
+    display: &DisplaySettings,
+    repos: &mut [GourceSettings],
+    debug: &DebugOptions,
+    dump_path: &str,
+) -> Result<(), String> {
+    let (rng, prng_name) = make_rng(debug)?;
 
     let file = std::fs::File::create(dump_path)
         .map_err(|_| format!("could not write to '{dump_path}'"))?;
@@ -372,7 +379,16 @@ fn run() -> Result<(), ConfError> {
         }
         std::process::exit(0);
     }
-    // Not a C++ message: the display path does not exist yet.
+    if !display.output_ppm_filename.is_empty() {
+        let rng = make_rng(&cl.debug)
+            .map(|r| r.0)
+            .unwrap_or_else(|e| quit(&e));
+        if let Err(e) = export::run(&display, &mut repos, rng, &cl.debug) {
+            quit(&e);
+        }
+        std::process::exit(0);
+    }
+    // Not a C++ message: the windowed display path does not exist yet.
     eprintln!("{}: the display path is not implemented yet", EXEC);
     std::process::exit(1);
 }

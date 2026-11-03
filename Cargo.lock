@@ -50,8 +50,11 @@ version = "0.57.0"
 dependencies = [
  "burl-conf",
  "burl-formats",
+ "burl-gl",
+ "burl-render",
  "burl-sim",
  "burl-util",
+ "png",
  "xtask",
 ]
 

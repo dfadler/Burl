@@ -167,3 +167,44 @@ fn ortho_puts_pixel_origin_at_top_left() {
     let p = m.project_point3(glam::Vec3::new(320.0, 200.0, 0.0));
     assert_eq!((p.x, p.y), (1.0, -1.0));
 }
+
+#[test]
+fn background_is_centred_with_integer_halves_and_drawn_first() {
+    let b = background_batch(
+        TextureId(20),
+        glam::Vec2::new(101.0, 51.0),
+        glam::Vec2::new(640.0, 480.0),
+    );
+    assert_eq!(
+        (b.pass, b.texture, b.space),
+        (Pass::Background, Some(TextureId(20)), Space::Screen)
+    );
+    let Vertices::Quads(v) = &b.vertices else {
+        panic!()
+    };
+    // 640/2 - 101/2 = 270, 480/2 - 51/2 = 215 (not 269.5 / 214.5).
+    assert_eq!(v[0].pos, [270.0, 215.0]);
+    assert_eq!(v[2].pos, [371.0, 266.0]);
+    let f = Frame {
+        underlay: vec![b],
+        ..Frame::default()
+    };
+    assert_eq!(f.batches()[0].pass, Pass::Background);
+}
+
+#[test]
+fn logo_sits_bottom_right_inside_its_offset() {
+    let b = logo_batch(
+        TextureId(21),
+        glam::Vec2::new(64.0, 32.0),
+        glam::Vec2::new(640.0, 480.0),
+        glam::Vec2::new(10.0, 5.0),
+    );
+    let Vertices::Quads(v) = &b.vertices else {
+        panic!()
+    };
+    assert_eq!(v[0].pos, [566.0, 443.0]);
+    assert_eq!(v[2].pos, [630.0, 475.0]);
+    assert_eq!(v[0].uv, [0.0, 0.0]);
+    assert_eq!(b.pass, Pass::Overlay);
+}

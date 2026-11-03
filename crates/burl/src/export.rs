@@ -7,7 +7,10 @@ use super::{log_settings, sim_settings};
 use burl_conf::settings::{DebugOptions, DisplaySettings, GourceSettings};
 use burl_formats::fetch_log;
 use burl_gl::{GlContext, HeadlessEgl, Renderer};
-use burl_render::{build_frame, world_matrix, SceneSettings, SceneTextures, TextureId};
+use burl_render::{
+    background_batch, build_frame, logo_batch, world_matrix, SceneSettings, SceneTextures,
+    TextureId,
+};
 use burl_sim::Sim;
 use burl_util::prng::SimRng;
 use std::io::Write;
@@ -107,13 +110,40 @@ pub fn run(
         ss.hide_files = g.hide_files;
         ss.hide_users = g.hide_users;
         ss.user_scale = g.user_scale;
+        // --logo / --background-image: PNG only (Gource also reads JPEG and GIF).
+        let load_image = |path: &str, id: u32, r: &mut Renderer<_>, mip: bool| {
+            let bytes = std::fs::read(path).map_err(|e| format!("could not read '{path}': {e}"))?;
+            let (iw, ih, px) = decode(&bytes).map_err(|e| format!("'{path}': {e}"))?;
+            r.upload_texture(TextureId(id), iw, ih, &px, mip)?;
+            Ok::<_, String>((
+                TextureId(id),
+                burl_render::glam::Vec2::new(iw as f32, ih as f32),
+            ))
+        };
+        let screen = burl_render::glam::Vec2::new(w as f32, h as f32);
+        let background = match g.background_image.as_str() {
+            "" => None,
+            p => Some(load_image(p, 4, &mut r, true)?),
+        };
+        let logo = match g.logo.as_str() {
+            "" => None,
+            p => Some(load_image(p, 5, &mut r, false)?),
+        };
         let bg = g.background_colour;
         let clear = [bg[0], bg[1], bg[2], 1.0];
 
         while !sim.is_finished() {
             sim.update().map_err(|e| e.0)?;
             let scene = sim.scene_view();
-            let frame = build_frame(&scene, &tex, &ss);
+            let mut frame = build_frame(&scene, &tex, &ss);
+            frame.underlay = background
+                .map(|(t, size)| background_batch(t, size, screen))
+                .into_iter()
+                .collect();
+            frame.overlay = logo
+                .map(|(t, size)| logo_batch(t, size, screen, g.logo_offset.into()))
+                .into_iter()
+                .collect();
             let world = world_matrix(&scene, &ss);
             r.render(clear, &frame.batches(), world)?;
             write_ppm(&mut out, w, h, &r.read_frame()?).map_err(io)?;

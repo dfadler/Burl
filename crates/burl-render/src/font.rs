@@ -210,7 +210,7 @@ impl FontManager {
 
     /// `FXFontManager::grab`: the glyph set for `size` is created and precached on first use.
     pub fn grab(&mut self, size: u32) -> Font {
-        let size = size.max(1);
+        let size = size.clamp(1, 100);
         if !self.sets.contains_key(&size) {
             let lm = self.font.horizontal_line_metrics(size as f32);
             let (ascender, descender) = lm.map_or((0.0, 0.0), |m| (m.ascent, m.descent));

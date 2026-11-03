@@ -42,9 +42,9 @@ pub const INT_KEYS: &[&str] = &[
     "max_frames",
 ];
 
-/// Float keys that depend on the platform libm (`sinf`/`cosf` in `calcFileDest` and in rotate):
+/// Float keys that depend on the platform libm (`sinf`/`cosf` in `calcFileDest`):
 /// compared with a relative tolerance instead of bit equality (ticket #11 item 1).
-pub const LIBM_KEYS: &[&str] = &["dest", "rotate_angle"];
+pub const LIBM_KEYS: &[&str] = &["dest"];
 
 /// Header keys describing the build, not the run: recorded, never compared.
 pub const BUILD_KEYS: &[&str] = &["compiler", "char_signed", "fma_target", "flt_eval_method"];

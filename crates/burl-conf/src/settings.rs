@@ -1062,45 +1062,6 @@ pub fn import_all_gource_settings(conf: &mut ConfFile) -> Result<Vec<GourceSetti
         .collect()
 }
 
-/// The minimal settings the phase 3 simulation gate needs (ticket #11): the gate's fixed-input
-/// flags, everything else default until the sim reads more.
-#[derive(Clone, Debug, PartialEq)]
-pub struct SimSettings {
-    pub framerate: i32,
-    pub width: i32,
-    pub height: i32,
-    pub days_per_second: f32,
-    pub stop_at_time: f32,
-    pub hash_seed: i32,
-    pub auto_skip_seconds: f32,
-    pub disable_auto_rotate: bool,
-    pub file_idle_time: f32,
-    pub file_idle_time_at_end: f32,
-    pub user_idle_time: f32,
-    pub time_scale: f32,
-    pub hide_mouse: bool,
-}
-
-impl SimSettings {
-    pub fn new(d: &DisplaySettings, g: &GourceSettings) -> Self {
-        SimSettings {
-            framerate: d.output_framerate,
-            width: d.width,
-            height: d.height,
-            days_per_second: g.days_per_second,
-            stop_at_time: g.stop_at_time,
-            hash_seed: g.hash_seed,
-            auto_skip_seconds: g.auto_skip_seconds,
-            disable_auto_rotate: g.disable_auto_rotate,
-            file_idle_time: g.file_idle_time,
-            file_idle_time_at_end: g.file_idle_time_at_end,
-            user_idle_time: g.user_idle_time,
-            time_scale: g.time_scale,
-            hide_mouse: g.hide_mouse,
-        }
-    }
-}
-
 /// How the hidden `--prng` / `--rand-script` options select the generator (ticket #22).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PrngMode {

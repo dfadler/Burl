@@ -186,13 +186,21 @@ fn rec_type(r: &Value) -> &str {
     r.get("type").and_then(Value::as_str).unwrap_or("")
 }
 
-/// `g.loaded_frame0` of the first frame record.
-fn loaded_frame0(recs: &[Value]) -> i64 {
-    recs.iter()
-        .find(|r| rec_type(r) == "frame")
-        .and_then(|r| r.pointer("/g/loaded_frame0"))
-        .and_then(Value::as_i64)
-        .unwrap_or(0)
+/// The `section` of a record (header: none).
+fn section_of(r: &Value) -> Option<i64> {
+    r.get("section").and_then(Value::as_i64)
+}
+
+/// `g.loaded_frame0` of the first frame record of each section (the frame counter restarts at
+/// every section boundary, and so does the load frame).
+fn loaded_frame0(recs: &[Value]) -> BTreeMap<i64, i64> {
+    let mut m = BTreeMap::new();
+    for r in recs.iter().filter(|r| rec_type(r) == "frame") {
+        let l0 = r.pointer("/g/loaded_frame0").and_then(Value::as_i64);
+        m.entry(section_of(r).unwrap_or(0))
+            .or_insert(l0.unwrap_or(0));
+    }
+    m
 }
 
 fn show(v: &Value) -> String {
@@ -352,16 +360,24 @@ pub fn compare(golden: &str, actual: &str, o: &Options) -> Result<Report, String
     let g = parse(golden, "golden")?;
     let a = parse(actual, "actual")?;
     let (gl0, al0) = (loaded_frame0(&g), loaded_frame0(&a));
+    let l0 = |m: &BTreeMap<i64, i64>, r: &Value| {
+        m.get(&section_of(r).unwrap_or(0)).copied().unwrap_or(0)
+    };
 
     let mut rep = Report::default();
 
-    // Frame records pair on `frame - loaded_frame0`; header and section records pair in order.
-    let rel = |r: &Value, l0: i64| r.get("frame").and_then(Value::as_i64).map(|f| f - l0);
-    let a_frames: BTreeMap<i64, usize> = a
+    // Frame records pair on (section, frame - loaded_frame0); header and section records pair in
+    // order.
+    let rel = |r: &Value, m: &BTreeMap<i64, i64>| {
+        r.get("frame")
+            .and_then(Value::as_i64)
+            .map(|f| (section_of(r).unwrap_or(0), f - l0(m, r)))
+    };
+    let a_frames: BTreeMap<(i64, i64), usize> = a
         .iter()
         .enumerate()
         .filter(|(_, r)| rec_type(r) == "frame")
-        .filter_map(|(i, r)| rel(r, al0).map(|f| (f, i)))
+        .filter_map(|(i, r)| rel(r, &al0).map(|k| (k, i)))
         .collect();
     let a_other: Vec<usize> = (0..a.len())
         .filter(|&i| rec_type(&a[i]) != "frame")
@@ -370,11 +386,12 @@ pub fn compare(golden: &str, actual: &str, o: &Options) -> Result<Report, String
 
     for (gi, gr) in g.iter().enumerate() {
         let (ai, frame, prefix) = if rec_type(gr) == "frame" {
-            let f = rel(gr, gl0).unwrap_or(-1);
-            match a_frames.get(&f) {
+            let key = rel(gr, &gl0).unwrap_or((-1, -1));
+            let f = key.1;
+            match a_frames.get(&key) {
                 Some(&ai) => (ai, Some(f), ""),
                 // sampled in one dump only: the cadence differs under a shifted alignment
-                None if gl0 != al0 => continue,
+                None if gl0.get(&key.0) != al0.get(&key.0) => continue,
                 None => {
                     rep.failures.push(Divergence {
                         record: gi,
@@ -435,15 +452,32 @@ pub fn compare(golden: &str, actual: &str, o: &Options) -> Result<Report, String
             actual: "none paired".into(),
         });
     }
-    let g_frames = g.iter().filter(|r| rec_type(r) == "frame").count();
-    if gl0 == al0 && a_frames.len() != g_frames {
+    // every section's frame count must match, unless that section's load frames are shifted
+    let count = |recs: &[Value], section: i64| {
+        recs.iter()
+            .filter(|r| rec_type(r) == "frame" && section_of(r) == Some(section))
+            .count()
+    };
+    for (&sec, l) in &gl0 {
+        if al0.get(&sec) == Some(l) && count(&g, sec) != count(&a, sec) {
+            rep.failures.push(Divergence {
+                record: g.len(),
+                frame: None,
+                path: format!("section {sec} frame records"),
+                tier: Tier::Exact,
+                golden: count(&g, sec).to_string(),
+                actual: count(&a, sec).to_string(),
+            });
+        }
+    }
+    if gl0.len() != al0.len() {
         rep.failures.push(Divergence {
             record: g.len(),
             frame: None,
-            path: "frame records".into(),
+            path: "sections with frames".into(),
             tier: Tier::Exact,
-            golden: g_frames.to_string(),
-            actual: a_frames.len().to_string(),
+            golden: gl0.len().to_string(),
+            actual: al0.len().to_string(),
         });
     }
     Ok(rep)
@@ -597,12 +631,53 @@ mod tests {
         .is_err());
     }
 
+    /// Two sections restart the frame counter at 0; a frame pairs within its own section.
+    #[test]
+    fn frames_pair_within_their_section() {
+        let sec2 = |f: String| f.replace("\"section\":1", "\"section\":2");
+        let both = |a: &str, b: &str| {
+            format!(
+                "{}{}",
+                frame(0, 0, a, 7, "[0,1]", POS),
+                sec2(frame(0, 0, b, 7, "[0,1]", POS))
+            )
+        };
+        assert!(run(&both("1", "2"), &both("1", "2"), &Options::default()).ok());
+        // the same frame number in section 2 holds different content: caught, not shadowed
+        let r = run(&both("1", "2"), &both("1", "3"), &Options::default());
+        assert_eq!(r.failures.len(), 1);
+        assert_eq!(r.failures[0].path, "g.runtime");
+        // a missing second section fails
+        let one = frame(0, 0, "1", 7, "[0,1]", POS);
+        assert!(!run(&both("1", "2"), &one, &Options::default()).ok());
+    }
+
+    #[test]
+    fn captions_compare_exactly() {
+        let f = frame(0, 0, "1", 7, "[0,1]", POS);
+        let cap = |alpha: &str| {
+            f.replace(
+                "\"users\":[]",
+                &format!("\"users\":[],\"captions\":{{\"queued\":[],\"active\":[{{\"text\":\"hi\",\"timestamp\":1277788895,\"elapsed\":0.5,\"alpha\":{alpha}}}]}}"),
+            )
+        };
+        assert!(run(&cap("1"), &cap("1"), &Options::default()).ok());
+        let r = run(&cap("1"), &cap("0.99999994"), &Options::default());
+        assert_eq!(r.failures[0].path, "captions.active[0].alpha");
+        let r = run(
+            &cap("1"),
+            &cap("1").replace("\"hi\"", "\"ho\""),
+            &Options::default(),
+        );
+        assert_eq!(r.failures[0].path, "captions.active[0].text");
+    }
+
     #[test]
     fn extra_frames_and_extra_keys_in_burl_fail() {
         let one = frame(0, 0, "1", 7, "[0,1]", POS);
         let two = format!("{one}{}", frame(1, 0, "1", 7, "[0,1]", POS));
         let r = run(&one, &two, &Options::default());
-        assert_eq!(r.failures[0].path, "frame records");
+        assert_eq!(r.failures[0].path, "section 1 frame records");
         let extra = one.replace("\"rand_last\":7", "\"rand_last\":7,\"surprise\":1");
         let r = run(&one, &extra, &Options::default());
         assert_eq!(r.failures[0].path, "g");

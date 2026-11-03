@@ -3,6 +3,7 @@ name = "burl-render"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Gource rewrite: render crate (empty in phase 1)"
+description = "Burl: CPU-side render batches in Gource's fixed pass order (no GL)"
 
 [dependencies]
+glam.workspace = true

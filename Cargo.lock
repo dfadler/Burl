@@ -87,6 +87,8 @@ dependencies = [
 name = "burl-render"
 version = "0.57.0"
 dependencies = [
+ "burl-sim",
+ "burl-util",
  "glam",
 ]
 

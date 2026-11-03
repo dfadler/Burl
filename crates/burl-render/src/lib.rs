@@ -8,7 +8,9 @@
 //! table in docs/rust-rewrite/discovery/output-pipeline.md.
 
 mod camera;
+mod scene;
 pub use camera::*;
+pub use scene::*;
 
 use glam::{Mat4, Vec2, Vec4};
 
@@ -52,6 +54,17 @@ impl QuadBuf {
     pub fn clear(&mut self) {
         self.vertices.clear();
         self.runs.clear();
+    }
+
+    /// `quadbuf::add(textureid, v1, v2, v3, v4)`: four ready-made vertices (splines, actions).
+    pub fn add_vertices(&mut self, texture: Option<TextureId>, quad: [QuadVertex; 4]) {
+        let i = self.vertices.len();
+        self.vertices.extend(quad);
+        if let Some(t) = texture {
+            if self.runs.last().map(|r| r.1) != Some(t) {
+                self.runs.push((i, t));
+            }
+        }
     }
 
     /// `quadbuf::add(textureid, pos, dims, colour, texcoord)`. A zero texture id starts no run.

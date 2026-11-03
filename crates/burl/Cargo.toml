@@ -13,3 +13,8 @@ path = "src/main.rs"
 burl-util.workspace = true
 burl-conf.workspace = true
 burl-formats.workspace = true
+burl-sim.workspace = true
+
+[dev-dependencies]
+# The sim gate test reads the committed fork goldens through the xtask comparator.
+xtask = { path = "../../xtask" }

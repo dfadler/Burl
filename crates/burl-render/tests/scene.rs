@@ -115,7 +115,7 @@ fn only_visible_dirs_get_edges_and_bloom_and_finished_actions_are_skipped() {
     let f = frame();
     // One visible child -> one spline of 1..=10 quads (4 vertices each).
     let n = f.edges.vertices().len();
-    assert!(n >= 4 && n <= 40 && n % 4 == 0);
+    assert!((4..=40).contains(&n) && n.is_multiple_of(4));
     assert_eq!(f.bloom.vertices.len(), 2 * 4);
     assert_eq!(f.actions.vertices().len(), 4);
     assert_eq!(f.files.vertices().len(), 4);

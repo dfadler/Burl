@@ -28,7 +28,9 @@ fn decode(png_bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), String> {
     let rgba = match info.color_type {
         png::ColorType::Rgba => px.to_vec(),
         png::ColorType::Rgb => px
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .flat_map(|p| [p[0], p[1], p[2], 255])
             .collect(),
         c => return Err(format!("unsupported png colour type {c:?}")),
@@ -40,7 +42,9 @@ fn decode(png_bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), String> {
 fn write_ppm(out: &mut dyn Write, w: u32, h: u32, rgba: &[u8]) -> std::io::Result<()> {
     write!(out, "P6\n{w} {h}\n255\n")?;
     let rgb: Vec<u8> = rgba
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .flat_map(|p| [p[0], p[1], p[2]])
         .collect();
     out.write_all(&rgb)

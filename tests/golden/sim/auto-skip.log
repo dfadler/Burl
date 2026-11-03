@@ -1,0 +1,6 @@
+1277787455|alice|A|src/main.rs
+1277787455|alice|A|src/lib.rs
+1278046655|bob|A|src/util/str.rs
+1278046655|bob|M|src/main.rs
+1278392255|carol|A|docs/intro.md
+1278392255|alice|D|src/lib.rs

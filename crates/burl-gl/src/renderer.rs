@@ -33,6 +33,7 @@ pub struct Renderer<C: GlContext> {
     white: glow::Texture,
     textures: HashMap<TextureId, glow::Texture>,
     fbo: glow::Framebuffer,
+    rb: glow::Renderbuffer,
     size: (u32, u32),
 }
 
@@ -116,6 +117,7 @@ impl<C: GlContext> Renderer<C> {
                 white,
                 textures: HashMap::new(),
                 fbo,
+                rb,
                 size,
             })
         }
@@ -296,6 +298,52 @@ impl<C: GlContext> Renderer<C> {
             match gl.get_error() {
                 glow::NO_ERROR => Ok(()),
                 e => Err(format!("GL error 0x{e:x}")),
+            }
+        }
+    }
+
+    /// Reallocate the offscreen target at `w` x `h` (the windowed path follows the drawable).
+    pub fn resize(&mut self, w: u32, h: u32) -> Result<()> {
+        self.ctx.make_current()?;
+        let gl = self.ctx.gl();
+        // SAFETY: `rb` and `fbo` belong to this context; completeness is checked after.
+        unsafe {
+            gl.bind_renderbuffer(glow::RENDERBUFFER, Some(self.rb));
+            gl.renderbuffer_storage(glow::RENDERBUFFER, glow::RGBA8, w as i32, h as i32);
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.fbo));
+            if gl.check_framebuffer_status(glow::FRAMEBUFFER) != glow::FRAMEBUFFER_COMPLETE {
+                return Err(format!("framebuffer incomplete at {w}x{h}"));
+            }
+        }
+        self.size = (w, h);
+        Ok(())
+    }
+
+    /// Copy the last rendered frame to the context's default framebuffer, flipped to window
+    /// orientation (the windowed path; call `GlContext::present` after).
+    pub fn blit_to_screen(&self) -> Result<()> {
+        self.ctx.make_current()?;
+        let gl = self.ctx.gl();
+        let (w, h) = (self.size.0 as i32, self.size.1 as i32);
+        // SAFETY: both framebuffers are valid on this context; the rectangles are the target size.
+        unsafe {
+            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.fbo));
+            gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
+            gl.blit_framebuffer(
+                0,
+                0,
+                w,
+                h,
+                0,
+                h,
+                w,
+                0,
+                glow::COLOR_BUFFER_BIT,
+                glow::NEAREST,
+            );
+            match gl.get_error() {
+                glow::NO_ERROR => Ok(()),
+                e => Err(format!("GL error 0x{e:x} blitting to the window")),
             }
         }
     }

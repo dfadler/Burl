@@ -10,9 +10,9 @@ burl-render.workspace = true
 glam.workspace = true
 # Pins and features from the headless spike (#15); glow bumped to 0.18.0 by #19 and re-verified.
 glow = "=0.18.0"
-glutin = { version = "=0.32.3", default-features = false, features = ["egl"] }
-
-[target.'cfg(target_os = "macos")'.dependencies]
+glutin = { version = "=0.32.3", default-features = false, features = ["egl", "x11", "wayland"] }
+glutin-winit = { version = "=0.5.0", default-features = false, features = ["egl", "x11", "wayland"] }
+winit.workspace = true
 raw-window-handle = "=0.6.2"
 
 [dev-dependencies]

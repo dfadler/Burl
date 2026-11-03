@@ -226,6 +226,7 @@ fn sim_settings(
         filename_time: g.filename_time,
         hash_seed: g.hash_seed,
         camera_zoom_default: g.camera_zoom_default,
+        camera_zoom_min: g.camera_zoom_min,
         camera_zoom_max: g.camera_zoom_max,
         padding: g.padding,
         crop_vertical: g.crop_vertical,

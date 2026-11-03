@@ -50,8 +50,11 @@ version = "0.57.0"
 dependencies = [
  "burl-conf",
  "burl-formats",
+ "burl-gl",
+ "burl-render",
  "burl-sim",
  "burl-util",
+ "png",
  "xtask",
 ]
 
@@ -87,6 +90,8 @@ dependencies = [
 name = "burl-render"
 version = "0.57.0"
 dependencies = [
+ "burl-sim",
+ "burl-util",
  "glam",
 ]
 

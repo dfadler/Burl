@@ -7,3 +7,5 @@ description = "Burl: CPU-side render batches in Gource's fixed pass order (no GL
 
 [dependencies]
 glam.workspace = true
+burl-util.workspace = true
+burl-sim.workspace = true

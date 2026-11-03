@@ -42,6 +42,9 @@ pub struct SimSettings {
     pub highlight_users: Vec<String>,
     pub follow_users: Vec<String>,
     pub caption_file: String,
+    pub caption_duration: f32,
+    /// 1-based index of this `[gource]` section, and how many there are.
+    pub section: i32,
     pub repo_count: i32,
     pub path: String,
 }
@@ -85,6 +88,8 @@ impl Default for SimSettings {
             highlight_users: Vec::new(),
             follow_users: Vec::new(),
             caption_file: String::new(),
+            caption_duration: 10.0,
+            section: 1,
             repo_count: 1,
             path: String::new(),
         }

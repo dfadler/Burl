@@ -1,0 +1,1 @@
+@auto-rotate --log-format git --stop-at-time 20 --debug-dump-every 10 --debug-dump-max-frames 600

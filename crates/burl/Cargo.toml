@@ -15,6 +15,10 @@ burl-conf.workspace = true
 burl-formats.workspace = true
 burl-sim.workspace = true
 
+[features]
+# PCRE2 for the user filters (look-around, backreferences); the CI pcre2 leg runs the gate with it.
+pcre2 = ["burl-conf/pcre2"]
+
 [dev-dependencies]
 # The sim gate test reads the committed fork goldens through the xtask comparator.
 xtask = { path = "../../xtask" }

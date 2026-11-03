@@ -1,0 +1,1 @@
+@conf:golden/sim/pcre2-filters.conf --debug-dump-every 30 test-conf.log

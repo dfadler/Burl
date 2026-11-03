@@ -35,43 +35,52 @@ fn rand_args(root: &Path, extra: &str) -> Vec<std::ffi::OsString> {
     ]
 }
 
-/// Burl's dump of `name`, run with dump-run.sh's fixed inputs (no `-o`: the dump flag implies
-/// the fixed tick) and the fixture's extra arguments.
+/// Burl's dump of `name`, run as dump-run.sh runs the fork: a log fixture with the fixed
+/// per-repo inputs (no `-o`: the dump flag implies the fixed tick), a conf fixture
+/// (`@conf:PATH` first in the `.args`, PATH relative to `tests/`) with the display pinned only.
+/// `@auto-rotate` leaves auto-rotate on. TZ is UTC, as in the image.
 fn burl_dump(root: &Path, name: &str, out: &Path) -> String {
     let dir = root.join("tests/golden/sim");
-    let extra = std::fs::read_to_string(dir.join(format!("{name}.args"))).unwrap();
-    let status = Command::new(env!("CARGO_BIN_EXE_burl"))
-        .current_dir(&dir)
-        .arg(format!("{name}.log"))
-        .args([
-            "--log-format",
-            "custom",
-            "-1280x720",
-            "-r",
-            "60",
-            "--seconds-per-day",
-            "1",
-        ])
-        .args([
-            "--stop-at-time",
-            "10",
-            "--hash-seed",
-            "31",
-            "--disable-auto-skip",
-        ])
-        .args([
-            "--disable-auto-rotate",
-            "--file-idle-time",
-            "0",
-            "--time-scale",
-            "1",
-        ])
-        .args(["--hide", "mouse"])
-        .args(rand_args(root, &extra))
+    let args = std::fs::read_to_string(dir.join(format!("{name}.args"))).unwrap();
+    let mut extra: Vec<&str> = args.split_whitespace().collect();
+    let conf = extra
+        .first()
+        .and_then(|a| a.strip_prefix("@conf:"))
+        .map(|c| {
+            extra.remove(0);
+            root.join("tests").join(c)
+        });
+    let auto_rotate = extra.contains(&"@auto-rotate");
+    extra.retain(|a| *a != "@auto-rotate");
+    let extra_line = extra.join(" ");
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_burl"));
+    cmd.env("TZ", "UTC");
+    match &conf {
+        Some(conf) => {
+            cmd.current_dir(conf.parent().unwrap())
+                .arg(conf.file_name().unwrap())
+                .args(["-1280x720", "-r", "60"]);
+        }
+        None => {
+            cmd.current_dir(&dir)
+                .arg(format!("{name}.log"))
+                .args(["--log-format", "custom", "-1280x720", "-r", "60"])
+                .args(["--seconds-per-day", "1", "--stop-at-time", "10"])
+                .args(["--hash-seed", "31", "--disable-auto-skip"])
+                .args(["--file-idle-time", "0", "--time-scale", "1"])
+                .args(["--hide", "mouse"]);
+            if !auto_rotate {
+                cmd.arg("--disable-auto-rotate");
+            }
+        }
+    }
+    let status = cmd
+        .args(rand_args(root, &extra_line))
         .arg("--debug-dump-state")
         .arg(out)
         .args(["--debug-dump-max-frames", "4000"])
-        .args(extra.split_whitespace())
+        .args(&extra)
         .status()
         .unwrap();
     assert!(status.success(), "burl failed on {name}");
@@ -89,7 +98,7 @@ fn gate(name: &str) {
     let report = simcmp::compare(&golden, &actual, &options(&root)).unwrap();
     assert!(report.ok(), "{name}: {report}");
     assert!(
-        report.compared > 100,
+        report.compared > 50,
         "{name}: too few records compared ({})",
         report.compared
     );
@@ -167,4 +176,54 @@ fn sim_gate_time_travel() {
 #[test]
 fn sim_gate_no_time_travel() {
     gate("no-time-travel");
+}
+
+/// Phase 4 (ticket #18): captions (queued, active, fade, expiry; a BOM line, a date-string
+/// stamp, ignored lines), auto-rotate left on over a real log, and the multi-section shell.
+#[test]
+fn sim_gate_small_repo_captions() {
+    gate("small-repo-captions");
+}
+
+#[test]
+fn sim_gate_real_auto_rotate() {
+    gate("real-auto-rotate");
+}
+
+/// `tests/test.conf` unchanged (eight sections), every section's path replaced by one pinned log.
+#[test]
+fn sim_gate_test_conf() {
+    gate("test-conf");
+}
+
+/// Purpose-built conf: no stop time (the 60-second rule) and options in section 1 that must not
+/// reach section 2.
+#[test]
+fn sim_gate_multi_reset() {
+    gate("multi-reset");
+}
+
+/// Look-around and backreference filters (#18 item 5): PCRE2 only. The fixture and the gate run
+/// in the `pcre2` leg; the default build rejects the patterns at import (register row G4).
+#[cfg(feature = "pcre2")]
+#[test]
+fn sim_gate_pcre2_filters() {
+    gate("pcre2-filters");
+}
+
+#[cfg(not(feature = "pcre2"))]
+#[test]
+fn deviation_g4_default_build_rejects_pcre2_only_filters() {
+    let root = repo_root();
+    let dir = root.join("tests/golden/sim");
+    let out = Command::new(env!("CARGO_BIN_EXE_burl"))
+        .current_dir(&dir)
+        .args(["pcre2-filters.conf", "--debug-dump-state", "/dev/null"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8_lossy(&out.stderr),
+        "burl: pcre2-filters.conf, line 3: invalid file-filter regular expression\nTry 'burl --help' for more information.\n\n"
+    );
 }

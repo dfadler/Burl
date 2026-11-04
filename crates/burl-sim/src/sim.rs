@@ -418,6 +418,7 @@ impl Sim {
         // GourceSettings::importGourceSettings: `start_position = (rand() % 1000) / 1000.0f`. The
         // C++ reseeds with `srand(time(0))` first; the default generator is already clock-seeded
         // and the fork's `gource_srand_time` is a no-op for every other mode, so only the draw remains.
+        // The validating import in `main.cpp` draws first; `run_state_dump` replays that one.
         if sim.s.start_position_random {
             sim.s.start_position = (sim.rand() % 1000) as f32 / 1000.0;
         }

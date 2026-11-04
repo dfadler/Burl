@@ -16,7 +16,7 @@ mod labels;
 mod overlays;
 mod scene;
 mod slider;
-pub use avatars::{scan_user_image_dir, Avatars};
+pub use avatars::{scan_dir, scan_user_image_dir, Avatars};
 pub use camera::*;
 pub use font::*;
 pub use image::{decode_image, Image};

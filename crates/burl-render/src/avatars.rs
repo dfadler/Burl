@@ -28,6 +28,22 @@ pub struct Avatars {
 /// `user_image_map`: `.jpg`, `.jpeg` and `.png` files (extension case-insensitive), keyed by the
 /// file name without its extension. `dir` is the canonical value from import, ending in `/`.
 pub fn scan_user_image_dir(dir: &str) -> Result<HashMap<String, PathBuf>, String> {
+    scan_dir(dir, cfg!(target_os = "macos"))
+}
+
+/// The key as stored: on macOS (`#ifdef __APPLE__`, gource_settings.cpp:848-858) the name is
+/// normalised to NFC, because HFS+ hands back decomposed file names while log names are
+/// normally composed. The path keeps the name exactly as the directory listed it.
+fn key(stem: &str, nfc: bool) -> String {
+    if nfc {
+        use unicode_normalization::UnicodeNormalization;
+        stem.nfc().collect()
+    } else {
+        stem.to_string()
+    }
+}
+
+pub fn scan_dir(dir: &str, nfc: bool) -> Result<HashMap<String, PathBuf>, String> {
     let rd = std::fs::read_dir(dir).map_err(|e| format!("error reading user-image-dir: {e}"))?;
     let mut map = HashMap::new();
     for entry in rd.flatten() {
@@ -37,7 +53,7 @@ pub fn scan_user_image_dir(dir: &str) -> Result<HashMap<String, PathBuf>, String
         };
         let (stem, ext) = file.split_at(dot);
         if matches!(ext.to_lowercase().as_str(), ".jpg" | ".jpeg" | ".png") {
-            map.insert(stem.to_string(), PathBuf::from(format!("{dir}{file}")));
+            map.insert(key(stem, nfc), PathBuf::from(format!("{dir}{file}")));
         }
     }
     Ok(map)

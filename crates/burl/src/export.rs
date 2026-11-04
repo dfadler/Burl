@@ -10,12 +10,12 @@ use burl_conf::settings::{DebugOptions, DisplaySettings, GourceSettings};
 use burl_formats::fetch_log;
 use burl_gl::{GlContext, HeadlessEgl, Renderer};
 use burl_render::{
-    decode_image, world_matrix, Avatars, SceneSettings, SceneTextures, TextureId, DEFAULT_FONT_FILE,
+    decode_image, world_matrix, SceneSettings, SceneTextures, TextureId, DEFAULT_FONT_FILE,
 };
-use burl_sim::{Sim, UserGraphicsHook};
+use burl_sim::Sim;
 use burl_util::prng::SimRng;
 use std::io::Write;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 const BEAM: &[u8] = include_bytes!("../../../data/beam.png");
 const FILE: &[u8] = include_bytes!("../../../data/file.png");
@@ -98,18 +98,7 @@ pub fn run(
             g.set_scaled_font_sizes();
         }
         let mut settings = sim_settings(display, g, i as i32 + 1, repo_count as i32);
-        let avatars = Avatars::new(
-            &g.user_image_dir,
-            &g.default_user_image,
-            g.colour_user_images,
-        )?
-        .map(|a| Arc::new(Mutex::new(a)));
-        if let Some(a) = &avatars {
-            let a = Arc::clone(a);
-            settings.user_graphics = Some(UserGraphicsHook(Arc::new(move |name| {
-                a.lock().expect("avatar lock").assign(name)
-            })));
-        }
+        let avatars = super::frame::install_avatars(g, &mut settings)?;
         let log = fetch_log(&g.path.clone(), Arc::new(log_settings(g))).map_err(|e| e.0)?;
         let mut sim = Sim::new(settings, log, carry.0).map_err(|e| e.0)?;
         sim.carry_first_rand_frame(carry.1);
@@ -130,15 +119,7 @@ pub fn run(
 
         while !sim.is_finished() {
             sim.update().map_err(|e| e.0)?;
-            if let Some(a) = &avatars {
-                let mut a = a.lock().expect("avatar lock");
-                if let Some(e) = a.take_error() {
-                    return Err(e);
-                }
-                for (id, img) in a.take_uploads() {
-                    r.upload_texture(id, img.width, img.height, &img.rgba, true)?;
-                }
-            }
+            super::frame::upload_avatars(&avatars, &mut r)?;
             // Gource::update dumps every (frameskip + 1)-th tick only.
             if !sim.exports_frame() {
                 let last = sim.is_last_frame(max_frames);

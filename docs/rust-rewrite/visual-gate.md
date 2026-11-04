@@ -38,14 +38,20 @@ so the rasteriser contributes far less than the timing mode. Not measured: a rea
 AVX level (the amd64 container is emulated) and a second x86 microarchitecture, so R22 stays open for real
 x86 hosts: CI's ubuntu-24.04 runner is the first real check (run `scripts/visual.sh self 10` there; expect >= 0.959).
 
-## Measured: Burl vs oracle (non-blocking, informational)
+## Measured: Burl vs oracle (2026-11-03, after the cadence and PRNG fixes)
 
-`burl ... -o` in the same image vs the references at the same frame indices (SSIM): file-removal 0.987-0.993,
-file-to-dir 0.985-0.996, small-repo 0.921-0.956, real-burl-git-250 0.879-0.924. **Not a valid comparison yet**:
-Burl emits ~3x the frames (1051-1080 for fixtures where the oracle emits ~355; 3220 vs 1073 for the real log), so frame
-index N is not the same moment, and the one pair of frames I looked at differs visibly in layout. Dark, sparse
-frames score high regardless. The gate needs Burl's export to match the oracle's frame cadence and stop time first
-(proposed deviation or bug for the render owner; not for this PR to decide).
+The earlier numbers were invalid for two reasons, both fixed on the Burl side. (1) Burl wrote a frame every tick;
+Gource dumps every `frameskip + 1`-th (3rd at `-r 25`), so Burl emitted ~3x the frames. (2) Burl's default PRNG is
+clock-seeded, so frame counts varied 355-387 between identical runs; the oracle never calls `srand`, so its `rand()`
+is glibc `srand(1)`. `scripts/visual.sh burl` therefore runs Burl with `--prng glibc` (same base digest, amd64; the separate `burl-visual:amd64` image, not the oracle's `burl-golden:amd64`).
+
+Structural set (bloom hidden), 16 frames, SSIM vs the committed references: 11 frames 0.9995-0.99997; the lowest are
+real-burl-git-250 frames 100/300/500/800 = 0.9856/0.9968/0.9899/0.9996 and file-removal frame 30 = 0.9969 (the
+oracle's own jitter value 0.9969 above). Minimum 0.9856 against threshold 0.959.
+Bloom set (bloom drawn, same fixtures, oracle re-rendered with bloom; 15 of 16 frames recorded, real-repo frame 500 missing): worst 0.9797 (small-repo frame 30, real-repo
+frame 100), the rest 0.985-0.99996. small-repo frame 30 scored 0.9792 against one oracle run and 0.9991 against a
+second oracle run (the oracle differs from itself by 0.9794 there), so the shortfall is the oracle's jitter mode, not
+bloom. Mean luminance, Burl vs oracle, small-repo frames 30/70: 29.648 vs 29.702, 33.153 vs 33.106 (0.2%, inside the 5%).
 
 ## FMA (gcc on amd64)
 

@@ -268,6 +268,8 @@ pub struct Sim {
     pub(crate) framecount: i32,
     pub(crate) runtime: f32,
     max_tick_rate: f32,
+    /// `Gource::frameskip`: ticks per exported frame minus one.
+    frameskip: i32,
     pub(crate) currtime: i64,
     pub(crate) lasttime: i64,
     pub(crate) subseconds: f32,
@@ -342,8 +344,10 @@ impl Sim {
 
         // setFrameExporter: tick rate for the video frame rate
         let mut gource_framerate = settings.output_framerate;
+        let mut frameskip = 0;
         while gource_framerate < 60 {
             gource_framerate += settings.output_framerate;
+            frameskip += 1;
         }
         let max_tick_rate = 1.0f32 / gource_framerate as f32;
 
@@ -362,6 +366,7 @@ impl Sim {
             framecount: 0,
             runtime: 0.0,
             max_tick_rate,
+            frameskip,
             currtime: 0,
             lasttime: 0,
             subseconds: 0.0,
@@ -550,6 +555,11 @@ impl Sim {
             self.runtime_at_load = self.runtime;
         }
         Ok(())
+    }
+
+    /// `Gource::update`'s `framecount % (frameskip + 1) == 0`: whether the exporter dumps this tick.
+    pub fn exports_frame(&self) -> bool {
+        self.framecount % (self.frameskip + 1) == 0
     }
 
     /// Called by the driver after the dump hook, in place of `Gource::update`'s tail.
@@ -2351,6 +2361,29 @@ mod tests {
 
     const THREE: &str =
         "1277787455|bob|A|a/b.txt\n1277787456|bob|A|c/d.txt\n1277787457|bob|A|c/e/f.txt\n";
+
+    /// `Gource::setFrameExporter`: at 25 fps the tick rate is 75/s and every third tick is dumped.
+    #[test]
+    fn exports_every_frameskip_plus_one_tick() {
+        let exported = |fps| {
+            let mut s = sim(SimSettings {
+                output_framerate: fps,
+                ..ok_settings()
+            })
+            .unwrap();
+            (0..7)
+                .map(|_| {
+                    s.update().unwrap();
+                    let e = s.exports_frame();
+                    s.end_frame();
+                    e
+                })
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(exported(25), [true, false, false, true, false, false, true]);
+        assert_eq!(exported(30), [true, false, true, false, true, false, true]);
+        assert_eq!(exported(60), [true; 7]);
+    }
 
     #[test]
     fn paused_freezes_the_clock_but_not_the_camera() {

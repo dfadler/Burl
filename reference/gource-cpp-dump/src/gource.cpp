@@ -1061,6 +1061,10 @@ RUser* Gource::addUser(const std::string& username) {
 
 void Gource::deleteUser(RUser* user) {
 
+    // state-dump fork: userTree still holds this pointer until the next interactUsers, and
+    // mousetrace runs before that. It must not read it; Burl skips the same users.
+    dump_deleted_users.insert(user);
+
     if(hoverUser == user) {
         hoverUser = 0;
     }
@@ -1310,6 +1314,8 @@ void Gource::addFileAction(const RCommit& commit, const RCommitFile& cf, RFile* 
 
 void Gource::interactUsers() {
 
+    dump_deleted_users.clear();   // state-dump fork: see mousetrace
+
 
     // update quad tree
     Bounds2D quadtreebounds = user_bounds;
@@ -1553,7 +1559,7 @@ void Gource::updateCamera(float dt) {
 
             rotate_angle *= DEGREES_TO_RADIANS;
 
-        } else if(!cursor.rightButtonPressed() && dir_bounds.area() > 10000.0f) {
+        } else if(!buttonRight() && dir_bounds.area() > 10000.0f) {
 
             float aspect_ratio = display.width / (float) display.height;
 
@@ -1919,6 +1925,7 @@ void Gource::mousetrace(float dt) {
 
         for(std::set<QuadItem*>::iterator it = userset.begin(); it != userset.end(); it++) {
             RUser* user = (RUser*) *it;
+            if(dump_deleted_users.count(user)) continue;
             if(!user->isFading() && user->quadItemBounds.contains(projected_mouse)) {
                 userSelection = user;
                 break;

@@ -87,6 +87,11 @@ With a script, the `g` object of every frame ends with
 "selected_user":name|null,"selected_file":path|null}`. `buttons` is the SDL mask (1 left, 2 middle, 4 right). Without
 a script the key is absent, so no existing golden changes.
 
+Real SDL still runs underneath: releasing a grab warps the real pointer back to `mousepos`, and that comes back as a
+motion event which `mouseMove` takes (it resets the cursor idle clock, at a tick the script does not control). Skipping the
+warp is worse: the pointer then stays at the window centre and the next motion event moves `mousepos` there. So a fixture
+must not depend on the 3 s cursor timeout expiring shortly after a grab ends.
+
 Overlaps are not reproducible: Gource picks the first of a `std::set<QuadItem*>` ordered by heap address
 (`D12`). Fixtures must not put two pawns under one scripted point.
 

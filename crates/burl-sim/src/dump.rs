@@ -485,6 +485,9 @@ pub struct DumpOptions {
     pub prng_seed: Option<u64>,
     /// The scripted pointer events (`--debug-pointer-script`); `None` = no `g.pointer` object.
     pub pointer: Option<Vec<PointerEvent>>,
+    /// How many scripted events are spent. Shared by the sections of a run, as the fork's
+    /// `pointer_pos` is: a later section does not replay the events of an earlier one.
+    pub pointer_next: std::cell::Cell<usize>,
 }
 
 /// The dump header, once per run (the fork writes it at the first section boundary).
@@ -509,7 +512,6 @@ impl Sim {
         out.write_all(self.section_record().as_bytes())
             .map_err(write_err)?;
         self.pointer_dump = o.pointer.is_some();
-        let mut next_event = 0;
         while !self.app_finished {
             self.update()?;
             if self.should_dump(o.every, o.max_frames) {
@@ -520,11 +522,11 @@ impl Sim {
             // first seen in the dump of frame N+1
             if let Some(events) = &o.pointer {
                 while let Some(e) = events
-                    .get(next_event)
+                    .get(o.pointer_next.get())
                     .filter(|e| e.frame <= self.framecount)
                 {
                     self.apply_pointer(e);
-                    next_event += 1;
+                    o.pointer_next.set(o.pointer_next.get() + 1);
                 }
                 // the draw: `mousetrace`, then `cursor.logic` with the fixed tick
                 self.draw_pointer();

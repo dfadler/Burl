@@ -19,6 +19,7 @@
 #define GOURCE_H
 
 #include <deque>
+#include <set>
 #include <list>
 #include <fstream>
 
@@ -288,6 +289,7 @@ public:
     void quit();
 
     void update(float t, float dt);
+    std::set<RUser*> dump_deleted_users;   // state-dump fork
     void dumpState(); // state-dump fork
     // state-dump fork, scripted pointer (--debug-pointer-script)
     void dumpPointer();

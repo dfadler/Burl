@@ -229,6 +229,8 @@ fn selected_sprites_are_white() {
     let mut sc = scene();
     sc.dirs[1].files[0].selected = true;
     sc.users[0].selected = true;
+    sc.users[0].colour = Vec3::new(1.0, 0.0, 0.0);
+    sc.dirs[1].files[0].colour = Vec3::new(0.0, 1.0, 0.0);
     let tex = SceneTextures {
         beam: TextureId(1),
         file: TextureId(2),

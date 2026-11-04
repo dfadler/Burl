@@ -1,5 +1,5 @@
 image: debian@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4 (trixie-slim), amd64
-built image id: sha256:0ab3a1d6ed1bf47b8ae0033d5de3bf29792fac3c9949f5a18ba113335bf45a9e
-source sha: 9ac5df6acba64643eadb6390cfbfc2a3c727c55b (reference/gource-cpp-dump/ must be unmodified at this commit)
+built image id: sha256:abdc1c37eb61553c17d2c44a3ab355a37f2f3d84ab0e36f6b3dada548cefcbf3
+source sha: 7e659e61258b1d6e2b52d29f275d9632ed9f298b (reference/gource-cpp-dump/ must be unmodified at this commit)
 fork: clang++ with -O1 -fsigned-char -ffp-contract=off (reference/gource-cpp-dump/Dockerfile), Xvfb + llvmpipe, one warm-up run
 regenerate: docs/rust-rewrite/discovery/golden/scripts/regen-sim.sh

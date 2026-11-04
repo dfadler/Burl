@@ -296,6 +296,16 @@ fn run_state_dump(
 ) -> Result<(), String> {
     let (rng, prng_name) = make_rng(debug)?;
 
+    // read the script before the dump file is created (and emptied)
+    let pointer = match &debug.pointer_script {
+        Some(path) => {
+            let text =
+                std::fs::read_to_string(path).map_err(|_| format!("could not read '{path}'"))?;
+            Some(burl_sim::pointer::parse_script(&text)?)
+        }
+        None => None,
+    };
+
     let file = std::fs::File::create(dump_path)
         .map_err(|_| format!("could not write to '{dump_path}'"))?;
     let mut out = std::io::BufWriter::new(file);
@@ -304,14 +314,8 @@ fn run_state_dump(
         max_frames: debug.dump_max_frames.unwrap_or(0),
         prng: prng_name.to_string(),
         prng_seed: debug.prng_seed,
-        pointer: match &debug.pointer_script {
-            Some(path) => {
-                let text = std::fs::read_to_string(path)
-                    .map_err(|_| format!("could not read '{path}'"))?;
-                Some(burl_sim::pointer::parse_script(&text)?)
-            }
-            None => None,
-        },
+        pointer,
+        pointer_next: Default::default(),
     };
     burl_sim::dump::write_header(&mut out, &opts).map_err(|e| e.0)?;
 

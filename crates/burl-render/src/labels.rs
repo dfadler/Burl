@@ -49,7 +49,7 @@ impl Default for NameSettings {
             dir_colour: Vec3::ONE,
             filename_colour: Vec3::ONE,
             highlight_colour: Vec3::ONE,
-            selection_colour: Vec3::ONE,
+            selection_colour: Vec3::new(1.0, 1.0, 0.3),
         }
     }
 }

@@ -472,6 +472,16 @@ impl Sim {
         (self.rng, self.first_rand_frame)
     }
 
+    /// [`Self::into_carry`] for a Sim that stays in place: the generator is replaced by a fresh
+    /// one, so this Sim must be dropped without being stepped again.
+    pub fn take_carry(&mut self) -> (SimRng, i64) {
+        let spent = SimRng::new(burl_util::prng::PrngMode::Glibc, None);
+        (
+            std::mem::replace(&mut self.rng, spent),
+            self.first_rand_frame,
+        )
+    }
+
     /// Resume the carried `first_rand_frame` (set once, by the first `rand()` of the whole run).
     pub fn carry_first_rand_frame(&mut self, f: i64) {
         self.first_rand_frame = f;

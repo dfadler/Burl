@@ -23,6 +23,8 @@ pub enum Action {
     ToggleFrame,
     /// Alt+Return: `toggleFullscreen`.
     ToggleFullscreen,
+    /// Return: `GourceShell::next`, honoured only with more than one `[gource]` section.
+    NextSection,
 }
 
 /// The action for a key press. `key` is the layout key without modifiers (SDL's `keysym.sym`,
@@ -59,6 +61,7 @@ pub fn key_action(
         match key {
             Key::Named(NamedKey::F11) => return Some(Action::ToggleFrame),
             Key::Named(NamedKey::Enter) if alt => return Some(Action::ToggleFullscreen),
+            Key::Named(NamedKey::Enter) => return Some(Action::NextSection),
             _ => {}
         }
     }
@@ -303,7 +306,7 @@ mod tests {
         assert_eq!(k(&esc, false, false, true), Some(Action::Quit));
         assert_eq!(k(&esc, true, false, false), None);
         let enter = Key::Named(NamedKey::Enter);
-        assert_eq!(k(&enter, false, false, false), None);
+        assert_eq!(k(&enter, false, false, false), Some(Action::NextSection));
         assert_eq!(
             k(&enter, false, true, false),
             Some(Action::ToggleFullscreen)

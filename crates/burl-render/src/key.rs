@@ -211,6 +211,14 @@ impl FileKey {
                     }
                     self.entries.get_mut(&ext).expect("just inserted").count += 1;
                 }
+                KeyEvent::Clear => {
+                    for k in &self.active {
+                        if let Some(e) = self.entries.get_mut(k) {
+                            e.count = 0;
+                        }
+                    }
+                    self.interval_remaining = 0.0;
+                }
                 KeyEvent::Dec { path } => {
                     if let Some(e) = self.entries.get_mut(extension(path, s.fallback)) {
                         e.count -= 1;

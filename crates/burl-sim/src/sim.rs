@@ -429,8 +429,26 @@ impl Sim {
         Ok(sim)
     }
 
+    /// `last_percent`: where in the log the commits read so far end (the slider's position).
+    pub fn percent(&self) -> f32 {
+        self.last_percent
+    }
+
+    /// The `dt` `Gource::logic` sees for a real frame time `dt` (`step`: capped, then scaled).
+    pub fn logic_dt(&self, dt: f32) -> f32 {
+        dt.min(self.max_tick_rate) * self.s.time_scale
+    }
+
+    /// `Gource::dateAtPosition`: the timestamp of the commit under `percent` of the log.
+    pub fn commit_time_at(&mut self, percent: f32) -> Option<i64> {
+        if percent >= 1.0 {
+            return None;
+        }
+        self.log.get_commit_at(percent).map(|c| c.timestamp)
+    }
+
     /// `Gource::seekTo`: ignored for a log that cannot seek.
-    fn seek_to(&mut self, percent: f32) {
+    pub(crate) fn seek_to(&mut self, percent: f32) {
         if !self.log.is_seekable() {
             return;
         }
@@ -2415,6 +2433,26 @@ mod tests {
         .unwrap();
         assert_eq!(s.s.start_position, 0.001);
         assert_eq!((s.rand_calls(), s.first_rand_frame), (1, 0));
+    }
+
+    /// The slider: `commit_time_at` peeks at the commit under a percent without moving the
+    /// read position, and `SeekTo` (a click) restarts the log there and ends a pause.
+    #[test]
+    fn slider_peek_and_seek() {
+        let mut s = sim_with(THREE, ok_settings()).unwrap();
+        let first = s.commit_time_at(0.0).unwrap();
+        let late = s.commit_time_at(0.5).unwrap();
+        assert!(late > first);
+        assert_eq!(s.commit_time_at(1.0), None);
+        // peeking left the log where it was: the next commit is still the first
+        assert_eq!(s.commit_time_at(0.0), Some(first));
+        s.update().unwrap();
+        assert_eq!(s.scene_view().time, first);
+        s.apply(Command::TogglePause);
+        s.apply(Command::SeekTo(0.5));
+        assert!(!s.paused);
+        s.update().unwrap();
+        assert_eq!(s.scene_view().time, late);
     }
 
     /// `Gource::setFrameExporter`: at 25 fps the tick rate is 75/s and every third tick is dumped.

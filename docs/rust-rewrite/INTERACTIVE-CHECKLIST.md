@@ -32,7 +32,7 @@ Use any real log, e.g. `burl --seconds-per-day 0.5 <repo>`.
 - [ ] Wheel zooms in/out and respects the zoom clamp
 - [ ] Left-drag on the background pans; clicking empty background deselects the user
 - [ ] Right-drag rotates the camera; middle click toggles camera mode
-- [ ] Hover shows names; clicking a user selects it; the timeline slider seeks on click and shows its hover caption
+- [ ] Hover shows names; clicking a user selects it; the timeline slider (bottom strip, fades in on hover, out after 1 s) seeks on click, shows its date caption over the cursor clamped to the window, and is absent with `--hide-progress` or a stdin log
 - [ ] Cursor grab starts on drag and releases when the last button is up
 
 ## Render

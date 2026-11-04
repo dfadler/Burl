@@ -62,10 +62,9 @@ fn stream(extra: &[&str], frames: usize) -> Option<Vec<u8>> {
         return Some(out.stdout);
     }
     let err = String::from_utf8_lossy(&out.stderr);
-    assert!(
-        !cfg!(target_os = "macos"),
-        "burl -o - failed on macOS: {err}"
-    );
+    if cfg!(target_os = "macos") {
+        panic!("burl -o - failed on macOS: {err}");
+    }
     eprintln!("SKIPPED: no headless GL context: {err}");
     None
 }

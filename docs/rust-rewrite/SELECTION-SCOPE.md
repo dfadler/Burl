@@ -135,3 +135,7 @@ Do **A+ now, B later**:
 4. Revisit B once the windowed work has settled (`interactive.rs`/`frame.rs` stable, the slider landed, which also needs the pointer position). Then do B1 with the scripted-pointer fork patch, and B2 last.
 
 Decision wanted from the user: A, A+ (recommended), B1 or B2; and whether to accept `D12` (deterministic tie-break) if B is chosen.
+
+## 8. Decision
+
+The user chose **full parity** (B2: selected look, pointer picking of users and files, Tab, and the hover text box). The implementation is a separate ticket and PR sequence, to start once the windowed path (`interactive.rs`, `frame.rs`) is stable; suggested order: P1+P2, then P3-P5, then P6, with the scripted-pointer oracle fork patch ahead of P3 so picking has a real oracle test. Rows `D12` (deterministic overlap order) and `D13` (selection at event time) still need the user's explicit OK before they merge.

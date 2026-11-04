@@ -9,7 +9,7 @@ and the release design ([#21](https://github.com/dfadler/Burl/issues/21)). The f
 | Criterion (#14) | Check | Where it runs |
 |---|---|---|
 | Every gate green on Linux amd64 | `cargo xtask ci` (fmt, clippy, tests, sim comparator) and the heavy tier: goldens and sim goldens reproduce, slow tests, headless render smoke | `ci.yml`, `heavy.yml`; `release.yml` re-runs the heavy tier and `cargo xtask ci` on the tag |
-| Scene visual gate (SSIM, #12) | `scripts/visual-burl.sh` (`cargo xtask ssim --min 0.959` per frame), refs in `tests/golden/visual/` | `heavy.yml` `visual-ssim`, wired; **non-blocking until the criteria in `visual-gate.md` are met, so check its step summary before tagging** |
+| Scene visual gate (SSIM, #12) | `scripts/visual-burl.sh` (`cargo xtask ssim --min 0.959` per frame), refs in `tests/golden/visual/` | `heavy.yml` `visual-ssim`, blocking (per-frame numbers in its step summary) |
 | macOS native build, sim goldens within tolerance | the `macos` leg of `ci.yml`; `cargo xtask ci` on macOS | `ci.yml`, and `build-macos-arm64` in `release.yml` |
 | `--features pcre2` leg | `cargo xtask ci --pcre2` | `ci.yml` (`linux-pcre2`) |
 | Docker headless export gives a valid PPM stream for a fixture | `docker build --platform linux/amd64 -f docker/release.Dockerfile -t burl:release . && scripts/check-image.sh burl:release` | `image` job in `release.yml` |
@@ -26,7 +26,7 @@ required reviewer. Nothing is public until the user also publishes the draft.
 
 1. All feature and gate PRs merged; `master` green (fast, heavy, visual).
 2. Run the interactive checklist ([INTERACTIVE-CHECKLIST.md](INTERACTIVE-CHECKLIST.md)) on macOS Retina, macOS non-Retina and Linux X11.
-3. Review every row of `DEVIATIONS.md`. Every Change/Gap has the user's OK; no unpinned or "not yet written" test names (the D3 ADR and the D9 per-PR check are open at the time of writing); decide G4 (does `pcre2` ship by default).
+3. Review every row of `DEVIATIONS.md`. Every Change/Gap has the user's OK; no unpinned or "not yet written" test names; decide G4 (does `pcre2` ship by default).
 4. Release PR (merged by the user; it touches no workflow): bump the workspace version to 0.58.0, change `VERSION` in `crates/burl-conf/src/help.rs` and the `help-*` expected-diff row, fill the sign-off block (`version`, `deviation-register` = the hash command above, one line per platform), tick the boxes.
 5. Optional dry run: tag `v0.58.0-rc.1`. It skips the sign-off check, builds everything, pushes the image without `latest` and drafts a prerelease. Delete the draft and image tag afterwards.
 6. Tag `v0.58.0` on the merge commit on `master` (the gate rejects a tag not reachable from `master`). Approve the `release` environment when the jobs are green. Publish the draft release.

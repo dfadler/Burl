@@ -5,6 +5,7 @@ on:
   pull_request:
   push:
     branches: [master]
+  merge_group:
   workflow_dispatch:
 
 permissions:
@@ -12,7 +13,8 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Only PR runs are superseded; a newer master push must not cancel the run testing an earlier merge.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always

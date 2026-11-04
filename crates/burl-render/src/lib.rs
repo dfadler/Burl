@@ -15,7 +15,8 @@ mod key;
 mod labels;
 mod overlays;
 mod scene;
-pub use avatars::{scan_user_image_dir, Avatars};
+mod slider;
+pub use avatars::{scan_dir, scan_user_image_dir, Avatars};
 pub use camera::*;
 pub use font::*;
 pub use image::{decode_image, Image};
@@ -23,6 +24,7 @@ pub use key::KeySettings;
 pub use labels::*;
 pub use overlays::*;
 pub use scene::*;
+pub use slider::Slider;
 
 pub use glam;
 use glam::{Mat4, Vec2, Vec4};

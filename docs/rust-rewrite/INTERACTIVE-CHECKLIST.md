@@ -32,7 +32,7 @@ Use any real log, e.g. `burl --seconds-per-day 0.5 <repo>`.
 - [ ] Wheel zooms in/out and respects the zoom clamp
 - [ ] Left-drag on the background pans; clicking empty background deselects the user
 - [ ] Right-drag rotates the camera; middle click toggles camera mode
-- [ ] Hover shows names; clicking a user selects it; the timeline slider seeks on click and shows its hover caption
+- [ ] Hover shows names; clicking a user selects it; the timeline slider (bottom strip, fades in on hover, out after 1 s) seeks on click, shows its date caption over the cursor clamped to the window, and is absent with `--hide-progress` or a stdin log
 - [ ] Cursor grab starts on drag and releases when the last button is up
 
 ## Render
@@ -40,6 +40,7 @@ Use any real log, e.g. `burl --seconds-per-day 0.5 <repo>`.
 - [ ] Bloom, shadows, file and user textures, beams and the key legend look like Gource's at the same settings
 - [ ] Text (user, file, directory names, captions, title, date) is readable and positioned like Gource's
 - [ ] Pause/resume and seeking leave no stale frame or flicker
+- [ ] `burl --user-image-dir DIR <repo>` (DIR holds `<user name>.png/.jpg`) shows each user as their own image, white unless `--colour-images`; `--default-user-image F` gives the rest F; a corrupt file in DIR exits with an error naming it (#91)
 
 ## Sign-off
 

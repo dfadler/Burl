@@ -26,7 +26,7 @@ required reviewer. Nothing is public until the user also publishes the draft.
 
 1. All feature and gate PRs merged; `master` green (fast, heavy, visual).
 2. Run the interactive checklist ([INTERACTIVE-CHECKLIST.md](INTERACTIVE-CHECKLIST.md)) on macOS Retina, macOS non-Retina and Linux X11.
-3. Review every row of `DEVIATIONS.md`. Every Change/Gap has the user's OK; no unpinned or "not yet written" test names (the G6 texture check, the D3 ADR and the D9 per-PR check are open at the time of writing); decide G4 (does `pcre2` ship by default).
+3. Review every row of `DEVIATIONS.md`. Every Change/Gap has the user's OK; no unpinned or "not yet written" test names (the D3 ADR and the D9 per-PR check are open at the time of writing); decide G4 (does `pcre2` ship by default).
 4. Release PR (merged by the user; it touches no workflow): bump the workspace version to 0.58.0, change `VERSION` in `crates/burl-conf/src/help.rs` and the `help-*` expected-diff row, fill the sign-off block (`version`, `deviation-register` = the hash command above, one line per platform), tick the boxes.
 5. Optional dry run: tag `v0.58.0-rc.1`. It skips the sign-off check, builds everything, pushes the image without `latest` and drafts a prerelease. Delete the draft and image tag afterwards.
 6. Tag `v0.58.0` on the merge commit on `master` (the gate rejects a tag not reachable from `master`). Approve the `release` environment when the jobs are green. Publish the draft release.

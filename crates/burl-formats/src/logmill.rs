@@ -59,6 +59,7 @@ macro_rules! attempt {
 
 fn fetch(logfile: &str, log_format: &str, s: &Arc<LogSettings>) -> Attempt {
     if !log_format.is_empty() {
+        burl_util::log::debug(|| format!("log-format = {log_format}"));
         match log_format {
             "git" => {
                 attempt!(git::GitCommitLog::new(logfile, s.clone()));
@@ -77,14 +78,24 @@ fn fetch(logfile: &str, log_format: &str, s: &Arc<LogSettings>) -> Attempt {
         return Ok(None);
     }
     // try different formats until one works
+    let trying = |what: &str| burl_util::log::debug(|| format!("trying {what}..."));
+    trying("git");
     attempt!(git::GitCommitLog::new(logfile, s.clone()));
+    trying("mercurial");
     attempt!(hg::MercurialLog::new(logfile, s.clone()));
+    trying("bzr");
     attempt!(bzr::BazaarLog::new(logfile, s.clone()));
+    trying("git raw");
     attempt!(gitraw::GitRawCommitLog::new(logfile, s.clone()));
+    trying("cvs-exp");
     attempt!(cvs_exp::CVSEXPCommitLog::new(logfile, s.clone()));
+    trying("svn");
     attempt!(svn::SVNCommitLog::new(logfile, s.clone()));
+    trying("cvs2cl");
     attempt!(cvs2cl::CVS2CLCommitLog::new(logfile, s.clone()));
+    trying("custom");
     attempt!(custom::CustomLog::new(logfile, s.clone()));
+    trying("apache combined");
     attempt!(apache::ApacheCombinedLog::new(logfile, s.clone()));
     Ok(None)
 }

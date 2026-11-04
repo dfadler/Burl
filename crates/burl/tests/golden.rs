@@ -394,6 +394,45 @@ fn log_command_printers() {
     assert_eq!(out.code, 1);
 }
 
+/// The other four printers, each by both spellings. git's `--no-show-signature` depends on the
+/// installed git and hg's style path on where the data directory is, so those two are matched at
+/// both ends.
+#[test]
+fn log_command_printers_git_hg_cvs() {
+    for args in [&["--git-log-command"][..], &["--log-command", "git"]] {
+        let out = run(args);
+        let text = String::from_utf8(out.stdout).unwrap();
+        assert!(
+            text.starts_with("git log --reverse --raw --encoding=UTF-8 --no-renames ")
+                && text.ends_with(" --pretty=format:user:%aN%n%ct\n"),
+            "git {args:?}: {text:?}"
+        );
+    }
+    for args in [&["--hg-log-command"][..], &["--log-command", "hg"]] {
+        let text = String::from_utf8(run(args).stdout).unwrap();
+        assert!(
+            text.starts_with("hg log  -r 0:tip --style '") && text.ends_with("gource.style'\n"),
+            "hg {args:?}: {text:?}"
+        );
+    }
+    for (args, want) in [
+        (&["--cvs-exp-command"][..], "cvs-exp.pl -notree\n"),
+        (&["--log-command", "cvs-exp"][..], "cvs-exp.pl -notree\n"),
+        (
+            &["--cvs2cl-command"][..],
+            "cvs2cl --chrono --stdout --xml -g-q\n",
+        ),
+        (
+            &["--log-command", "cvs2cl"][..],
+            "cvs2cl --chrono --stdout --xml -g-q\n",
+        ),
+    ] {
+        let out = run(args);
+        assert_eq!(out.code, 0, "{args:?}");
+        assert_bytes(&format!("{args:?}"), &out.stdout, want.as_bytes());
+    }
+}
+
 /// `chrono::Local` must honour TZ like the C library: date-string timestamps in a custom
 /// log use the local zone (unit-tests.md rows 1-2).
 #[test]

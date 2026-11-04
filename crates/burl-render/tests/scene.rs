@@ -179,3 +179,24 @@ fn an_avatar_user_draws_with_its_own_texture_and_ratio() {
         .iter()
         .any(|b| b.texture == Some(TextureId(900))));
 }
+
+#[test]
+fn fixed_user_size_scales_users_with_camera_distance() {
+    let tex = SceneTextures {
+        beam: TextureId(1),
+        file: TextureId(2),
+        file_ratio: 1.0,
+        user: TextureId(3),
+    };
+    let mut sc = scene();
+    sc.camera.pos.z = -600.0;
+    let mut ss = SceneSettings::new(640, 480);
+    let width = |f: &Frame| {
+        let v = f.users.vertices();
+        v[2].pos[0] - v[0].pos[0]
+    };
+    let plain = width(&build_frame(&sc, &tex, &ss));
+    ss.fixed_user_size = true;
+    let fixed = width(&build_frame(&sc, &tex, &ss));
+    assert!((fixed - 2.0 * plain).abs() < 1e-3, "{plain} {fixed}");
+}

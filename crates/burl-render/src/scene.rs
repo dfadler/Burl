@@ -4,12 +4,15 @@
 //! (src/spline.cpp) and `RAction::drawToVBO` (src/action.cpp).
 //!
 //! Not ported: the `in_frustum` culling of files and bloom (it only skips off-screen quads, so the
-//! image is unchanged), `fixed_user_size`, selection.
+//! image is unchanged), selection.
 
 use crate::{BloomBuf, Camera, Frame, QuadBuf, QuadVertex, TextureId, FULL_TEXCOORD};
 use burl_sim::view::{DirView, SceneView};
 use burl_util::math::normalise_vec2;
 use glam::{Vec2, Vec3, Vec4};
+
+/// `Gource::starting_z`, the camera's initial distance.
+const STARTING_Z: f32 = -300.0;
 
 /// The textures a frame uses and their height/width ratios (`Pawn::graphic_ratio`).
 #[derive(Clone, Copy, Debug)]
@@ -32,6 +35,8 @@ pub struct SceneSettings {
     pub hide_tree: bool,
     pub hide_files: bool,
     pub hide_users: bool,
+    /// `--fixed-user-size`: user quads scale by `-camera.z / 300` (`Gource::updateVBOs`).
+    pub fixed_user_size: bool,
     /// `--user-scale`, which also scales the user shadow offset.
     pub user_scale: f32,
 }
@@ -47,6 +52,7 @@ impl SceneSettings {
             hide_tree: false,
             hide_files: false,
             hide_users: false,
+            fixed_user_size: false,
             user_scale: 1.0,
         }
     }
@@ -156,7 +162,10 @@ pub fn build_frame(scene: &SceneView, tex: &SceneTextures, s: &SceneSettings) ->
     }
 
     for u in scene.users.iter().filter(|_| !s.hide_users) {
-        let dims = Vec2::new(u.size, u.size * u.graphic_ratio);
+        let mut dims = Vec2::new(u.size, u.size * u.graphic_ratio);
+        if s.fixed_user_size {
+            dims *= -scene.camera.pos.z / STARTING_Z.abs();
+        }
         f.users.add(
             Some(u.graphic.map_or(tex.user, TextureId)),
             u.pos - dims * 0.5,

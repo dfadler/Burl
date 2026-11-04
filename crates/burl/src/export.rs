@@ -183,6 +183,15 @@ pub fn run(
 
         while !sim.is_finished() {
             sim.update().map_err(|e| e.0)?;
+            // Gource::update dumps every (frameskip + 1)-th tick only.
+            if !sim.exports_frame() {
+                let last = sim.is_last_frame(max_frames);
+                sim.end_frame();
+                if last {
+                    break;
+                }
+                continue;
+            }
             let scene = sim.scene_view();
             let mut frame = build_frame(&scene, &tex, &ss);
             frame.underlay = background

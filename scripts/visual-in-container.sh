@@ -4,12 +4,16 @@
 # then renders the structural fixtures under Xvfb + llvmpipe (ticket #12).
 #   visual-in-container.sh build
 #   visual-in-container.sh stream FIXTURE OUT.ppm      one warm-up render discarded first
+#   visual-in-container.sh burl FIXTURE OUT.ppm       the same fixture through Burl (burl-visual image, no X)
 #   visual-in-container.sh cut STREAM.ppm PREFIX I,J,..   write PREFIX-I.png (RGB8) for those frames
 set -euo pipefail
 T=/repo/tests/golden/sim
 # Structural set: text and overlays hidden, bloom off. Fixed size/rate/seed like the sim gate.
+# BLOOM=1 (the bloom set, ticket #12): same, but bloom drawn.
+HIDE=mouse,date,dirnames,filenames,usernames,progress
+[ "${BLOOM:-}" = 1 ] || HIDE=$HIDE,bloom
 COMMON="-640x360 -r 25 --seconds-per-day 1 --hash-seed 31 --disable-auto-skip --disable-auto-rotate \
- --file-idle-time 0 --time-scale 1 --hide mouse,date,dirnames,filenames,usernames,progress,bloom"
+ --file-idle-time 0 --time-scale 1 --hide $HIDE"
 # fixture -> "LOG EXTRA-ARGS"
 fixture() {
   case $1 in
@@ -45,6 +49,14 @@ case ${1:-} in
     render "$log" "${args[@]}" > /dev/null  # warm-up: the first llvmpipe run in a container differs (#16)
     render "$log" "${args[@]}" > "$out"
     ;;
+  burl)
+    # shellcheck disable=SC2046 # fixture() prints a word list
+    set -- $(fixture "$2") "$3"
+    log=$1 out=${!#}; args=("${@:2:$#-2}")
+    # shellcheck disable=SC2086 # COMMON is a word list by design
+    # Gource never calls srand, so its rand() is glibc srand(1); Burl's default PRNG is clock-seeded.
+    burl "$log" $COMMON "${args[@]}" --prng glibc -o "$out"
+    ;;
   cut)
     python3 -I - "$2" "$3" "$4" <<'PY'
 import re, struct, sys, zlib
@@ -68,5 +80,5 @@ for i in idx:
 print("frames=%d" % len(frames))
 PY
     ;;
-  *) echo "usage: $0 build | stream FIXTURE OUT.ppm | cut STREAM.ppm PREFIX I,J,.." >&2; exit 2 ;;
+  *) echo "usage: $0 build | stream FIXTURE OUT.ppm | burl FIXTURE OUT.ppm | cut STREAM.ppm PREFIX I,J,.." >&2; exit 2 ;;
 esac

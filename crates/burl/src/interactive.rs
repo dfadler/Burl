@@ -213,7 +213,8 @@ impl App {
     }
 
     /// `GourceShell::getNext`: the section after the one that ended. `Ok(false)` when there is
-    /// none (a single section, played once).
+    /// none (a single section, played once). Loading blocks the event loop while the log is read,
+    /// as `getNext` blocks the SDL loop in the C++ original.
     fn advance(&mut self, live: &mut Live) -> Result<bool, String> {
         let carry = live.sim.take_carry();
         self.carry = Some(carry);
@@ -228,6 +229,13 @@ impl App {
         live.ss = l.ss;
         live.clear = l.clear;
         live.disable_input = l.disable_input;
+        if live.disable_input {
+            // Button releases are ignored while input is disabled, so drop the drag and its grab.
+            live.pointer = Pointer::default();
+            if live.grabbed {
+                live.set_grab(false);
+            }
+        }
         live.hide_mouse = l.hide_mouse;
         live.next = false;
         live.pending.clear();

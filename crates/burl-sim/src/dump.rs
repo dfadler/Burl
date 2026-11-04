@@ -500,16 +500,17 @@ fn write_err(e: std::io::Error) -> SimError {
 impl Sim {
     /// Run one section to its end, writing its section record and every selected frame
     /// (`Gource::update` with the fork's hook after `logic`). The frame counter is the Sim's
-    /// own, so it restarts with each section's Sim.
+    /// own, so it restarts with each section's Sim. `next_event` is the script cursor
+    /// (`gDump.pointer_pos`): it survives from one section to the next.
     pub fn run_section(
         &mut self,
         out: &mut dyn std::io::Write,
         o: &DumpOptions,
+        next_event: &mut usize,
     ) -> Result<(), SimError> {
         out.write_all(self.section_record().as_bytes())
             .map_err(write_err)?;
         self.pointer_dump = o.pointer.is_some();
-        let mut next_event = 0;
         while !self.app_finished {
             self.update()?;
             if self.should_dump(o.every, o.max_frames) {
@@ -520,11 +521,11 @@ impl Sim {
             // first seen in the dump of frame N+1
             if let Some(events) = &o.pointer {
                 while let Some(e) = events
-                    .get(next_event)
+                    .get(*next_event)
                     .filter(|e| e.frame <= self.framecount)
                 {
                     self.apply_pointer(e);
-                    next_event += 1;
+                    *next_event += 1;
                 }
                 // the draw: `mousetrace`, then `cursor.logic` with the fixed tick
                 self.draw_pointer();
@@ -546,7 +547,7 @@ impl Sim {
         o: &DumpOptions,
     ) -> Result<(), SimError> {
         write_header(out, o)?;
-        self.run_section(out, o)
+        self.run_section(out, o, &mut 0)
     }
 }
 

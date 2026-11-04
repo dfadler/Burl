@@ -296,6 +296,19 @@ fn run_state_dump(
 ) -> Result<(), String> {
     let (rng, prng_name) = make_rng(debug)?;
 
+    // read the script before `File::create` truncates the dump: a dump path that is the script
+    // would otherwise be read back empty
+    let pointer = match &debug.pointer_script {
+        Some(path) => {
+            let text =
+                std::fs::read_to_string(path).map_err(|_| format!("could not read '{path}'"))?;
+            if std::fs::canonicalize(path).ok() == std::fs::canonicalize(dump_path).ok() {
+                return Err(format!("'{path}' is both the pointer script and the dump"));
+            }
+            Some(burl_sim::pointer::parse_script(&text)?)
+        }
+        None => None,
+    };
     let file = std::fs::File::create(dump_path)
         .map_err(|_| format!("could not write to '{dump_path}'"))?;
     let mut out = std::io::BufWriter::new(file);
@@ -304,19 +317,13 @@ fn run_state_dump(
         max_frames: debug.dump_max_frames.unwrap_or(0),
         prng: prng_name.to_string(),
         prng_seed: debug.prng_seed,
-        pointer: match &debug.pointer_script {
-            Some(path) => {
-                let text = std::fs::read_to_string(path)
-                    .map_err(|_| format!("could not read '{path}'"))?;
-                Some(burl_sim::pointer::parse_script(&text)?)
-            }
-            None => None,
-        },
+        pointer,
     };
     burl_sim::dump::write_header(&mut out, &opts).map_err(|e| e.0)?;
 
     let repo_count = repos.len();
     let mut carry = (rng, -1i64);
+    let mut next_event = 0;
     // main.cpp's validating `importGourceSettings` runs on the first section before the shell
     // imports each one again; both draw `start-position random`, so the first draw is discarded.
     // The real clock-seeded generator never shows it, a Script or --prng stream does.
@@ -332,7 +339,8 @@ fn run_state_dump(
         let log = fetch_log(&path, Arc::new(log_settings(g))).map_err(|e| e.0)?;
         let mut sim = Sim::new(settings, log, carry.0).map_err(|e| e.0)?;
         sim.carry_first_rand_frame(carry.1);
-        sim.run_section(&mut out, &opts).map_err(|e| e.0)?;
+        sim.run_section(&mut out, &opts, &mut next_event)
+            .map_err(|e| e.0)?;
         carry = sim.into_carry();
     }
     Ok(())

@@ -273,3 +273,12 @@ fn selected_names_are_drawn_last_in_the_selection_colour_whatever_the_fade_or_hi
     let hidden = names(&s, |n, _| n.hide_usernames = true);
     assert_eq!(quads(&hidden), 3 + 4);
 }
+
+/// `setGourceDefaults`: `selection_colour` is (1, 1, 0.3), not white.
+#[test]
+fn the_default_selection_colour_is_yellow() {
+    assert_eq!(
+        NameSettings::default().selection_colour,
+        Vec3::new(1.0, 1.0, 0.3)
+    );
+}

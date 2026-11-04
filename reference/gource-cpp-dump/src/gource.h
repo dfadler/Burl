@@ -183,6 +183,7 @@ class Gource : public SDLApp {
 
     std::deque<RCommit> commitqueue;
     std::map<std::string, RUser*> users;
+    std::vector<RUser*> deletedUsers;   // erased from users, freed when userTree is rebuilt
     std::map<std::string, RFile*> files;
     std::map<int, RUser*> tagusermap;
 

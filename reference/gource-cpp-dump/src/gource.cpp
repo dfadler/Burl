@@ -905,6 +905,9 @@ void Gource::reset() {
     if(userTree!=0) delete userTree;
     if(dirNodeTree!=0) delete dirNodeTree;
 
+    for(std::vector<RUser*>::iterator it = deletedUsers.begin(); it != deletedUsers.end(); it++) delete *it;
+    deletedUsers.clear();
+
     recolour = false;
 
     userTree = 0;
@@ -1074,7 +1077,9 @@ void Gource::deleteUser(RUser* user) {
 
     //debugLog("deleted user %s, tagid = %d\n", user->getName().c_str(), user->getTagID());
 
-    delete user;
+    // userTree still holds this pointer and the draw after update() runs mousetrace on it:
+    // free it when the tree is rebuilt (interactUsers)
+    deletedUsers.push_back(user);
 }
 
 bool Gource::canSeek() {
@@ -1321,6 +1326,9 @@ void Gource::interactUsers() {
 
     if(userTree != 0) delete userTree;
 
+    for(std::vector<RUser*>::iterator it = deletedUsers.begin(); it != deletedUsers.end(); it++) delete *it;
+    deletedUsers.clear();
+
     int max_depth = 1;
 
     //dont use deep quad tree initially when all the nodes are in one place
@@ -1553,7 +1561,7 @@ void Gource::updateCamera(float dt) {
 
             rotate_angle *= DEGREES_TO_RADIANS;
 
-        } else if(!cursor.rightButtonPressed() && dir_bounds.area() > 10000.0f) {
+        } else if(!buttonRight() && dir_bounds.area() > 10000.0f) {
 
             float aspect_ratio = display.width / (float) display.height;
 

@@ -67,7 +67,12 @@ impl Sim {
     pub fn apply_pointer(&mut self, e: &crate::pointer::PointerEvent) {
         use crate::pointer::PointerKind;
         match e.kind {
-            PointerKind::Tab => self.apply(Command::NextUser),
+            // `keyPress` returns first under --disable-input
+            PointerKind::Tab => {
+                if !self.s.disable_input {
+                    self.apply(Command::NextUser)
+                }
+            }
             PointerKind::Move { x, y } => {
                 let (px, py) = (self.pointer_x, self.pointer_y);
                 self.pointer_x = x;

@@ -97,6 +97,7 @@ fn scene() -> SceneView {
         seekable: false,
         captions: vec![],
         captions_activated: 0,
+        key_events: vec![],
     }
 }
 

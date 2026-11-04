@@ -64,6 +64,7 @@ fn scene(dirs: Vec<DirView>, users: Vec<UserView>) -> SceneView {
         seekable: false,
         captions: vec![],
         captions_activated: 0,
+        key_events: vec![],
     }
 }
 

@@ -85,6 +85,16 @@ pub struct SceneView {
     /// `active_captions`, oldest first, with how many captions have ever been activated.
     pub captions: Vec<CaptionView>,
     pub captions_activated: usize,
+    /// The `file_key` calls since the last snapshot, in order.
+    pub key_events: Vec<KeyEvent>,
+}
+
+/// `FileKey::logic/inc/dec` as the sim made them.
+#[derive(Clone, Debug, PartialEq)]
+pub enum KeyEvent {
+    Tick(f32),
+    Inc { path: String, colour: Vec3 },
+    Dec { path: String },
 }
 
 /// An active `RCaption`: its text and current opacity.
@@ -174,6 +184,7 @@ impl Sim {
                 })
                 .collect(),
             captions_activated: self.captions_activated,
+            key_events: std::mem::take(&mut self.key_events),
         }
     }
 

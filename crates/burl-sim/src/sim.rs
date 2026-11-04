@@ -272,6 +272,8 @@ pub struct Sim {
     pub(crate) active_captions: Vec<Caption>,
     /// How many captions have become active so far (the renderer's row bookkeeping key).
     pub(crate) captions_activated: usize,
+    /// `file_key` calls waiting for the renderer (`SceneView::key_events`).
+    pub(crate) key_events: Vec<crate::view::KeyEvent>,
     pub(crate) tag_seq: i32,
     pub(crate) user_bounds: Bounds2D,
     active_user_bounds: Bounds2D,
@@ -375,6 +377,7 @@ impl Sim {
             captions: VecDeque::new(),
             active_captions: Vec::new(),
             captions_activated: 0,
+            key_events: Vec::new(),
             tag_seq: 1,
             user_bounds: Bounds2D::default(),
             active_user_bounds: Bounds2D::default(),
@@ -503,6 +506,7 @@ impl Sim {
     }
 
     fn logic(&mut self, t: f32, dt: f32) -> Result<(), SimError> {
+        self.key_events.push(crate::view::KeyEvent::Tick(dt));
         self.apply_rotation();
 
         // still want to update the camera while paused
@@ -726,6 +730,10 @@ impl Sim {
         let id = self.files.len();
         self.files.push(Some(file));
         self.file_map.insert(filename.to_string(), id);
+        self.key_events.push(crate::view::KeyEvent::Inc {
+            path: filename.to_string(),
+            colour: Vec3::from_array(colour),
+        });
 
         let root = self.root;
         self.dir_add_file(root, id);
@@ -748,6 +756,8 @@ impl Sim {
 
         let fullpath = self.file(f).fullpath.clone();
         self.file_map.remove(&fullpath);
+        self.key_events
+            .push(crate::view::KeyEvent::Dec { path: fullpath });
         self.files[f] = None;
     }
 

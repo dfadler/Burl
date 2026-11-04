@@ -17,6 +17,8 @@ pub enum Action {
     ToggleTree,
     /// `G`: `hide_users`.
     ToggleUsers,
+    /// `R`: `hide_root`.
+    ToggleRoot,
     /// `M`: hide the cursor and `hide_mouse`.
     ToggleMouse,
     /// F11: `toggleWindowFrame`.
@@ -79,6 +81,7 @@ pub fn key_action(
         "n" | "N" => Action::Sim(SkipIdle),
         "t" | "T" => Action::ToggleTree,
         "g" | "G" => Action::ToggleUsers,
+        "r" | "R" => Action::ToggleRoot,
         "m" | "M" => Action::ToggleMouse,
         _ => return None,
     })
@@ -254,6 +257,7 @@ mod tests {
         }
         assert_eq!(act(&ch("t")), Some(Action::ToggleTree));
         assert_eq!(act(&ch("g")), Some(Action::ToggleUsers));
+        assert_eq!(act(&ch("r")), Some(Action::ToggleRoot));
         assert_eq!(act(&ch("m")), Some(Action::ToggleMouse));
         assert_eq!(
             act(&Key::Named(NamedKey::Space)),

@@ -117,6 +117,7 @@ impl Live {
             Action::Sim(c) => self.pending.push(c),
             Action::Quit => {}
             Action::ToggleTree => self.ss.hide_tree = !self.ss.hide_tree,
+            Action::ToggleRoot => self.ss.hide_root = !self.ss.hide_root,
             Action::ToggleUsers => self.ss.hide_users = !self.ss.hide_users,
             // ignored while a button is down or dragging
             Action::ToggleMouse if !self.pointer.busy() => {
@@ -177,6 +178,7 @@ impl App {
         ss.hide_tree = g.hide_tree;
         ss.hide_files = g.hide_files;
         ss.hide_users = g.hide_users;
+        ss.hide_root = g.hide_root;
         ss.user_scale = g.user_scale;
         let bg = g.background_colour;
         // `Cursor` starts hidden under --hide-mouse

@@ -122,6 +122,7 @@ pub fn run(
         ss.hide_tree = g.hide_tree;
         ss.hide_files = g.hide_files;
         ss.hide_users = g.hide_users;
+        ss.hide_root = g.hide_root;
         ss.user_scale = g.user_scale;
         // --logo / --background-image: PNG only (Gource also reads JPEG and GIF).
         let load_image = |path: &str, id: u32, r: &mut Renderer<_>, mip: bool| {

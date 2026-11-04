@@ -1,0 +1,1 @@
+--camera-mode track --follow-user bob --follow-user nobody --debug-dump-every 5

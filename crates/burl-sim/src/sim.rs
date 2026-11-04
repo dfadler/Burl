@@ -2,7 +2,7 @@
 //! `std::list` is a `Vec` in the same order (no swap-remove, ever), every `std::map` a `BTreeMap`
 //! (byte order, like `std::string`). Order-sensitive spots are commented where they occur.
 //!
-//! Not ported, and refused up front by [`Sim::new`] rather than silently ignored: followed users, the track camera mode. The renderer-only calls in
+//! The renderer-only calls in
 //! `draw` have no simulation effect.
 
 use burl_formats::{CommitLog, RCommit};
@@ -220,6 +220,14 @@ impl Camera {
         self.target = pos + dir;
     }
 
+    /// `ZoomCamera::lockOn`.
+    fn lock_on(&mut self, lockon: bool) {
+        if lockon {
+            self.lockon_time = 1.0;
+        }
+        self.lockon = lockon;
+    }
+
     /// `ZoomCamera::stop`.
     fn stop(&mut self) {
         self.dest = self.pos;
@@ -283,6 +291,9 @@ pub struct Sim {
     active_user_bounds: Bounds2D,
     pub(crate) dir_bounds: Bounds2D,
     pub(crate) camera: Camera,
+    /// `track_users` (`--camera-mode track`) and `selectedUser`.
+    track_users: bool,
+    selected_user: Option<UserId>,
     /// Set by a zoom command (`manual_zoom`): the camera stops fitting the bounds' distance.
     pub(crate) manual_zoom: bool,
     /// Input state (T2.2): `paused`, `manual_camera`, `manual_rotate`, `cursor_move`,
@@ -327,17 +338,7 @@ impl Sim {
         log: Box<dyn CommitLog>,
         rng: SimRng,
     ) -> Result<Sim, SimError> {
-        let nyi = |what: &str| {
-            Err(SimError(format!(
-                "{what} is not ported to the simulation yet"
-            )))
-        };
-        if !settings.follow_users.is_empty() {
-            return nyi("--follow-user");
-        }
-        if settings.track_users {
-            return nyi("--camera-mode track");
-        }
+        let track_users = settings.track_users;
 
         // setFrameExporter: tick rate for the video frame rate
         let mut gource_framerate = settings.output_framerate;
@@ -381,6 +382,9 @@ impl Sim {
             active_user_bounds: Bounds2D::default(),
             dir_bounds: Bounds2D::default(),
             camera,
+            // setCameraMode(gGourceSettings.camera_mode): nothing is selected yet, so no lock-on
+            track_users,
+            selected_user: None,
             manual_zoom: false,
             paused: false,
             manual_camera: false,
@@ -1110,12 +1114,31 @@ impl Sim {
 
             let u = self.user(uid);
             let idle = u.active_actions.is_empty() && u.actions.is_empty();
+            // deselect a user fading out from inactivity
+            if idle
+                && ((u.elapsed - u.last_action) > self.s.user_idle_time)
+                && self.selected_user == Some(uid)
+            {
+                self.select_user(None);
+            }
+            let u = self.user(uid);
             // isInactive
             if idle && ((u.elapsed - u.last_action) as f64) > 10.0 {
                 inactive.push(uid);
             }
             if idle {
                 idle_users += 1;
+            } else if self.selected_user.is_none() {
+                // nothing is selected (no file ever is here), and this active user is one to follow
+                let name = &self.user(uid).name;
+                if self
+                    .s
+                    .follow_users
+                    .iter()
+                    .any(|f| !f.is_empty() && f == name)
+                {
+                    self.select_user(Some(uid));
+                }
             }
         }
 
@@ -1132,9 +1155,26 @@ impl Sim {
 
         // delete inactive users
         for uid in inactive {
+            if self.selected_user == Some(uid) {
+                self.select_user(None);
+            }
             let name = self.user(uid).name.clone();
             self.user_map.remove(&name);
             self.users[uid] = None;
+        }
+    }
+
+    /// `Gource::selectUser`; only the camera lock-on is simulation state.
+    pub(crate) fn select_user(&mut self, user: Option<UserId>) {
+        // already selected: nothing to do
+        if user.is_some() && self.selected_user == user {
+            return;
+        }
+        self.selected_user = user;
+        match user {
+            None => self.camera.lock_on(false),
+            Some(_) if self.track_users => self.camera.lock_on(true),
+            Some(_) => {}
         }
     }
 
@@ -2079,8 +2119,16 @@ impl Sim {
                 self.cursor_move = Vec2::ZERO;
             }
         } else {
-            // camera mode overview: bounds are the visible dirs
-            let cambounds = self.dir_bounds;
+            let cambounds = match self.selected_user {
+                // track mode on a selected user: just that user
+                Some(uid) if self.track_users => {
+                    let mut b = Bounds2D::default();
+                    b.update(self.user(uid).pos);
+                    b
+                }
+                _ if self.track_users && self.idle_time == 0.0 => self.active_user_bounds,
+                _ => self.dir_bounds,
+            };
             self.camera.adjust(&cambounds, &self.s, !self.manual_zoom);
         }
         self.camera.logic(dt);
@@ -2415,25 +2463,6 @@ mod tests {
         .unwrap();
         s.apply(Command::SkipIdle);
         assert_eq!(s.idle_time, 3.0);
-    }
-
-    #[test]
-    fn unported_options_are_refused_not_ignored() {
-        assert!(sim(ok_settings()).is_ok());
-        // auto-rotate and captions are ported
-        assert!(sim(SimSettings::default()).is_ok());
-        for bad in [
-            SimSettings {
-                follow_users: vec!["bob".into()],
-                ..ok_settings()
-            },
-            SimSettings {
-                track_users: true,
-                ..ok_settings()
-            },
-        ] {
-            assert!(sim(bad).is_err());
-        }
     }
 
     #[test]

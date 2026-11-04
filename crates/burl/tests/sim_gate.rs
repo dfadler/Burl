@@ -149,6 +149,16 @@ fn sim_gate_small_repo_max_files() {
 }
 
 #[test]
+fn sim_gate_small_repo_track() {
+    gate("small-repo-track");
+}
+
+#[test]
+fn sim_gate_small_repo_follow() {
+    gate("small-repo-follow");
+}
+
+#[test]
 fn sim_gate_small_repo_elasticity() {
     gate("small-repo-elasticity");
 }

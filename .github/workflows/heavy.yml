@@ -1,10 +1,10 @@
 # Heavy tier (ticket #13): Docker-based gates. Today: rebuild the oracle in the pinned image
 # and check the committed goldens reproduce, plus the slow Burl-only tests. The simulation goldens are
-# recaptured from the state-dump fork the same way. The headless render smoke (#15, #19) runs on llvmpipe; the scene visual gate lands with the scene render.
+# recaptured from the state-dump fork the same way. The headless render smoke (#15, #19) runs on llvmpipe; the structural SSIM visual gate (#12) runs Burl in the same kind of image.
 name: heavy
 on:
   pull_request:
-    paths: ["tests/golden/**", "docs/rust-rewrite/discovery/golden/**", "docker/**", "reference/**", "src/**", "crates/burl-gl/**", "crates/burl-render/**", "scripts/render-smoke.sh"]
+    paths: [".github/workflows/heavy.yml", "tests/golden/**", "docs/rust-rewrite/discovery/golden/**", "docker/**", "reference/**", "src/**", "crates/burl-gl/**", "crates/burl-render/**", "scripts/render-smoke.sh", "scripts/visual-burl.sh", "docker/release.Dockerfile", "xtask/**", "crates/**", "data/**"]
   schedule:
     - cron: "17 3 * * 1"
   workflow_dispatch:
@@ -68,3 +68,20 @@ jobs:
           persist-credentials: false
       - name: Headless render smoke (Docker, Mesa llvmpipe)
         run: bash scripts/render-smoke.sh
+
+  visual-ssim:
+    # Non-blocking until docs/rust-rewrite/visual-gate.md "What blocks" is met (Burl's frame cadence
+    # matches the oracle's, and one real x86 run confirms the spread). Then drop continue-on-error.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Render the structural fixtures with Burl and SSIM them against tests/golden/visual
+        run: bash scripts/visual-burl.sh 0.959 | tee "$RUNNER_TEMP/ssim.txt"
+      - name: Report per-frame SSIM
+        if: ${{ !cancelled() }}
+        run: |
+          { echo '```'; cat "$RUNNER_TEMP/ssim.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

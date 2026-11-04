@@ -193,7 +193,11 @@ impl Sim {
                 }
                 self.manual_camera |= x.is_some() || y.is_some();
             }
-            Command::DragStart => self.manual_camera = true,
+            Command::DragStart => {
+                // selectBackground: deselect, then the camera goes manual
+                self.select_user(None);
+                self.manual_camera = true;
+            }
             Command::Drag { dx, dy } => self.cursor_move += glam::vec2(dx, dy),
             Command::Rotate { dx, dy } => {
                 self.manual_rotate = true;

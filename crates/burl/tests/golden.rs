@@ -473,6 +473,28 @@ fn golden_with_expected_diff(file: &str) -> Vec<u8> {
     out
 }
 
+/// D5a: the help says `--user-friction` defaults to 1.0 (Gource prints 0.67; the code default is 1.0).
+#[test]
+fn deviation_d5a_help_user_friction_default() {
+    let out = String::from_utf8(run(&["-H"]).stdout).unwrap();
+    assert!(
+        out.contains("--user-friction SECONDS  Change the rate users slow down (default: 1.0)\n")
+    );
+    assert!(!out.contains("0.67"));
+}
+
+/// D5b: the help says `--dir-name-position` is between 0.1 and 1.0 (Gource says 0.0; the code
+/// rejects below 0.1).
+#[test]
+fn deviation_d5b_help_dir_name_position_range() {
+    let out = String::from_utf8(run(&["-H"]).stdout).unwrap();
+    assert!(out.contains("(between 0.1 and 1.0, default is 0.5)."));
+    let r = run(&["--dir-name-position", "0.05", "tests/logs/utf8.log"]);
+    assert_eq!(r.code, 1);
+    assert!(String::from_utf8_lossy(&r.stderr)
+        .contains("dir-name-position outside of range 0.1 - 1.0 (inclusive)"));
+}
+
 #[test]
 fn help_text_matches_golden() {
     for (flag, file) in [
@@ -488,10 +510,10 @@ fn help_text_matches_golden() {
     }
 }
 
-/// D5: explicit `--log-format cvs-exp` selects the CVS-EXP parser (Gource: "unsupported log
+/// D5c: explicit `--log-format cvs-exp` selects the CVS-EXP parser (Gource: "unsupported log
 /// format"). Burl-only test, no oracle golden.
 #[test]
-fn deviation_d5_cvs_exp_explicit() {
+fn deviation_d5c_cvs_exp_explicit() {
     let envs = [("TZ", "UTC")];
     let explicit = run_with(
         &[
@@ -522,30 +544,36 @@ fn deviation_d5_cvs_exp_explicit() {
     assert_bytes("detected", &detected.stdout, &explicit.stdout);
 }
 
-/// D5: `--stop-on-idle` and `--ffp` are accepted and have no effect.
-#[test]
-fn deviation_d5_ignored_options() {
-    let base = run(&[
-        "--output-custom-log",
-        "-",
-        "--log-format",
-        "custom",
-        "tests/logs/utf8.log",
-    ]);
-    assert_eq!(base.code, 0);
-    for opt in ["--stop-on-idle", "--ffp"] {
-        let out = run(&[
-            opt,
+/// `--stop-on-idle` and `--ffp` are accepted and have no effect: output equals a run without them.
+fn ignored_option_changes_nothing(opt: &str) {
+    let args = |opt: Option<&str>| {
+        let mut a: Vec<&str> = opt.into_iter().collect();
+        a.extend([
             "--output-custom-log",
             "-",
             "--log-format",
             "custom",
             "tests/logs/utf8.log",
         ]);
-        assert_eq!(out.code, 0, "{opt}");
-        assert_bytes(opt, &out.stdout, &base.stdout);
-        assert_bytes(opt, &out.stderr, &base.stderr);
-    }
+        run(&a)
+    };
+    let (base, out) = (args(None), args(Some(opt)));
+    assert_eq!(base.code, 0);
+    assert_eq!(out.code, 0, "{opt}");
+    assert_bytes(opt, &out.stdout, &base.stdout);
+    assert_bytes(opt, &out.stderr, &base.stderr);
+}
+
+/// D4: `--ffp` is accepted and has no effect.
+#[test]
+fn deviation_d4_ffp_ignored() {
+    ignored_option_changes_nothing("--ffp");
+}
+
+/// D5d: `--stop-on-idle` is accepted and has no effect.
+#[test]
+fn deviation_d5d_stop_on_idle_ignored() {
+    ignored_option_changes_nothing("--stop-on-idle");
 }
 
 /// `tests/golden/{edge,real}/NAME.case` (ticket #17): each case runs as written and with

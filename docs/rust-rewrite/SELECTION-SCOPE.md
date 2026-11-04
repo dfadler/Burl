@@ -110,7 +110,7 @@ B1 = A+ plus pointer selection of users and files and Tab (P1-P5). B2 = B1 plus 
 - **Size:** B1 ~450 LOC, 8 files, 3 crates (`burl-sim`, `burl-render`, `burl`). B2 adds ~120 LOC and a `frame.rs` change.
 - **Risk:** medium. Touches `interactive.rs`, `input.rs`, `frame.rs`, all being changed now by other sessions (avatars, windowed fixes, slider) so it conflicts unless it waits for them. The pointer needs HiDPI coordinate handling that can only be checked by hand. Camera lock-on in track mode interacts with picking.
 - **Tests:** the pure pieces are Burl-only unit tests: mouse-to-world formula (compare numbers computed from the C++ formula), hit tests on constructed `SceneView`s (user wins over file, fading users skipped, hidden files skipped), `Pointer` behaviour. The oracle cannot be compared on picking today: the dump fork is headless and takes no pointer. A real oracle test needs a fork patch that injects scripted `(frame, x, y, button)` events into `mouseMove`/`mouseClick` and dumps `hoverUser`, `selectedUser`, `selectedFile` (about a day of work, medium risk, but then sim-state *and* visual gates cover clicks). The alternative, `xdotool` against Xvfb, is not deterministic about which frame an event lands in. The text box and everything about real cursor feel (cursor hiding, grab, HiDPI, flipping at the window edge) are **manual-only**: add rows to `INTERACTIVE-CHECKLIST.md` for macOS Retina, non-Retina and Linux X11.
-- **Register rows:** `D12` Change: overlap tie-break is deterministic (Gource: pointer order). `D13` Change or Gap: click selects at event time, not frame time. Optional `G11` Gap if B1 only: no hover text box (`P6` deferred). `G10` is not needed.
+- **Register rows:** `D13` Change: overlap tie-break is deterministic (Gource: pointer order). `D14` Change or Gap: click selects at event time, not frame time. Optional `G11` Gap if B1 only: no hover text box (`P6` deferred). `G10` is not needed.
 
 ## 6. Comparison
 
@@ -123,7 +123,7 @@ B1 = A+ plus pointer selection of users and files and Tab (P1-P5). B2 = B1 plus 
 | Conflicts with in-flight windowed work | none | none | high | high |
 | Oracle-testable | n/a | yes (follow fixture) | no, unless fork patch | no, unless fork patch |
 | Manual checklist rows | remove | remove | 3 | 4 |
-| Register rows | G10, G11 | G10 | D12, D13, G11 | D12, D13 |
+| Register rows | G10, G11 | G10 | D13, D14, G11 | D13, D14 |
 
 ## 7. Recommendation
 
@@ -134,8 +134,10 @@ Do **A+ now, B later**:
 3. Do not refuse `--selection-colour`: it is a valid Gource flag and becomes live under A+.
 4. Revisit B once the windowed work has settled (`interactive.rs`/`frame.rs` stable, the slider landed, which also needs the pointer position). Then do B1 with the scripted-pointer fork patch, and B2 last.
 
-Decision wanted from the user: A, A+ (recommended), B1 or B2; and whether to accept `D12` (deterministic tie-break) if B is chosen.
+Decision wanted from the user: A, A+ (recommended), B1 or B2; and whether to accept `D13` (deterministic tie-break) if B is chosen.
 
 ## 8. Decision
 
-The user chose **full parity** (B2: selected look, pointer picking of users and files, Tab, and the hover text box). The implementation is a separate ticket and PR sequence, to start once the windowed path (`interactive.rs`, `frame.rs`) is stable; suggested order: P1+P2, then P3-P5, then P6, with the scripted-pointer oracle fork patch ahead of P3 so picking has a real oracle test. Rows `D12` (deterministic overlap order) and `D13` (selection at event time) still need the user's explicit OK before they merge.
+The user chose **full parity** (B2: selected look, pointer picking of users and files, Tab, and the hover text box). The implementation is a separate ticket and PR sequence, to start once the windowed path (`interactive.rs`, `frame.rs`) is stable; suggested order: P1+P2, then P3-P5, then P6, with the scripted-pointer oracle fork patch ahead of P3 so picking has a real oracle test. Rows `D13` (deterministic overlap order) and `D14` (selection at event time) still need the user's explicit OK before they merge.
+
+Row numbers: `D12` is taken by the 0.58.0 version-line row in the release PR (#114), so the rows proposed here are `D13` (deterministic overlap order) and `D14` (selection at event time).

@@ -9,12 +9,14 @@
 
 mod camera;
 mod font;
+mod image;
 mod key;
 mod labels;
 mod overlays;
 mod scene;
 pub use camera::*;
 pub use font::*;
+pub use image::{decode_image, Image};
 pub use key::KeySettings;
 pub use labels::*;
 pub use overlays::*;

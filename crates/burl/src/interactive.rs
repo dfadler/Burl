@@ -4,6 +4,7 @@
 //! in [`input`]; they queue up and are applied before the next step.
 
 mod input;
+mod slider;
 
 use super::export::upload_scene_textures;
 use super::frame::{new_fonts, FrameKit};
@@ -11,16 +12,18 @@ use super::{fetch_log, log_settings, sim_settings};
 use burl_conf::settings::{DisplaySettings, GourceSettings};
 use burl_gl::winit::application::ApplicationHandler;
 use burl_gl::winit::dpi::{LogicalSize, PhysicalPosition, PhysicalSize, Size};
-use burl_gl::winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
+use burl_gl::winit::event::{DeviceEvent, DeviceId, ElementState, MouseButton, WindowEvent};
 use burl_gl::winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use burl_gl::winit::monitor::MonitorHandle;
 use burl_gl::winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 use burl_gl::winit::window::{CursorGrabMode, Fullscreen, WindowAttributes, WindowId};
 use burl_gl::{monitor_index, GlContext, Renderer, WindowedGl};
+use burl_render::glam::Vec2;
 use burl_render::{world_matrix, FontManager, SceneSettings, SceneTextures};
 use burl_sim::{Command, Sim};
 use burl_util::prng::SimRng;
 use input::{key_action, wheel_command, Action, Arrows, Pointer, PointerOut};
+use slider::SliderHook;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -95,6 +98,7 @@ struct Live {
     ss: SceneSettings,
     fonts: FontManager,
     kit: FrameKit,
+    slider: SliderHook,
     clear: [f32; 4],
     last: Instant,
     /// Commands since the last frame, applied in order before the step.
@@ -116,6 +120,7 @@ struct Loaded {
     ss: SceneSettings,
     fonts: FontManager,
     kit: FrameKit,
+    slider: SliderHook,
     clear: [f32; 4],
     disable_input: bool,
     hide_mouse: bool,
@@ -226,6 +231,7 @@ impl App {
             ss: l.ss,
             fonts: l.fonts,
             kit: l.kit,
+            slider: l.slider,
             clear: l.clear,
             last: Instant::now(),
             pending: Vec::new(),
@@ -256,6 +262,7 @@ impl App {
         live.ss = l.ss;
         live.fonts = l.fonts;
         live.kit = l.kit;
+        live.slider = l.slider;
         live.clear = l.clear;
         live.disable_input = l.disable_input;
         if live.disable_input {
@@ -312,12 +319,14 @@ impl App {
         ss.user_scale = g.user_scale;
         let mut fonts = new_fonts(&g.font_file)?;
         let kit = FrameKit::new(r, &mut fonts, g, w, h)?;
+        let slider = SliderHook::new(&mut fonts, g, w, h, repo_count);
         let bg = g.background_colour;
         Ok(Loaded {
             sim,
             ss,
             fonts,
             kit,
+            slider,
             clear: [bg[0], bg[1], bg[2], 1.0],
             disable_input: g.disable_input,
             hide_mouse: g.hide_mouse,
@@ -340,9 +349,17 @@ impl App {
             .update_realtime(dt.as_secs_f32())
             .map_err(|e| e.0)?;
         let scene = live.sim.scene_view();
-        let frame = live
-            .kit
-            .compose(&mut live.fonts, &mut live.r, &scene, &live.tex, &live.ss)?;
+        let mut frame =
+            live.kit
+                .compose(&mut live.fonts, &mut live.r, &scene, &live.tex, &live.ss)?;
+        live.slider.frame(
+            &mut live.fonts,
+            &mut live.r,
+            &live.sim,
+            &mut frame,
+            scene.seekable,
+            dt.as_secs_f32(),
+        )?;
         let world = world_matrix(&scene, &live.ss);
         live.r.render(live.clear, &frame.batches(), world)?;
         live.r.blit_to_screen()?;
@@ -413,12 +430,23 @@ impl ApplicationHandler for App {
             WindowEvent::MouseInput { state, button, .. }
                 if !live.disable_input && (!live.hide_mouse || state == ElementState::Released) =>
             {
+                // `Gource::mouseClick`: a left press on the slider seeks (then also starts the
+                // background drag below, as in the C++)
+                if button == MouseButton::Left && state == ElementState::Pressed {
+                    live.pending.extend(live.slider.click());
+                }
                 for o in live.pointer.button(button, state == ElementState::Pressed) {
                     match o {
                         PointerOut::Cmd(c) => live.pending.push(c),
                         PointerOut::Grab(on) => live.set_grab(on),
                     }
                 }
+            }
+            WindowEvent::CursorMoved { position, .. }
+                if !live.disable_input && !live.hide_mouse && !live.grabbed =>
+            {
+                let pos = Vec2::new(position.x as f32, position.y as f32);
+                live.slider.moved(pos, &mut live.sim, &mut live.fonts);
             }
             WindowEvent::Resized(s) if s.width > 0 && s.height > 0 => {
                 live.r.context().resize(s.width, s.height);
@@ -428,6 +456,7 @@ impl ApplicationHandler for App {
                 }
                 live.ss.width = s.width as f32;
                 live.ss.height = s.height as f32;
+                live.slider.resize(s.width, s.height);
             }
             _ => {}
         }

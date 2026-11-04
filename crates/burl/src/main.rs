@@ -214,6 +214,7 @@ fn sim_settings(
         auto_skip_seconds: g.auto_skip_seconds,
         no_time_travel: g.no_time_travel,
         loop_: g.loop_,
+        loop_delay_seconds: g.loop_delay_seconds,
         file_idle_time: g.file_idle_time,
         file_idle_time_at_end: g.file_idle_time_at_end,
         user_idle_time: g.user_idle_time,

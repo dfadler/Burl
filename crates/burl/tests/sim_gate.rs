@@ -164,6 +164,16 @@ fn sim_gate_small_repo_stop_position() {
 }
 
 #[test]
+fn sim_gate_small_repo_start_position() {
+    gate("small-repo-start-position");
+}
+
+#[test]
+fn sim_gate_small_repo_loop() {
+    gate("small-repo-loop");
+}
+
+#[test]
 fn sim_gate_auto_skip() {
     gate("auto-skip");
 }

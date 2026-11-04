@@ -93,8 +93,15 @@ pub struct SceneView {
 #[derive(Clone, Debug, PartialEq)]
 pub enum KeyEvent {
     Tick(f32),
-    Inc { path: String, colour: Vec3 },
-    Dec { path: String },
+    Inc {
+        path: String,
+        colour: Vec3,
+    },
+    Dec {
+        path: String,
+    },
+    /// `FileKey::clear` (a seek resets the sim).
+    Clear,
 }
 
 /// An active `RCaption`: its text and current opacity.

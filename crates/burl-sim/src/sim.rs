@@ -2,8 +2,7 @@
 //! `std::list` is a `Vec` in the same order (no swap-remove, ever), every `std::map` a `BTreeMap`
 //! (byte order, like `std::string`). Order-sensitive spots are commented where they occur.
 //!
-//! Not ported, and refused up front by [`Sim::new`] rather than silently ignored: start
-//! position seeks, `--loop`, followed users, the track camera mode. The renderer-only calls in
+//! Not ported, and refused up front by [`Sim::new`] rather than silently ignored: followed users, the track camera mode. The renderer-only calls in
 //! `draw` have no simulation effect.
 
 use burl_formats::{CommitLog, RCommit};
@@ -148,6 +147,9 @@ pub(crate) struct Camera {
     pub target: Vec3,
     pub lockon: bool,
     pub lockon_time: f32,
+    /// `_pos`/`_target`, restored by `ZoomCamera::reset`.
+    pos0: Vec3,
+    target0: Vec3,
     min_distance: f32,
     max_distance: f32,
     padding: f32,
@@ -164,6 +166,8 @@ impl Camera {
             target,
             lockon: false,
             lockon_time: 0.0,
+            pos0: pos,
+            target0: target,
             min_distance,
             max_distance,
             padding,
@@ -328,12 +332,6 @@ impl Sim {
                 "{what} is not ported to the simulation yet"
             )))
         };
-        if settings.start_position > 0.0 {
-            return nyi("--start-position");
-        }
-        if settings.loop_ {
-            return nyi("--loop");
-        }
         if !settings.follow_users.is_empty() {
             return nyi("--follow-user");
         }
@@ -406,7 +404,57 @@ impl Sim {
         };
         // reset(): root = new RDirNode(0, "/")
         sim.root = sim.dir_new("/");
+        // Gource::update, once the log is ready: `if(start_position>0.0) seekTo(start_position)`
+        if sim.s.start_position > 0.0 {
+            sim.seek_to(sim.s.start_position);
+        }
         Ok(sim)
+    }
+
+    /// `Gource::seekTo`: ignored for a log that cannot seek.
+    fn seek_to(&mut self, percent: f32) {
+        if !self.log.is_seekable() {
+            return;
+        }
+        // end pause
+        self.paused = false;
+        self.reset();
+        self.log.seek_to(percent);
+    }
+
+    /// `Gource::reset`. Not reset, as in the C++: the runtime and frame counters, `first_read`,
+    /// `stop_position_reached`, `file_idle_time` and the PRNG.
+    fn reset(&mut self) {
+        self.camera.pos = self.camera.pos0;
+        self.camera.target = self.camera.target0;
+        self.user_bounds = Bounds2D::default();
+        self.active_user_bounds = Bounds2D::default();
+        self.dir_bounds = Bounds2D::default();
+        self.commitqueue.clear();
+        self.removed.clear();
+        self.manual_rotate = false;
+        self.manual_zoom = false;
+        self.rotation_remaining_angle = 0.0;
+        self.cursor_move = Vec2::ZERO;
+        self.manual_camera = false;
+        self.commitqueue_max_size = 100;
+        self.rotate_angle = 0.0;
+        self.files.clear();
+        self.file_map.clear();
+        self.users.clear();
+        self.user_map.clear();
+        self.dirs.clear();
+        self.dir_map.clear();
+        self.root = self.dir_new("/");
+        self.captions.clear();
+        self.active_captions.clear();
+        self.last_percent = 0.0;
+        self.key_events.push(crate::view::KeyEvent::Clear);
+        self.idle_time = 0.0;
+        self.currtime = 0;
+        self.lasttime = 0;
+        self.subseconds = 0.0;
+        self.tag_seq = 1;
     }
 
     /// The generator and the fork's global `first_rand_frame`, which outlive a section: the next
@@ -520,6 +568,17 @@ impl Sim {
 
         // get more entries
         if self.commitqueue.is_empty() {
+            self.read_log()?;
+        }
+
+        // loop in attempt to find commits
+        if self.s.loop_
+            && self.commitqueue.is_empty()
+            && self.log.is_seekable()
+            && self.idle_time >= self.s.loop_delay_seconds
+        {
+            self.first_read = true;
+            self.seek_to(0.0);
             self.read_log()?;
         }
 
@@ -2364,14 +2423,6 @@ mod tests {
         // auto-rotate and captions are ported
         assert!(sim(SimSettings::default()).is_ok());
         for bad in [
-            SimSettings {
-                loop_: true,
-                ..ok_settings()
-            },
-            SimSettings {
-                start_position: 0.5,
-                ..ok_settings()
-            },
             SimSettings {
                 follow_users: vec!["bob".into()],
                 ..ok_settings()

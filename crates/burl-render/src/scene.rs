@@ -161,7 +161,12 @@ pub fn build_frame(scene: &SceneView, tex: &SceneTextures, s: &SceneSettings) ->
                 None,
                 file.pos - dims * 0.5,
                 dims,
-                file.colour.extend(file.alpha),
+                if file.selected {
+                    Vec3::ONE
+                } else {
+                    file.colour
+                }
+                .extend(file.alpha),
                 FULL_TEXCOORD,
             );
         }
@@ -176,7 +181,7 @@ pub fn build_frame(scene: &SceneView, tex: &SceneTextures, s: &SceneSettings) ->
             Some(u.graphic.map_or(tex.user, TextureId)),
             u.pos - dims * 0.5,
             dims,
-            u.colour.extend(u.alpha),
+            if u.selected { Vec3::ONE } else { u.colour }.extend(u.alpha),
             FULL_TEXCOORD,
         );
         for a in u.actions.iter().filter(|a| a.progress < 1.0) {

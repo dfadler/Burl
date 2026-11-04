@@ -297,7 +297,19 @@ pub struct Sim {
     pub(crate) camera: Camera,
     /// `track_users` (`--camera-mode track`) and `selectedUser`.
     track_users: bool,
-    selected_user: Option<UserId>,
+    pub(crate) selected_user: Option<UserId>,
+    /// `selectedFile`: only one of the two is ever set.
+    pub(crate) selected_file: Option<FileId>,
+    /// `hoverUser` / `hoverFile` (`mousetrace`).
+    pub(crate) hover_user: Option<UserId>,
+    pub(crate) hover_file: Option<FileId>,
+    /// `mousepos`, `mousedragged`, `grab_mouse` and the held-button mask (`cursor`).
+    pub(crate) mousepos: Vec2,
+    pub(crate) mousedragged: bool,
+    pub(crate) grab_mouse: bool,
+    pub(crate) pointer_buttons: i32,
+    /// Dump the `g.pointer` object (a pointer script is running).
+    pub(crate) pointer_dump: bool,
     /// Set by a zoom command (`manual_zoom`): the camera stops fitting the bounds' distance.
     pub(crate) manual_zoom: bool,
     /// Input state (T2.2): `paused`, `manual_camera`, `manual_rotate`, `cursor_move`,
@@ -392,6 +404,14 @@ impl Sim {
             // setCameraMode(gGourceSettings.camera_mode): nothing is selected yet, so no lock-on
             track_users,
             selected_user: None,
+            selected_file: None,
+            hover_user: None,
+            hover_file: None,
+            mousepos: Vec2::ZERO,
+            mousedragged: false,
+            grab_mouse: false,
+            pointer_buttons: 0,
+            pointer_dump: false,
             manual_zoom: false,
             paused: false,
             manual_camera: false,
@@ -453,6 +473,12 @@ impl Sim {
         self.manual_zoom = false;
         self.rotation_remaining_angle = 0.0;
         self.cursor_move = Vec2::ZERO;
+        self.selected_user = None;
+        self.selected_file = None;
+        self.hover_user = None;
+        self.hover_file = None;
+        self.grab_mouse = false;
+        self.mousedragged = false;
         self.manual_camera = false;
         self.commitqueue_max_size = 100;
         self.rotate_angle = 0.0;
@@ -848,6 +874,13 @@ impl Sim {
             self.user_file_removed(u, f);
         }
 
+        if self.hover_file == Some(f) {
+            self.hover_file = None;
+        }
+        if self.selected_file == Some(f) {
+            self.select_file(None);
+        }
+
         let fullpath = self.file(f).fullpath.clone();
         self.file_map.remove(&fullpath);
         self.key_events
@@ -1176,8 +1209,8 @@ impl Sim {
             }
             if idle {
                 idle_users += 1;
-            } else if self.selected_user.is_none() {
-                // nothing is selected (no file ever is here), and this active user is one to follow
+            } else if self.selected_user.is_none() && self.selected_file.is_none() {
+                // nothing is selected, and this active user is one to follow
                 let name = &self.user(uid).name;
                 if self
                     .s
@@ -1203,6 +1236,9 @@ impl Sim {
 
         // delete inactive users
         for uid in inactive {
+            if self.hover_user == Some(uid) {
+                self.hover_user = None;
+            }
             if self.selected_user == Some(uid) {
                 self.select_user(None);
             }
@@ -1212,18 +1248,57 @@ impl Sim {
         }
     }
 
-    /// `Gource::selectUser`; only the camera lock-on is simulation state.
+    /// `Gource::selectUser`: deselects the file and the user, then selects `user` and, in track
+    /// mode, locks the camera on.
     pub(crate) fn select_user(&mut self, user: Option<UserId>) {
         // already selected: nothing to do
         if user.is_some() && self.selected_user == user {
             return;
         }
+        self.selected_file = None;
         self.selected_user = user;
         match user {
             None => self.camera.lock_on(false),
             Some(_) if self.track_users => self.camera.lock_on(true),
             Some(_) => {}
         }
+    }
+
+    /// `Gource::selectFile`: deselects the user and the file; no camera lock.
+    pub(crate) fn select_file(&mut self, file: Option<FileId>) {
+        if file.is_some() && self.selected_file == file {
+            return;
+        }
+        self.selected_user = None;
+        self.selected_file = file;
+    }
+
+    /// `Gource::selectNextUser` (Tab): the next user in tag-id order after the selected one that
+    /// is not inactive and fully opaque, else the first such user.
+    pub(crate) fn select_next_user(&mut self) {
+        let curr = self.selected_user.map_or(-1, |u| self.user(u).tagid);
+        // `tagusermap` is a std::map<int, RUser*>
+        let mut by_tag: Vec<(i32, UserId)> = self
+            .user_map
+            .values()
+            .map(|&u| (self.user(u).tagid, u))
+            .collect();
+        by_tag.sort_unstable();
+        let ok = |s: &Sim, u: UserId| !s.user_is_inactive(u) && s.user_alpha(u) >= 1.0;
+        let next = by_tag
+            .iter()
+            .find(|&&(tag, u)| tag > curr && ok(self, u))
+            .or_else(|| by_tag.iter().find(|&&(_, u)| ok(self, u)))
+            .map(|&(_, u)| u);
+        self.select_user(next);
+    }
+
+    /// `RUser::isInactive`.
+    pub(crate) fn user_is_inactive(&self, u: UserId) -> bool {
+        let user = self.user(u);
+        user.active_actions.is_empty()
+            && user.actions.is_empty()
+            && (user.elapsed - user.last_action) as f64 > 10.0
     }
 
     /// `RUser::logic`.
@@ -2167,15 +2242,22 @@ impl Sim {
                 self.cursor_move = Vec2::ZERO;
             }
         } else {
-            let cambounds = match self.selected_user {
-                // track mode on a selected user: just that user
-                Some(uid) if self.track_users => {
-                    let mut b = Bounds2D::default();
+            let cambounds = if self.track_users
+                && (self.selected_file.is_some() || self.selected_user.is_some())
+            {
+                // track mode on a selection: just that user and/or file
+                let mut b = Bounds2D::default();
+                if let Some(uid) = self.selected_user {
                     b.update(self.user(uid).pos);
-                    b
                 }
-                _ if self.track_users && self.idle_time == 0.0 => self.active_user_bounds,
-                _ => self.dir_bounds,
+                if let Some(f) = self.selected_file {
+                    b.update(self.file_abs_pos(f));
+                }
+                b
+            } else if self.track_users && self.idle_time == 0.0 {
+                self.active_user_bounds
+            } else {
+                self.dir_bounds
             };
             self.camera.adjust(&cambounds, &self.s, !self.manual_zoom);
         }

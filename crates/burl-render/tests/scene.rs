@@ -53,6 +53,7 @@ fn scene() -> SceneView {
         name: "f.rs".into(),
         nametime: 4.0,
         name_interval: 4.0,
+        selected: false,
     };
     SceneView {
         camera: CameraView {
@@ -77,6 +78,7 @@ fn scene() -> SceneView {
             nametime: 5.0,
             name_interval: 5.0,
             highlighted: false,
+            selected: false,
             actions: vec![
                 ActionView {
                     src: Vec2::new(5.0, -5.0),
@@ -220,4 +222,28 @@ fn hide_root_skips_edges_to_the_roots_children() {
     assert!(one > 0 && one < both);
     sc.dirs.pop();
     assert_eq!(build_frame(&sc, &tex, &ss).edges.vertices().len(), 0);
+}
+
+#[test]
+fn selected_sprites_are_white() {
+    let mut sc = scene();
+    sc.dirs[1].files[0].selected = true;
+    sc.users[0].selected = true;
+    let tex = SceneTextures {
+        beam: TextureId(1),
+        file: TextureId(2),
+        file_ratio: 1.0,
+        user: TextureId(3),
+    };
+    let f = build_frame(&sc, &tex, &SceneSettings::new(640, 480));
+    assert!(f
+        .files
+        .vertices()
+        .iter()
+        .all(|v| v.colour[..3] == [1.0, 1.0, 1.0]));
+    assert!(f
+        .users
+        .vertices()
+        .iter()
+        .all(|v| v.colour[..3] == [1.0, 1.0, 1.0]));
 }

@@ -47,6 +47,20 @@ pub enum Command {
     Rotate { dx: f32, dy: f32 },
     /// The right button went down or up (`cursor.rightButtonPressed()`).
     RightButton(bool),
+    /// Tab: `selectNextUser`.
+    NextUser,
+}
+
+impl Sim {
+    /// One scripted pointer event (the fork's `dumpPointer`).
+    pub fn apply_pointer(&mut self, e: &crate::pointer::PointerEvent) {
+        use crate::pointer::PointerKind;
+        match e.kind {
+            PointerKind::Tab => self.apply(Command::NextUser),
+            // mouse events arrive with the picking pieces
+            PointerKind::Move { .. } | PointerKind::Button { .. } => {}
+        }
+    }
 }
 
 /// Keys `=`/`+`: `days_per_second`.
@@ -204,6 +218,7 @@ impl Sim {
                 self.rotate_angle = drag_rotation(dx, dy);
             }
             Command::RightButton(down) => self.right_button = down,
+            Command::NextUser => self.select_next_user(),
         }
     }
 }

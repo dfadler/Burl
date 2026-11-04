@@ -1079,6 +1079,8 @@ pub struct DebugOptions {
     pub dump_max_frames: Option<u32>,
     pub prng: PrngMode,
     pub prng_seed: Option<u64>,
+    /// `--debug-pointer-script`: scripted mouse and Tab events for the dump (oracle fork option).
+    pub pointer_script: Option<String>,
     prng_flag: bool,
     script_flag: bool,
 }
@@ -1091,6 +1093,7 @@ impl Default for DebugOptions {
             dump_max_frames: None,
             prng: PrngMode::Default,
             prng_seed: None,
+            pointer_script: None,
             prng_flag: false,
             script_flag: false,
         }
@@ -1107,6 +1110,7 @@ impl DebugOptions {
                 | "prng"
                 | "prng-seed"
                 | "rand-script"
+                | "debug-pointer-script"
         )
     }
 
@@ -1128,6 +1132,9 @@ impl DebugOptions {
                     _ => return Err(invalid()),
                 };
                 self.prng_flag = true;
+            }
+            "debug-pointer-script" if !value.is_empty() => {
+                self.pointer_script = Some(value.to_string())
             }
             "prng-seed" => self.prng_seed = Some(value.parse::<u64>().map_err(|_| invalid())?),
             "rand-script" if !value.is_empty() => {

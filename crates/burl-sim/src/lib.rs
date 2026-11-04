@@ -9,11 +9,13 @@
 
 pub mod command;
 pub mod dump;
+pub mod pointer;
 pub mod settings;
 pub mod sim;
 pub mod view;
 
 pub use command::Command;
 pub use dump::DumpOptions;
+pub use pointer::{Button, PointerEvent, PointerKind};
 pub use settings::{SimSettings, UserGraphic, UserGraphicsHook};
 pub use sim::{Sim, SimError};

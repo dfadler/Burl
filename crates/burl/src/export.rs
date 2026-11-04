@@ -1,8 +1,8 @@
 //! Headless frame export (`-o FILE|-`, phase 5, ticket #19): each tick is simulated, drawn into
 //! the offscreen framebuffer and written as one binary PPM (`P6`), the stream Gource pipes to
 //! ffmpeg (`PPMWriter`, reference/gource-cpp-dump/src/core/ppm.cpp). `--debug-dump-max-frames N`
-//! stops after N frames. Directory, file and user names, the logo and the background image are
-//! drawn; the other overlays are not yet.
+//! stops after N frames. Names, date, title, captions, the logo and the background image are
+//! drawn; the file key and the slider are not yet.
 
 use super::{log_settings, sim_settings};
 use burl_conf::settings::{DebugOptions, DisplaySettings, GourceSettings};
@@ -10,7 +10,8 @@ use burl_formats::fetch_log;
 use burl_gl::{GlContext, HeadlessEgl, Renderer};
 use burl_render::{
     background_batch, build_frame, draw_names, logo_batch, world_matrix, FontManager, NameFonts,
-    NameSettings, SceneSettings, SceneTextures, TextureId, FREE_SANS, PAGE_SIZE,
+    NameSettings, OverlaySettings, Overlays, SceneSettings, SceneTextures, TextureId, FREE_SANS,
+    PAGE_SIZE,
 };
 use burl_sim::Sim;
 use burl_util::prng::SimRng;
@@ -161,6 +162,22 @@ pub fn run(
             g.scaled_filename_font_size as u32,
             g.scaled_user_font_size as u32,
         );
+        let mut overlays = Overlays::new(
+            &mut fonts,
+            g.scaled_font_size as u32,
+            g.caption_size.clamp(1, 100) as u32,
+        );
+        let os = OverlaySettings {
+            width: w as f32,
+            height: h as f32,
+            hide_date: g.hide_date,
+            hide_progress: g.hide_progress,
+            title: g.title.clone(),
+            date_format: g.date_format.clone(),
+            font_colour: g.font_colour.into(),
+            caption_colour: g.caption_colour.into(),
+            caption_offset: g.caption_offset,
+        };
         let bg = g.background_colour;
         let clear = [bg[0], bg[1], bg[2], 1.0];
 
@@ -179,6 +196,8 @@ pub fn run(
             fonts.start_buffer();
             draw_names(&mut fonts, &mut name_fonts, &scene, &tex, &ss, &ns);
             frame.names = std::mem::take(&mut fonts.buffer);
+            let date = burl_util::timeparse::format_local(scene.time, &os.date_format);
+            overlays.draw(&mut fonts, &mut frame.overlay, &scene, &date, &os);
             // Glyphs cached while drawing the names must be on the GPU before the render.
             for u in fonts.take_updates() {
                 r.upload_texture(u.id, PAGE_SIZE as u32, PAGE_SIZE as u32, &u.rgba, false)?;

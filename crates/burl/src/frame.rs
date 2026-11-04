@@ -119,6 +119,14 @@ impl FrameKit {
         }
     }
 
+    /// Window resized: C++ reads the live `display.width`/`height` for the overlays, logo and
+    /// background on every draw, so they follow the new size.
+    pub fn resize(&mut self, w: u32, h: u32) {
+        self.os.width = w as f32;
+        self.os.height = h as f32;
+        self.screen = Vec2::new(w as f32, h as f32);
+    }
+
     /// Everything one frame draws, with no GL: glyphs it cached are left in `fonts` for
     /// [`upload_glyphs`].
     fn batches(
@@ -216,6 +224,20 @@ mod tests {
             FrameKit::with_images(&mut fonts, g, d.width as u32, d.height as u32, bg, logo);
         kit.batches(&mut fonts, &sim.scene_view(), &tex, &ss)
             .batches()
+    }
+
+    /// A resize moves the logo and the background; before the fix both kept the initial size.
+    #[test]
+    fn resize_relays_out_logo_and_background() {
+        let img = Some((TextureId(4), Vec2::new(8.0, 8.0)));
+        let g = GourceSettings::default();
+        let mut fonts = new_fonts(burl_render::DEFAULT_FONT_FILE).unwrap();
+        let mut kit = FrameKit::with_images(&mut fonts, &g, 100, 100, img, img);
+        let before = (kit.screen, kit.os.width, kit.os.height);
+        kit.resize(300, 200);
+        assert_ne!(before, (kit.screen, kit.os.width, kit.os.height));
+        assert_eq!(kit.screen, Vec2::new(300.0, 200.0));
+        assert_eq!((kit.os.width, kit.os.height), (300.0, 200.0));
     }
 
     /// The window and the exporter share this builder, so equal settings give equal batches, and

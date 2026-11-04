@@ -15,6 +15,22 @@ use std::num::NonZeroU32;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{Window, WindowAttributes};
 
+/// Sample counts to try, in order: `SDLAppDisplay::multiSample(4)` first, then the C++'s retry
+/// with multi-sampling off.
+pub fn sample_attempts(multisample: bool) -> Vec<u8> {
+    if multisample {
+        vec![4, 0]
+    } else {
+        vec![0]
+    }
+}
+
+/// `--screen N` (1-based) as an index into the monitor list; out of range means no preference
+/// (`SDLAppDisplay::setVideoMode`: `screen > 0 && screen <= SDL_GetNumVideoDisplays()`).
+pub fn monitor_index(screen: i32, count: usize) -> Option<usize> {
+    (screen > 0 && screen as usize <= count).then(|| screen as usize - 1)
+}
+
 // Field order is drop order: the glow handle, then the surface, then the context, and the
 // window last (a surface must not outlive its window).
 pub struct WindowedGl {
@@ -27,17 +43,33 @@ pub struct WindowedGl {
 
 impl WindowedGl {
     /// Create the window from `attrs` and a current 3.2 core context on it. `vsync` waits for the
-    /// display refresh on every [`GlContext::present`].
-    pub fn new(event_loop: &ActiveEventLoop, attrs: WindowAttributes, vsync: bool) -> Result<Self> {
-        let template = ConfigTemplateBuilder::new().with_alpha_size(8);
-        let (window, config) = DisplayBuilder::new()
-            .with_window_attributes(Some(attrs))
-            .build(event_loop, template, |mut configs| {
-                // The iterator is non-empty whenever `find_configs` succeeded; glutin-winit's picker
-                // has no way to return an error, so take the first.
-                configs.next().expect("glutin returned no GL config")
-            })
-            .map_err(|e| format!("window and GL config: {e}"))?;
+    /// display refresh on every [`GlContext::present`]. `multisample` asks for 4 samples
+    /// (`--multi-sampling`) and, like the C++, retries without when no such config exists.
+    pub fn new(
+        event_loop: &ActiveEventLoop,
+        attrs: WindowAttributes,
+        vsync: bool,
+        multisample: bool,
+    ) -> Result<Self> {
+        let mut built = Err(String::new());
+        for samples in sample_attempts(multisample) {
+            let mut template = ConfigTemplateBuilder::new().with_alpha_size(8);
+            if samples > 0 {
+                template = template.with_multisampling(samples);
+            }
+            built = DisplayBuilder::new()
+                .with_window_attributes(Some(attrs.clone()))
+                .build(event_loop, template, |mut configs| {
+                    // The iterator is non-empty whenever `find_configs` succeeded; glutin-winit's
+                    // picker has no way to return an error, so take the first.
+                    configs.next().expect("glutin returned no GL config")
+                })
+                .map_err(|e| format!("window and GL config: {e}"));
+            if built.is_ok() {
+                break;
+            }
+        }
+        let (window, config) = built?;
         let window = window.ok_or("no window was created")?;
         let display = config.display();
         let handle = window.window_handle().map_err(|e| e.to_string())?.as_raw();
@@ -111,5 +143,25 @@ impl GlContext for WindowedGl {
         self.surface
             .swap_buffers(&self.ctx)
             .map_err(|e| format!("swap_buffers: {e}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn multisample_tries_four_then_none() {
+        assert_eq!(sample_attempts(true), [4, 0]);
+        assert_eq!(sample_attempts(false), [0]);
+    }
+
+    #[test]
+    fn screen_is_one_based_and_range_checked() {
+        assert_eq!(monitor_index(1, 2), Some(0));
+        assert_eq!(monitor_index(2, 2), Some(1));
+        assert_eq!(monitor_index(3, 2), None);
+        assert_eq!(monitor_index(0, 2), None);
+        assert_eq!(monitor_index(1, 0), None);
     }
 }

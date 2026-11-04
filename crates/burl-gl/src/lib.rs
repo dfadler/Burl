@@ -8,7 +8,7 @@ mod window;
 
 pub use headless::HeadlessEgl;
 pub use renderer::Renderer;
-pub use window::WindowedGl;
+pub use window::{monitor_index, sample_attempts, WindowedGl};
 pub use winit;
 
 pub type Result<T> = std::result::Result<T, String>;

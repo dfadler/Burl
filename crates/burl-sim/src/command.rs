@@ -49,6 +49,15 @@ pub enum Command {
     RightButton(bool),
     /// Tab: `selectNextUser`.
     NextUser,
+    /// The pointer moved to window pixel `(x, y)` (`Gource::mouseMove`).
+    PointerAt { x: i32, y: i32 },
+    /// Relative motion while the cursor is grabbed (`xrel`, `yrel`): drag or rotate.
+    PointerDelta { dx: f32, dy: f32 },
+    /// A mouse button went down or up (`Gource::mouseClick`).
+    Button {
+        button: crate::pointer::Button,
+        down: bool,
+    },
     /// A click on the position slider (`Gource::seekTo`): `percent` of the log.
     SeekTo(f32),
 }
@@ -59,8 +68,13 @@ impl Sim {
         use crate::pointer::PointerKind;
         match e.kind {
             PointerKind::Tab => self.apply(Command::NextUser),
-            // mouse events arrive with the picking pieces
-            PointerKind::Move { .. } | PointerKind::Button { .. } => {}
+            PointerKind::Move { x, y } => {
+                let (px, py) = (self.pointer_x, self.pointer_y);
+                self.pointer_x = x;
+                self.pointer_y = y;
+                self.mouse_move(x, y, x - px, y - py);
+            }
+            PointerKind::Button { button, down } => self.mouse_button(button, down),
         }
     }
 }
@@ -222,6 +236,9 @@ impl Sim {
             }
             Command::RightButton(down) => self.right_button = down,
             Command::NextUser => self.select_next_user(),
+            Command::PointerAt { x, y } => self.mouse_move(x, y, 0, 0),
+            Command::PointerDelta { dx, dy } => self.mouse_delta(dx, dy),
+            Command::Button { button, down } => self.mouse_button(button, down),
         }
     }
 }

@@ -526,6 +526,9 @@ impl Sim {
                     self.apply_pointer(e);
                     next_event += 1;
                 }
+                // the draw: `mousetrace`, then `cursor.logic` with the fixed tick
+                self.draw_pointer();
+                self.tick_cursor(self.max_tick_rate);
             }
             // the cap (or the natural end) finishes the run after its last frame is written
             if self.is_last_frame(o.max_frames) {

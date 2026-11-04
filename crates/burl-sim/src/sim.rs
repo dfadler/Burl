@@ -223,7 +223,7 @@ impl Camera {
     }
 
     /// `ZoomCamera::lockOn`.
-    fn lock_on(&mut self, lockon: bool) {
+    pub(crate) fn lock_on(&mut self, lockon: bool) {
         if lockon {
             self.lockon_time = 1.0;
         }
@@ -269,7 +269,7 @@ pub struct Sim {
 
     pub(crate) framecount: i32,
     pub(crate) runtime: f32,
-    max_tick_rate: f32,
+    pub(crate) max_tick_rate: f32,
     /// `Gource::frameskip`: ticks per exported frame minus one.
     frameskip: i32,
     pub(crate) currtime: i64,
@@ -308,6 +308,19 @@ pub struct Sim {
     pub(crate) mousedragged: bool,
     pub(crate) grab_mouse: bool,
     pub(crate) pointer_buttons: i32,
+    /// The last scripted pointer position (the base of the next `xrel`).
+    pub(crate) pointer_x: i32,
+    pub(crate) pointer_y: i32,
+    /// `userTree` / `dirNodeTree` as the last `interactUsers` / `interactDirs` built them: the
+    /// picking test reads the leaf under the pointer, whole, as `getItemsAt` does.
+    pub(crate) user_tree: Option<QuadTree<UserId>>,
+    pub(crate) dir_tree: Option<QuadTree<DirId>>,
+    /// `MouseCursor`: seconds since the last move or click, hidden (grabbed), window focus.
+    pub(crate) cursor_idle: f32,
+    pub(crate) cursor_hidden: bool,
+    pub(crate) cursor_focus: bool,
+    /// `mouseclicked`: set by a left press, consumed by the next `mousetrace`.
+    pub(crate) mouseclicked: bool,
     /// Dump the `g.pointer` object (a pointer script is running).
     pub(crate) pointer_dump: bool,
     /// Set by a zoom command (`manual_zoom`): the camera stops fitting the bounds' distance.
@@ -411,7 +424,15 @@ impl Sim {
             mousedragged: false,
             grab_mouse: false,
             pointer_buttons: 0,
+            pointer_x: 0,
+            pointer_y: 0,
             pointer_dump: false,
+            user_tree: None,
+            dir_tree: None,
+            cursor_idle: crate::pointer::CURSOR_TIMEOUT,
+            cursor_hidden: false,
+            cursor_focus: true,
+            mouseclicked: false,
             manual_zoom: false,
             paused: false,
             manual_camera: false,
@@ -496,7 +517,10 @@ impl Sim {
         self.selected_file = None;
         self.hover_user = None;
         self.hover_file = None;
+        self.user_tree = None;
+        self.dir_tree = None;
         self.grab_mouse = false;
+        self.mouseclicked = false;
         self.mousedragged = false;
         self.manual_camera = false;
         self.commitqueue_max_size = 100;
@@ -641,7 +665,7 @@ impl Sim {
         if self.paused {
             self.update_bounds();
             self.interact_users();
-            self.interact_dirs();
+            self.dir_tree = Some(self.interact_dirs());
             self.update_camera(dt);
             return Ok(());
         }
@@ -729,6 +753,7 @@ impl Sim {
         self.update_users(t, dt);
         let tree = self.interact_dirs();
         self.update_dirs(dt, &tree);
+        self.dir_tree = Some(tree);
         self.update_camera(dt);
         Ok(())
     }
@@ -1094,6 +1119,21 @@ impl Sim {
             }
             self.user_apply_force_to_actions(a);
         }
+        self.user_tree = Some(tree);
+    }
+
+    /// A user still in the arena: the picking trees outlive `updateUsers`, which can delete one
+    /// after the tree was built (C++ would read freed memory there).
+    pub(crate) fn user_live(&self, id: UserId) -> bool {
+        self.users.get(id).is_some_and(|u| u.is_some())
+    }
+
+    pub(crate) fn dir_live(&self, id: DirId) -> bool {
+        self.dirs.get(id).is_some_and(|d| d.is_some())
+    }
+
+    pub(crate) fn file_live(&self, id: FileId) -> bool {
+        self.files.get(id).is_some_and(|f| f.is_some())
     }
 
     fn user_apply_force_user(&mut self, a: UserId, u: UserId) {
@@ -1496,6 +1536,10 @@ impl Sim {
 
     /// `RFile::getColour`.
     pub(crate) fn file_colour(&self, f: FileId) -> Vec3 {
+        // a selected file is white, and so feeds a white into its directory's colour
+        if self.selected_file == Some(f) {
+            return Vec3::ONE;
+        }
         let file = self.file(f);
         let lc = file.elapsed - file.last_action;
         if lc < 1.0 {

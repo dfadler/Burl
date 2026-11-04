@@ -1,0 +1,18 @@
+# sr.log (small-repo-follow): bob ~ (592,297) at 290, main.rs ~ (730,259) at 360, background (200,650)
+290 move 592 297
+300 down l
+302 up l
+330 key tab
+360 move 730 259
+370 down l
+372 up l
+380 key tab
+390 move 200 650
+391 down l
+391 up l
+400 down l
+402 up l
+# bob has faded out by now (alpha 0, isFading): not hoverable
+450 move 616 275
+460 down l
+462 up l

@@ -161,6 +161,13 @@ fn sim_gate_small_repo_follow() {
 }
 
 /// Tab (`selectNextUser`) in track mode, driven by the fork's scripted pointer (#92).
+/// Mouse picking: hover and click-select of a user and a file, Tab, a same-frame click that does
+/// nothing, and `selectBackground` (deselect, grab, drag) (#92).
+#[test]
+fn sim_gate_small_repo_pick() {
+    gate("small-repo-pick");
+}
+
 #[test]
 fn sim_gate_small_repo_select() {
     gate("small-repo-select");

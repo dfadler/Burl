@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: coderabbit-retry
+  cancel-in-progress: false
+
 jobs:
   retry:
     runs-on: ubuntu-latest
@@ -23,7 +27,8 @@ jobs:
     steps:
       - name: Re-request rate-limited reviews
         run: |
-          for pr in $(gh pr list --state open --json number --jq '.[].number'); do
+          prs=$(gh pr list --state open --limit 1000 --json number --jq '.[].number') || { echo "::error::Failed to list open PRs"; exit 1; }
+          for pr in $prs; do
             comments=$(gh api "repos/$GH_REPO/issues/$pr/comments" --paginate | jq -s 'add // []')
             # latest CodeRabbit "limit reached" comment; empty if none
             limited=$(jq -r '[.[] | select(.user.login == "coderabbitai[bot]" and (.body | contains("Review limit reached")))] | last | .updated_at // empty' <<<"$comments")

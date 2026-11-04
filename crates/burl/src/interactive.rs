@@ -359,7 +359,7 @@ mod tests {
     }
 
     #[test]
-    fn viewport_without_high_dpi_is_exact_pixels() {
+    fn deviation_g3_viewport_without_high_dpi_is_exact_pixels() {
         let d = DisplaySettings {
             width: 640,
             height: 480,

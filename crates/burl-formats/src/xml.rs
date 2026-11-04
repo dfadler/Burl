@@ -96,4 +96,41 @@ mod tests {
         assert_eq!(get_text(get("d")), None);
         assert_eq!(get_text(get("e")).as_deref(), Some("&<"));
     }
+
+    /// G2: where Burl's text differs from TinyXML's. The C++ column was measured by compiling
+    /// `src/tinyxml` and calling `GetText()` on the same input; the CDATA node is kept verbatim there.
+    #[test]
+    fn deviation_g2_cdata_and_entity_differences_from_tinyxml() {
+        let get = |xml: &str| {
+            let doc = parse_fragment(xml.as_bytes())?;
+            Some(get_text(
+                first_child_element(doc.root_element(), "path").unwrap(),
+            ))
+        };
+        // (input, TinyXML GetText, Burl get_text)
+        // same: plain text, entities, a comment before text, text before a comment
+        assert_eq!(
+            get("<r><path>&#65;&#x42;&apos;</path></r>"),
+            Some(Some("AB'".into()))
+        );
+        assert_eq!(get("<r><path><!-- c -->z</path></r>"), Some(None));
+        assert_eq!(
+            get("<r><path>a<!-- c -->b</path></r>"),
+            Some(Some("a".into()))
+        );
+        // differs: TinyXML "/a  b" (CDATA is not condensed), Burl condenses
+        assert_eq!(
+            get("<r><path><![CDATA[/a  b]]></path></r>"),
+            Some(Some("/a b".into()))
+        );
+        // differs: TinyXML "x" (text and CDATA are separate nodes), Burl merges them
+        assert_eq!(
+            get("<r><path>x<![CDATA[y]]></path></r>"),
+            Some(Some("xy".into()))
+        );
+        // differs: TinyXML "" (a non-NULL empty string), Burl None
+        assert_eq!(get("<r><path><![CDATA[]]></path></r>"), Some(None));
+        // differs: TinyXML is lenient ("bogus;"), roxmltree rejects the whole entry
+        assert_eq!(get("<r><path>&bogus;</path></r>"), None);
+    }
 }

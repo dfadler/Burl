@@ -20,6 +20,8 @@ dump (Script-mode PRNG, `reference/gource-cpp-dump/tests/dump/rand-script.txt`).
 | `custom-dir-delete` | `D` on a directory path removing every file below it |
 | `real-burl-git-250` | slice 2 real-repo run (#11 item 7): this repository's first 250 commits as a git log (`tests/golden/real/burl-git-250.log`, copied), `--stop-at-time 60`, dumped every 30 frames; ~110 files, quadtree forces over 2 to 7 users |
 | `small-repo-glibc` | the small-repo log with `--prng glibc`: the fork's real glibc `rand()` (`srand(1)`) against Burl's `Glibc` generator (the only fixture not in Script mode; Park is unit-tested, #11 item 2) |
+| `small-repo-track` | `--camera-mode track` with nothing selected: the camera fits `active_user_bounds` while users are active and `dir_bounds` once idle |
+| `small-repo-follow` | `--camera-mode track --follow-user bob --follow-user nobody`: `selectUser` on the first active frame (camera `lockon`, `lockon_time` decay), deselect when the user fades out, a name that never appears |
 | `small-repo-max-files` | `--max-files 6` |
 | `small-repo-elasticity` | `--elasticity 0.5` |
 | `small-repo-tuning` | `--user-friction 0.5 --user-scale 2 --max-user-speed 100 --max-file-lag 0.5 --filename-time 2 --highlight-all-users` |

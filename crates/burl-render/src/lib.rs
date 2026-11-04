@@ -10,10 +10,12 @@
 mod camera;
 mod font;
 mod labels;
+mod overlays;
 mod scene;
 pub use camera::*;
 pub use font::*;
 pub use labels::*;
+pub use overlays::*;
 pub use scene::*;
 
 use glam::{Mat4, Vec2, Vec4};

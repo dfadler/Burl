@@ -258,3 +258,17 @@ mod tests {
         );
     }
 }
+
+/// `strftime(buf, 256, fmt, localtime(&t))`: local time per `TZ`. An unsupported specifier gives an
+/// empty string (chrono rejects it) where C would print it verbatim.
+pub fn format_local(timestamp: i64, fmt: &str) -> String {
+    use std::fmt::Write;
+    let Some(t) = chrono::Local.timestamp_opt(timestamp, 0).single() else {
+        return String::new();
+    };
+    let mut out = String::new();
+    if write!(out, "{}", t.format(fmt)).is_err() {
+        out.clear();
+    }
+    out
+}

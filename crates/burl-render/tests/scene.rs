@@ -93,6 +93,10 @@ fn scene() -> SceneView {
                 },
             ],
         }],
+        time: 0,
+        seekable: false,
+        captions: vec![],
+        captions_activated: 0,
     }
 }
 

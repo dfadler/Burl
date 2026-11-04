@@ -229,7 +229,7 @@ impl Camera {
 pub struct Sim {
     pub(crate) s: SimSettings,
     rng: SimRng,
-    log: Box<dyn CommitLog>,
+    pub(crate) log: Box<dyn CommitLog>,
 
     pub(crate) framecount: i32,
     pub(crate) runtime: f32,
@@ -240,7 +240,7 @@ pub struct Sim {
     pub(crate) idle_time: f32,
     pub(crate) stop_position_reached: bool,
     first_read: bool,
-    commitqueue: VecDeque<RCommit>,
+    pub(crate) commitqueue: VecDeque<RCommit>,
     commitqueue_max_size: usize,
     pub(crate) last_percent: f32,
     pub(crate) rotation_remaining_angle: f32,
@@ -248,6 +248,8 @@ pub struct Sim {
     /// `captions` (queued, in file order) and `active_captions`.
     pub(crate) captions: VecDeque<Caption>,
     pub(crate) active_captions: Vec<Caption>,
+    /// How many captions have become active so far (the renderer's row bookkeeping key).
+    pub(crate) captions_activated: usize,
     pub(crate) tag_seq: i32,
     pub(crate) user_bounds: Bounds2D,
     active_user_bounds: Bounds2D,
@@ -341,6 +343,7 @@ impl Sim {
             rotate_angle: 0.0,
             captions: VecDeque::new(),
             active_captions: Vec::new(),
+            captions_activated: 0,
             tag_seq: 1,
             user_bounds: Bounds2D::default(),
             active_user_bounds: Bounds2D::default(),
@@ -2058,6 +2061,7 @@ impl Sim {
         {
             let c = self.captions.pop_front().unwrap();
             self.active_captions.push(c);
+            self.captions_activated += 1;
         }
         let duration = self.s.caption_duration;
         self.active_captions.retain_mut(|c| {

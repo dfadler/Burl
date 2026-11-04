@@ -208,7 +208,6 @@ fn hide_root_skips_edges_to_the_roots_children() {
         file: TextureId(2),
         file_ratio: 1.0,
         user: TextureId(3),
-        user_ratio: 1.0,
     };
     let mut sc = scene();
     // a grandchild keeps its edge under hide_root

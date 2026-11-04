@@ -254,6 +254,9 @@ fn key_lists_extensions_by_count_and_fades_in() {
         b = key_frame(&mut r, &o, vec![]);
     }
     assert_eq!(bars(&b)[0].0[3], 1.0);
+    // The shadow is the bar's rectangle at (3, 3), black at a third of the opacity.
+    assert_eq!(b[0].offset, [3.0, 3.0]);
+    assert_eq!(colours(&b[..1])[0], [0.0, 0.0, 0.0, 0.333]);
     assert_eq!(b.len(), 2 * (1 + 1 + 1 + 2));
 }
 
@@ -283,4 +286,23 @@ fn key_is_hidden_without_the_flag_and_drops_empty_entries() {
         key_frame(&mut r, &o, vec![]);
     }
     assert!(key_frame(&mut r, &o, vec![]).is_empty());
+}
+
+#[test]
+fn key_shows_only_the_entries_that_fit_the_window() {
+    let mut r = rig();
+    let mut o = settings();
+    o.show_key = true;
+    o.height = 190.0; // (190 - 150) / 20 = 2 rows
+    key_frame(
+        &mut r,
+        &o,
+        vec![
+            inc("a.c", [1.0; 3]),
+            inc("b.h", [1.0; 3]),
+            inc("c.rs", [1.0; 3]),
+        ],
+    );
+    key_frame(&mut r, &o, vec![]);
+    assert_eq!(bars(&key_frame(&mut r, &o, vec![])).len(), 2);
 }

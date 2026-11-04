@@ -179,7 +179,7 @@ pub fn run(
             caption_offset: g.caption_offset,
             show_key: g.show_key,
             font_scale: g.font_scale,
-            scaled_font_size: g.scaled_font_size,
+            scaled_font_size: g.scaled_font_size as f32,
             file_extension_fallback: g.file_extension_fallback,
         };
         let bg = g.background_colour;

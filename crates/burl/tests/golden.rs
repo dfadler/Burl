@@ -72,7 +72,7 @@ fn assert_bytes(what: &str, got: &[u8], want: &[u8]) {
 /// (decision recorded in docs/rust-rewrite/discovery/LEDGER.md). Any other difference, including
 /// the name anywhere else, still fails. `{n}` is the lowercase name and `{N}` the capitalised one.
 const NAME_TEMPLATES: [&str; 5] = [
-    "{N} v0.57",                              // first help line
+    "{N} v0.58",                              // first help line
     "Usage: {n} [options] [path]",            // usage line
     "a {n} config",                           // help prose
     "If omitted, {n} will attempt",           // help prose

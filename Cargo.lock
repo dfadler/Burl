@@ -117,7 +117,7 @@ checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
 name = "burl"
-version = "0.57.0"
+version = "0.58.0"
 dependencies = [
  "burl-conf",
  "burl-formats",
@@ -130,7 +130,7 @@ dependencies = [
 
 [[package]]
 name = "burl-conf"
-version = "0.57.0"
+version = "0.58.0"
 dependencies = [
  "burl-util",
  "chrono",
@@ -138,7 +138,7 @@ dependencies = [
 
 [[package]]
 name = "burl-formats"
-version = "0.57.0"
+version = "0.58.0"
 dependencies = [
  "burl-util",
  "roxmltree",
@@ -146,7 +146,7 @@ dependencies = [
 
 [[package]]
 name = "burl-gl"
-version = "0.57.0"
+version = "0.58.0"
 dependencies = [
  "burl-render",
  "glam",
@@ -160,7 +160,7 @@ dependencies = [
 
 [[package]]
 name = "burl-render"
-version = "0.57.0"
+version = "0.58.0"
 dependencies = [
  "burl-sim",
  "burl-util",
@@ -173,7 +173,7 @@ dependencies = [
 
 [[package]]
 name = "burl-sim"
-version = "0.57.0"
+version = "0.58.0"
 dependencies = [
  "burl-formats",
  "burl-util",
@@ -182,7 +182,7 @@ dependencies = [
 
 [[package]]
 name = "burl-util"
-version = "0.57.0"
+version = "0.58.0"
 dependencies = [
  "chrono",
  "glam",
@@ -2216,7 +2216,7 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 
 [[package]]
 name = "xtask"
-version = "0.57.0"
+version = "0.58.0"
 dependencies = [
  "burl-sim",
  "png",

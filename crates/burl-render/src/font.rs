@@ -13,6 +13,18 @@ use std::collections::HashMap;
 /// The font Gource ships (`data/fonts/FreeSans.ttf`), the `--font-file` default.
 pub const FREE_SANS: &[u8] = include_bytes!("../../../data/fonts/FreeSans.ttf");
 
+/// The `--font-file` default as `GourceSettings` stores it; any other value is a canonical path.
+pub const DEFAULT_FONT_FILE: &str = "FreeSans.ttf";
+
+/// The font bytes for `--font-file` (`gource.cpp:50-67`: every `fontmanager.grab(font_file, ..)`
+/// loads the one file). The default keeps the bundled FreeSans; a path is read from disk.
+pub fn load_font_file(font_file: &str) -> Result<Vec<u8>, String> {
+    if font_file == DEFAULT_FONT_FILE {
+        return Ok(FREE_SANS.to_vec());
+    }
+    std::fs::read(font_file).map_err(|e| format!("could not read font '{font_file}': {e}"))
+}
+
 /// `min(512, GL_MAX_TEXTURE_SIZE)`: the page size and the denominator of the text shader's
 /// `texel_size` (`Gource::font_texel_size`).
 pub const PAGE_SIZE: usize = 512;

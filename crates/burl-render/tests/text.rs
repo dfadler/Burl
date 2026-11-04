@@ -111,3 +111,21 @@ fn height_is_ascender_minus_descender_ceiled() {
     assert_eq!(h, h.ceil());
     assert!((10.0..=16.0).contains(&h), "{h}");
 }
+
+#[test]
+fn font_file_default_is_the_bundled_font_and_a_path_is_read_from_disk() {
+    assert_eq!(load_font_file(DEFAULT_FONT_FILE).unwrap(), FREE_SANS);
+    let path = std::env::temp_dir().join(format!("burl-font-{}.ttf", std::process::id()));
+    std::fs::write(&path, b"not really a font").unwrap();
+    assert_eq!(
+        load_font_file(path.to_str().unwrap()).unwrap(),
+        b"not really a font"
+    );
+    std::fs::remove_file(&path).unwrap();
+    assert!(load_font_file("/nonexistent/burl.ttf").is_err());
+}
+
+#[test]
+fn a_file_that_is_not_a_font_is_rejected() {
+    assert!(FontManager::new(b"not really a font", 100).is_err());
+}

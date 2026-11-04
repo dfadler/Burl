@@ -64,6 +64,9 @@ pub struct UserView {
     pub pos: Vec2,
     pub size: f32,
     pub colour: Vec3,
+    /// `Pawn::graphic_ratio` and the avatar texture handle (`None` = the stock `user.png`).
+    pub graphic_ratio: f32,
+    pub graphic: Option<u32>,
     pub alpha: f32,
     pub actions: Vec<ActionView>,
     pub name: String,
@@ -145,6 +148,8 @@ impl Sim {
                     pos: u.pos,
                     size: u.size,
                     colour: u.usercol,
+                    graphic_ratio: u.graphic_ratio,
+                    graphic: u.graphic_texture,
                     alpha,
                     name: u.name.clone(),
                     nametime: u.nametime,

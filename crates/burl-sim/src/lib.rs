@@ -15,5 +15,5 @@ pub mod view;
 
 pub use command::Command;
 pub use dump::DumpOptions;
-pub use settings::SimSettings;
+pub use settings::{SimSettings, UserGraphic, UserGraphicsHook};
 pub use sim::{Sim, SimError};

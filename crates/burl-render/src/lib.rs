@@ -7,6 +7,7 @@
 //! (reference/gource-cpp-dump/src/core/vbo.cpp, src/bloom.cpp). Row numbers below are the pass
 //! table in docs/rust-rewrite/discovery/output-pipeline.md.
 
+mod avatars;
 mod camera;
 mod font;
 mod image;
@@ -14,6 +15,7 @@ mod key;
 mod labels;
 mod overlays;
 mod scene;
+pub use avatars::{scan_user_image_dir, Avatars};
 pub use camera::*;
 pub use font::*;
 pub use image::{decode_image, Image};

@@ -42,6 +42,8 @@ fn user(name: &str, interval: f32, highlighted: bool) -> UserView {
         pos: Vec2::new(5.0, -5.0),
         size: 20.0,
         colour: Vec3::ONE,
+        graphic_ratio: 512.0 / 384.0,
+        graphic: None,
         alpha: 0.75,
         actions: vec![],
         name: name.into(),
@@ -74,7 +76,6 @@ fn names(scene: &SceneView, tweak: impl FnOnce(&mut NameSettings, &mut SceneSett
         file: TextureId(2),
         file_ratio: 1.0,
         user: TextureId(3),
-        user_ratio: 512.0 / 384.0,
     };
     let (mut n, mut s) = (NameSettings::default(), SceneSettings::new(640, 480));
     tweak(&mut n, &mut s);

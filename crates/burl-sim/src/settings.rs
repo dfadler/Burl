@@ -1,8 +1,32 @@
 //! The settings the simulation reads (ticket #11 item 6): the gate's fixed-input flags plus the
 //! few remaining sim-affecting fields, each at its `GourceSettings::setGourceDefaults` value.
 
+/// What `RUser::assignUserImage` leaves on a user (user.cpp:183-212): the avatar's height/width
+/// (`Pawn::graphic_ratio`, which sizes the user's bounds), an opaque texture handle for the
+/// renderer (`None` = the stock `user.png`), and whether the colour is forced to white.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct UserGraphic {
+    pub ratio: f32,
+    pub texture: Option<u32>,
+    pub white: bool,
+}
+
+/// Called once per new user; `None` leaves the stock `user.png`. The renderer owns the image files; the sim only needs the result.
+#[derive(Clone)]
+pub struct UserGraphicsHook(pub std::sync::Arc<UserGraphicFn>);
+
+pub type UserGraphicFn = dyn Fn(&str) -> Option<UserGraphic> + Send + Sync;
+
+impl std::fmt::Debug for UserGraphicsHook {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("UserGraphicsHook")
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct SimSettings {
+    /// `--user-image-dir` / `--default-user-image` resolved by the renderer; `None` = `user.png`.
+    pub user_graphics: Option<UserGraphicsHook>,
     /// `-WxH` (camera aspect ratio).
     pub display_width: i32,
     pub display_height: i32,
@@ -56,6 +80,7 @@ pub struct SimSettings {
 impl Default for SimSettings {
     fn default() -> Self {
         SimSettings {
+            user_graphics: None,
             display_width: 1024,
             display_height: 768,
             output_framerate: 60,

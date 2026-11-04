@@ -70,6 +70,8 @@ fn scene() -> SceneView {
             pos: Vec2::new(5.0, -5.0),
             size: 20.0,
             colour: Vec3::ONE,
+            graphic_ratio: 512.0 / 384.0,
+            graphic: None,
             alpha: 1.0,
             name: "u".into(),
             nametime: 5.0,
@@ -107,7 +109,6 @@ fn frame() -> Frame {
         file: TextureId(2),
         file_ratio: 1.0,
         user: TextureId(3),
-        user_ratio: 512.0 / 384.0,
     };
     build_frame(&scene(), &tex, &SceneSettings::new(640, 480))
 }
@@ -144,7 +145,6 @@ fn hide_flags_empty_their_buffers() {
         file: TextureId(2),
         file_ratio: 1.0,
         user: TextureId(3),
-        user_ratio: 1.0,
     };
     let go = |f: fn(&mut SceneSettings)| {
         let mut s = SceneSettings::new(640, 480);
@@ -161,13 +161,32 @@ fn hide_flags_empty_their_buffers() {
 }
 
 #[test]
+fn an_avatar_user_draws_with_its_own_texture_and_ratio() {
+    let mut sc = scene();
+    sc.users[0].graphic = Some(900);
+    sc.users[0].graphic_ratio = 2.0;
+    let tex = SceneTextures {
+        beam: TextureId(1),
+        file: TextureId(2),
+        file_ratio: 1.0,
+        user: TextureId(3),
+    };
+    let f = build_frame(&sc, &tex, &SceneSettings::new(640, 480));
+    let v = f.users.vertices();
+    assert_eq!(v[2].pos[1] - v[0].pos[1], 2.0 * (v[1].pos[0] - v[0].pos[0]));
+    assert!(f
+        .batches()
+        .iter()
+        .any(|b| b.texture == Some(TextureId(900))));
+}
+
+#[test]
 fn fixed_user_size_scales_users_with_camera_distance() {
     let tex = SceneTextures {
         beam: TextureId(1),
         file: TextureId(2),
         file_ratio: 1.0,
         user: TextureId(3),
-        user_ratio: 1.0,
     };
     let mut sc = scene();
     sc.camera.pos.z = -600.0;

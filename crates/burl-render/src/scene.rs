@@ -21,7 +21,6 @@ pub struct SceneTextures {
     pub file: TextureId,
     pub file_ratio: f32,
     pub user: TextureId,
-    pub user_ratio: f32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -169,12 +168,12 @@ pub fn build_frame(scene: &SceneView, tex: &SceneTextures, s: &SceneSettings) ->
     }
 
     for u in scene.users.iter().filter(|_| !s.hide_users) {
-        let mut dims = Vec2::new(u.size, u.size * tex.user_ratio);
+        let mut dims = Vec2::new(u.size, u.size * u.graphic_ratio);
         if s.fixed_user_size {
             dims *= -scene.camera.pos.z / STARTING_Z.abs();
         }
         f.users.add(
-            Some(tex.user),
+            Some(u.graphic.map_or(tex.user, TextureId)),
             u.pos - dims * 0.5,
             dims,
             u.colour.extend(u.alpha),

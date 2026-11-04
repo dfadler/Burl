@@ -19,6 +19,7 @@ use std::io::{BufRead, Write};
 use std::sync::Arc;
 
 mod export;
+mod frame;
 mod interactive;
 
 const EXEC: &str = "burl";

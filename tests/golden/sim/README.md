@@ -25,6 +25,7 @@ dump (Script-mode PRNG, `reference/gource-cpp-dump/tests/dump/rand-script.txt`).
 | `small-repo-max-files` | `--max-files 6` |
 | `small-repo-elasticity` | `--elasticity 0.5` |
 | `small-repo-tuning` | `--user-friction 0.5 --user-scale 2 --max-user-speed 100 --max-file-lag 0.5 --filename-time 2 --highlight-all-users` |
+| `small-repo-fps30` | `-r 30`: the output frame rate halves the dumped frames; `--debug-dump-every 5` counts those (the other fixtures run at `-r 60`) |
 | `small-repo-stop-position` | `--stop-position 0.5` (run ends early) |
 | `small-repo-start-position` | `--start-position 0.5`: the log seeks to byte 460 (mid-line, so the rest of that line is thrown away) before the first frame |
 | `small-repo-loop` | `--loop --loop-delay-seconds 1`: after the log ends and the users idle, `Gource::reset` and a seek to 0 replay it from a live state, several times in the 10 s run |

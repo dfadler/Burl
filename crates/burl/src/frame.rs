@@ -82,6 +82,7 @@ impl FrameKit {
             dir_colour: g.dir_colour.into(),
             filename_colour: g.filename_colour.into(),
             highlight_colour: g.highlight_colour.into(),
+            selection_colour: g.selection_colour.into(),
         };
         let name_fonts = NameFonts::new(
             fonts,

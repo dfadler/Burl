@@ -251,7 +251,7 @@ GourceSettings::GourceSettings() {
     conf_sections["log-level"]         = "command-line";
 
     //state-dump fork: hidden command line only options, not in help
-    const char* dump_options[] = { "debug-dump-state", "debug-dump-every", "debug-dump-max-frames", "prng", "prng-seed", "rand-script" };
+    const char* dump_options[] = { "debug-dump-state", "debug-dump-every", "debug-dump-max-frames", "prng", "prng-seed", "rand-script", "debug-pointer-script" };
     for(size_t i = 0; i < sizeof(dump_options)/sizeof(dump_options[0]); i++) {
         conf_sections[dump_options[i]] = "command-line";
     }
@@ -261,6 +261,7 @@ GourceSettings::GourceSettings() {
     arg_types["prng"]                  = "string";
     arg_types["prng-seed"]             = "int";
     arg_types["rand-script"]           = "string";
+    arg_types["debug-pointer-script"]  = "string";
 
     //boolean args
     arg_types["help"]                    = "bool";
@@ -598,7 +599,7 @@ void GourceSettings::commandLineOption(const std::string& name, const std::strin
     }
 
     if(name == "debug-dump-state" || name == "debug-dump-every" || name == "debug-dump-max-frames"
-        || name == "prng" || name == "prng-seed" || name == "rand-script") {
+        || name == "prng" || name == "prng-seed" || name == "rand-script" || name == "debug-pointer-script") {
         dumpSetOption(name, value);
         return;
     }

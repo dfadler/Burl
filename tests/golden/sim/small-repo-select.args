@@ -1,0 +1,1 @@
+@mouse --camera-mode track --debug-pointer-script small-repo-select.pointer --debug-dump-every 5

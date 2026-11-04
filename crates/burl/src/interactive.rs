@@ -19,10 +19,10 @@ use burl_gl::winit::platform::modifier_supplement::KeyEventExtModifierSupplement
 use burl_gl::winit::window::{CursorGrabMode, Fullscreen, WindowAttributes, WindowId};
 use burl_gl::{monitor_index, GlContext, Renderer, WindowedGl};
 use burl_render::glam::Vec2;
-use burl_render::{world_matrix, FontManager, SceneSettings, SceneTextures};
+use burl_render::{world_matrix, FontManager, SceneSettings, SceneTextures, TextBox, PAGE_SIZE};
 use burl_sim::{Command, Sim};
 use burl_util::prng::SimRng;
-use input::{key_action, wheel_command, Action, Arrows, Pointer, PointerOut};
+use input::{button_command, key_action, wheel_command, Action, Arrows};
 use slider::SliderHook;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -98,6 +98,7 @@ struct Live {
     ss: SceneSettings,
     fonts: FontManager,
     kit: FrameKit,
+    textbox: TextBox,
     slider: SliderHook,
     avatars: Option<SharedAvatars>,
     clear: [f32; 4],
@@ -105,7 +106,6 @@ struct Live {
     /// Commands since the last frame, applied in order before the step.
     pending: Vec<Command>,
     arrows: Arrows,
-    pointer: Pointer,
     alt: bool,
     disable_input: bool,
     /// `hide_mouse`: all mouse input is ignored and the cursor is hidden.
@@ -121,6 +121,7 @@ struct Loaded {
     ss: SceneSettings,
     fonts: FontManager,
     kit: FrameKit,
+    textbox: TextBox,
     slider: SliderHook,
     avatars: Option<SharedAvatars>,
     clear: [f32; 4],
@@ -178,10 +179,14 @@ impl Live {
             Action::Quit => {}
             Action::ToggleTree => self.ss.hide_tree = !self.ss.hide_tree,
             Action::ToggleRoot => self.ss.hide_root = !self.ss.hide_root,
-            Action::ToggleUsers => self.ss.hide_users = !self.ss.hide_users,
+            Action::ToggleUsers => {
+                self.ss.hide_users = !self.ss.hide_users;
+                self.sim.set_hide(self.ss.hide_users, self.ss.hide_files);
+            }
             // ignored while a button is down or dragging
-            Action::ToggleMouse if !self.pointer.busy() => {
+            Action::ToggleMouse if !self.sim.pointer_busy() => {
                 self.hide_mouse = !self.hide_mouse;
+                self.sim.set_hide_mouse(self.hide_mouse);
                 self.window()
                     .set_cursor_visible(!self.hide_mouse && !self.grabbed);
             }
@@ -233,13 +238,13 @@ impl App {
             ss: l.ss,
             fonts: l.fonts,
             kit: l.kit,
+            textbox: l.textbox,
             slider: l.slider,
             avatars: l.avatars,
             clear: l.clear,
             last: Instant::now(),
             pending: Vec::new(),
             arrows: Arrows::default(),
-            pointer: Pointer::default(),
             alt: false,
             disable_input: l.disable_input,
             hide_mouse: l.hide_mouse,
@@ -265,16 +270,14 @@ impl App {
         live.ss = l.ss;
         live.fonts = l.fonts;
         live.kit = l.kit;
+        live.textbox = l.textbox;
         live.slider = l.slider;
         live.avatars = l.avatars;
         live.clear = l.clear;
         live.disable_input = l.disable_input;
-        if live.disable_input {
-            // Button releases are ignored while input is disabled, so drop the drag and its grab.
-            live.pointer = Pointer::default();
-            if live.grabbed {
-                live.set_grab(false);
-            }
+        // the new sim holds no drag, so release a grab the old one left
+        if live.grabbed {
+            live.set_grab(false);
         }
         live.hide_mouse = l.hide_mouse;
         live.next = false;
@@ -324,6 +327,7 @@ impl App {
         ss.user_scale = g.user_scale;
         let mut fonts = new_fonts(&g.font_file)?;
         let kit = FrameKit::new(r, &mut fonts, g, w, h)?;
+        let textbox = TextBox::new(&mut fonts, (18.0 * g.font_scale) as u32);
         let slider = SliderHook::new(&mut fonts, g, w, h, repo_count);
         let bg = g.background_colour;
         Ok(Loaded {
@@ -333,6 +337,7 @@ impl App {
             kit,
             slider,
             avatars,
+            textbox,
             clear: [bg[0], bg[1], bg[2], 1.0],
             disable_input: g.disable_input,
             hide_mouse: g.hide_mouse,
@@ -354,6 +359,12 @@ impl App {
         live.sim
             .update_realtime(dt.as_secs_f32())
             .map_err(|e| e.0)?;
+        // `Gource::draw` starts with `mousetrace`; a click on the background grabs the mouse
+        live.sim.draw_pointer();
+        live.sim.tick_cursor(dt.as_secs_f32());
+        if live.sim.is_grabbed() != live.grabbed {
+            live.set_grab(live.sim.is_grabbed());
+        }
         upload_avatars(&live.avatars, &mut live.r)?;
         let scene = live.sim.scene_view();
         let mut frame =
@@ -367,6 +378,21 @@ impl App {
             scene.seekable,
             dt.as_secs_f32(),
         )?;
+        // the hover text box comes last in `Gource::draw`, after the overlays
+        if let Some(h) = live.sim.hover_text() {
+            live.textbox.draw(
+                &mut live.fonts,
+                &mut frame.overlay,
+                &h.lines,
+                h.colour,
+                live.sim.mouse_position(),
+                Vec2::new(live.ss.width, live.ss.height),
+            );
+            for u in live.fonts.take_updates() {
+                live.r
+                    .upload_texture(u.id, PAGE_SIZE as u32, PAGE_SIZE as u32, &u.rgba, false)?;
+            }
+        }
         let world = world_matrix(&scene, &live.ss);
         live.r.render(live.clear, &frame.batches(), world)?;
         live.r.blit_to_screen()?;
@@ -438,23 +464,25 @@ impl ApplicationHandler for App {
                 if !live.disable_input && (!live.hide_mouse || state == ElementState::Released) =>
             {
                 // `Gource::mouseClick`: a left press on the slider seeks (then also starts the
-                // background drag below, as in the C++)
+                // background drag, as in the C++)
                 if button == MouseButton::Left && state == ElementState::Pressed {
                     live.pending.extend(live.slider.click());
                 }
-                for o in live.pointer.button(button, state == ElementState::Pressed) {
-                    match o {
-                        PointerOut::Cmd(c) => live.pending.push(c),
-                        PointerOut::Grab(on) => live.set_grab(on),
-                    }
+                live.pending
+                    .extend(button_command(button, state == ElementState::Pressed));
+            }
+            WindowEvent::CursorMoved { position, .. } if !live.disable_input => {
+                if !live.hide_mouse && !live.grabbed {
+                    let pos = Vec2::new(position.x as f32, position.y as f32);
+                    live.slider.moved(pos, &mut live.sim, &mut live.fonts);
                 }
+                live.pending.push(Command::PointerAt {
+                    x: position.x as i32,
+                    y: position.y as i32,
+                });
             }
-            WindowEvent::CursorMoved { position, .. }
-                if !live.disable_input && !live.hide_mouse && !live.grabbed =>
-            {
-                let pos = Vec2::new(position.x as f32, position.y as f32);
-                live.slider.moved(pos, &mut live.sim, &mut live.fonts);
-            }
+            WindowEvent::CursorEntered { .. } => live.sim.set_cursor_focus(true),
+            WindowEvent::CursorLeft { .. } => live.sim.set_cursor_focus(false),
             WindowEvent::Resized(s) if s.width > 0 && s.height > 0 => {
                 live.r.context().resize(s.width, s.height);
                 if let Err(e) = live.r.resize(s.width, s.height) {
@@ -463,6 +491,7 @@ impl ApplicationHandler for App {
                 }
                 live.ss.width = s.width as f32;
                 live.ss.height = s.height as f32;
+                live.sim.set_display_size(s.width as i32, s.height as i32);
                 live.slider.resize(s.width, s.height);
                 live.kit.resize(s.width, s.height);
             }
@@ -478,8 +507,10 @@ impl ApplicationHandler for App {
             return;
         };
         if !live.disable_input && !live.hide_mouse {
-            live.pending
-                .extend(live.pointer.motion(dx as f32, dy as f32));
+            live.pending.push(Command::PointerDelta {
+                dx: dx as f32,
+                dy: dy as f32,
+            });
         }
     }
 

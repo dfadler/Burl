@@ -183,6 +183,7 @@ class Gource : public SDLApp {
 
     std::deque<RCommit> commitqueue;
     std::map<std::string, RUser*> users;
+    std::vector<RUser*> deletedUsers;   // erased from users, freed when userTree is rebuilt
     std::map<std::string, RFile*> files;
     std::map<int, RUser*> tagusermap;
 
@@ -289,6 +290,13 @@ public:
 
     void update(float t, float dt);
     void dumpState(); // state-dump fork
+    // state-dump fork, scripted pointer (--debug-pointer-script)
+    void dumpPointer();
+    void dumpPointerJson(FILE* f) const;
+    bool dumpCursorVisible() const;
+    bool buttonLeft() const;
+    bool buttonRight() const;
+    bool buttonAny() const;
     void keyPress(SDL_KeyboardEvent *e);
     void mouseMove(SDL_MouseMotionEvent *e);
     void mouseClick(SDL_MouseButtonEvent *e);

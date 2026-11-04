@@ -17,6 +17,7 @@ mod overlays;
 mod scene;
 mod slider;
 pub use avatars::{scan_dir, scan_user_image_dir, Avatars};
+mod textbox;
 pub use camera::*;
 pub use font::*;
 pub use image::{decode_image, Image};
@@ -25,6 +26,7 @@ pub use labels::*;
 pub use overlays::*;
 pub use scene::*;
 pub use slider::Slider;
+pub use textbox::TextBox;
 
 pub use glam;
 use glam::{Mat4, Vec2, Vec4};

@@ -47,8 +47,41 @@ pub enum Command {
     Rotate { dx: f32, dy: f32 },
     /// The right button went down or up (`cursor.rightButtonPressed()`).
     RightButton(bool),
+    /// Tab: `selectNextUser`.
+    NextUser,
+    /// The pointer moved to window pixel `(x, y)` (`Gource::mouseMove`).
+    PointerAt { x: i32, y: i32 },
+    /// Relative motion while the cursor is grabbed (`xrel`, `yrel`): drag or rotate.
+    PointerDelta { dx: f32, dy: f32 },
+    /// A mouse button went down or up (`Gource::mouseClick`).
+    Button {
+        button: crate::pointer::Button,
+        down: bool,
+    },
     /// A click on the position slider (`Gource::seekTo`): `percent` of the log.
     SeekTo(f32),
+}
+
+impl Sim {
+    /// One scripted pointer event (the fork's `dumpPointer`).
+    pub fn apply_pointer(&mut self, e: &crate::pointer::PointerEvent) {
+        use crate::pointer::PointerKind;
+        match e.kind {
+            // `keyPress` returns first under --disable-input
+            PointerKind::Tab => {
+                if !self.s.disable_input {
+                    self.apply(Command::NextUser)
+                }
+            }
+            PointerKind::Move { x, y } => {
+                let (px, py) = (self.pointer_x, self.pointer_y);
+                self.pointer_x = x;
+                self.pointer_y = y;
+                self.mouse_move(x, y, x - px, y - py);
+            }
+            PointerKind::Button { button, down } => self.mouse_button(button, down),
+        }
+    }
 }
 
 /// Keys `=`/`+`: `days_per_second`.
@@ -207,6 +240,10 @@ impl Sim {
                 self.rotate_angle = drag_rotation(dx, dy);
             }
             Command::RightButton(down) => self.right_button = down,
+            Command::NextUser => self.select_next_user(),
+            Command::PointerAt { x, y } => self.mouse_move(x, y, 0, 0),
+            Command::PointerDelta { dx, dy } => self.mouse_delta(dx, dy),
+            Command::Button { button, down } => self.mouse_button(button, down),
         }
     }
 }

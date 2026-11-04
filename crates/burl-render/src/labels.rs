@@ -2,8 +2,10 @@
 //! `Gource::draw` (src/gource.cpp:2495-2527) with `RDirNode::drawNames/drawDirName` (dirnode.cpp),
 //! `Pawn::drawName`, `RFile::drawNameText` and `RUser::drawNameText`.
 //!
-//! Not ported: selected and hovered labels (no pointer when exporting) and the `in_frustum` test of
-//! file names (an off-screen label is clipped anyway).
+//! The selected user's and file's labels are drawn again last, over everything, as in
+//! `Gource::draw` (they go through the same text buffer here, not a second immediate-mode pass).
+//!
+//! Not ported: the `in_frustum` test of file names (an off-screen label is clipped anyway).
 
 use crate::scene::{camera, label_pos};
 use crate::{Font, FontManager, SceneSettings, SceneTextures};
@@ -27,6 +29,8 @@ pub struct NameSettings {
     pub dir_colour: Vec3,
     pub filename_colour: Vec3,
     pub highlight_colour: Vec3,
+    /// `--selection-colour`: the selected user's and file's label.
+    pub selection_colour: Vec3,
 }
 
 impl Default for NameSettings {
@@ -45,6 +49,7 @@ impl Default for NameSettings {
             dir_colour: Vec3::ONE,
             filename_colour: Vec3::ONE,
             highlight_colour: Vec3::ONE,
+            selection_colour: Vec3::new(1.0, 1.0, 0.3),
         }
     }
 }
@@ -54,7 +59,13 @@ pub struct NameFonts {
     dir: Font,
     file: Font,
     user: Font,
+    /// `RUser::updateFont` and `file_selected_font`: 18 pt whatever `--font-scale` says.
+    selected_user: Font,
+    selected_file: Font,
 }
+
+/// The unscaled size of a selected pawn's label.
+const SELECTED_FONT_SIZE: u32 = 18;
 
 impl NameFonts {
     /// Sizes are `scaled_dirname_font_size`, `scaled_filename_font_size`, `scaled_user_font_size`.
@@ -64,7 +75,20 @@ impl NameFonts {
             f.shadow = true;
         }
         user.align_top = false;
-        Self { dir, file, user }
+        let (mut selected_user, mut selected_file) =
+            (mgr.grab(SELECTED_FONT_SIZE), mgr.grab(SELECTED_FONT_SIZE));
+        for f in [&mut selected_user, &mut selected_file] {
+            f.shadow = true;
+        }
+        selected_user.align_top = false;
+        selected_file.round = false;
+        Self {
+            dir,
+            file,
+            user,
+            selected_user,
+            selected_file,
+        }
     }
 }
 
@@ -137,7 +161,7 @@ pub fn draw_names(
 
         if !(n.hide_filenames || s.hide_files) {
             fonts.file.set_colour(n.filename_colour.extend(1.0));
-            for f in &d.files {
+            for f in d.files.iter().filter(|f| !f.selected) {
                 let Some(alpha) = name_alpha(f.nametime, f.name_interval) else {
                     continue;
                 };
@@ -157,10 +181,8 @@ pub fn draw_names(
         }
     }
 
-    if n.hide_usernames || s.hide_users {
-        return;
-    }
-    for u in &scene.users {
+    let show_users = !(n.hide_usernames || s.hide_users);
+    for u in scene.users.iter().filter(|u| show_users && !u.selected) {
         // RUser::nameVisible shows highlighted users even after their name has faded; the
         // (negative) fade value is then unused because the user's own alpha is drawn.
         let always = n.highlight_all_users || u.highlighted;
@@ -182,5 +204,29 @@ pub fn draw_names(
         let a = if always { u.alpha } else { alpha };
         fonts.user.set_colour(c.extend(a));
         mgr.draw_buffered(&fonts.user, x, y, &u.name);
+    }
+
+    // the selected names again, over the top
+    for u in scene.users.iter().filter(|u| u.selected) {
+        let at = screen(u.pos - Vec2::new(0.0, u.size * u.graphic_ratio * 0.5));
+        let x = at.x - mgr.width(&fonts.selected_user, &u.name) * 0.5;
+        let y = at.y - mgr.max_height(&fonts.selected_user);
+        fonts
+            .selected_user
+            .set_colour(n.selection_colour.extend(u.alpha));
+        mgr.draw_buffered(&fonts.selected_user, x, y, &u.name);
+    }
+    for f in scene
+        .dirs
+        .iter()
+        .flat_map(|d| &d.files)
+        .filter(|f| f.selected)
+    {
+        // RFile::calcScreenPos: the selected label sits 2 units below, not 1
+        let at = screen(f.pos + Vec2::new(5.5, 0.0) - Vec2::new(0.0, 2.0));
+        fonts
+            .selected_file
+            .set_colour(n.selection_colour.extend(1.0));
+        mgr.draw_buffered(&fonts.selected_file, at.x, at.y, &f.name);
     }
 }

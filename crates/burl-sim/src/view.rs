@@ -30,6 +30,10 @@ pub struct DirView {
     /// `isVisible()` (the node or any descendant is visible).
     pub visible: bool,
     pub files: Vec<FileView>,
+    /// `path_token`: the last path component, the directory label.
+    pub name: String,
+    pub depth: i32,
+    pub since_last_node_change: f32,
 }
 
 /// A file that is not hidden; `pos` is absolute (`getAbsolutePos`).
@@ -39,6 +43,11 @@ pub struct FileView {
     pub size: f32,
     pub colour: Vec3,
     pub alpha: f32,
+    /// `RFile::name`, the basename.
+    pub name: String,
+    /// `Pawn::nametime` / `name_interval`: the label's fade clock.
+    pub nametime: f32,
+    pub name_interval: f32,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -57,6 +66,10 @@ pub struct UserView {
     pub colour: Vec3,
     pub alpha: f32,
     pub actions: Vec<ActionView>,
+    pub name: String,
+    pub nametime: f32,
+    pub name_interval: f32,
+    pub highlighted: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -102,6 +115,10 @@ impl Sim {
                     size: u.size,
                     colour: u.usercol,
                     alpha,
+                    name: u.name.clone(),
+                    nametime: u.nametime,
+                    name_interval: u.name_interval,
+                    highlighted: u.highlighted,
                     actions: u
                         .active_actions
                         .iter()
@@ -150,14 +167,26 @@ impl Sim {
                 if f.fade_start > 0.0 {
                     alpha = 1.0 - (f.elapsed - f.fade_start).clamp(0.0, 1.0);
                 }
+                let name = f.fullpath.rsplit('/').next().unwrap_or_default();
                 FileView {
                     pos: f.pos + dd.pos,
                     size: f.size,
                     colour,
                     alpha,
+                    name: name.to_string(),
+                    nametime: f.nametime,
+                    name_interval: f.name_interval,
                 }
             })
             .collect();
+        // RDirNode::adjustPath: abspath minus the parent's, minus the trailing '/'.
+        let name = match dd.parent {
+            Some(p) => {
+                let from = self.dir(p).abspath.len();
+                dd.abspath[from..dd.abspath.len() - 1].to_string()
+            }
+            None => String::new(),
+        };
         DirView {
             parent,
             pos: dd.pos,
@@ -166,6 +195,9 @@ impl Sim {
             radius: dd.dir_radius,
             visible,
             files,
+            name,
+            depth: dd.depth,
+            since_last_node_change: dd.since_last_node_change,
         }
     }
 }

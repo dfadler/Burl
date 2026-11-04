@@ -40,6 +40,7 @@ Use any real log, e.g. `burl --seconds-per-day 0.5 <repo>`.
 - [ ] Bloom, shadows, file and user textures, beams and the key legend look like Gource's at the same settings
 - [ ] Text (user, file, directory names, captions, title, date) is readable and positioned like Gource's
 - [ ] Pause/resume and seeking leave no stale frame or flicker
+- [ ] `burl --user-image-dir DIR <repo>` (DIR holds `<user name>.png/.jpg`) shows each user as their own image, white unless `--colour-images`; `--default-user-image F` gives the rest F; a corrupt file in DIR exits with an error naming it (#91)
 
 ## Sign-off
 

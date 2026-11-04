@@ -7,7 +7,7 @@ mod input;
 mod slider;
 
 use super::export::upload_scene_textures;
-use super::frame::{new_fonts, FrameKit};
+use super::frame::{install_avatars, new_fonts, upload_avatars, FrameKit, SharedAvatars};
 use super::{fetch_log, log_settings, sim_settings};
 use burl_conf::settings::{DisplaySettings, GourceSettings};
 use burl_gl::winit::application::ApplicationHandler;
@@ -99,6 +99,7 @@ struct Live {
     fonts: FontManager,
     kit: FrameKit,
     slider: SliderHook,
+    avatars: Option<SharedAvatars>,
     clear: [f32; 4],
     last: Instant,
     /// Commands since the last frame, applied in order before the step.
@@ -121,6 +122,7 @@ struct Loaded {
     fonts: FontManager,
     kit: FrameKit,
     slider: SliderHook,
+    avatars: Option<SharedAvatars>,
     clear: [f32; 4],
     disable_input: bool,
     hide_mouse: bool,
@@ -232,6 +234,7 @@ impl App {
             fonts: l.fonts,
             kit: l.kit,
             slider: l.slider,
+            avatars: l.avatars,
             clear: l.clear,
             last: Instant::now(),
             pending: Vec::new(),
@@ -263,6 +266,7 @@ impl App {
         live.fonts = l.fonts;
         live.kit = l.kit;
         live.slider = l.slider;
+        live.avatars = l.avatars;
         live.clear = l.clear;
         live.disable_input = l.disable_input;
         if live.disable_input {
@@ -304,6 +308,7 @@ impl App {
         let (rng, first_rand) = self.carry.take().ok_or("simulation already started")?;
         let mut settings = sim_settings(&d, g, section, repo_count);
         settings.exporting = false;
+        let avatars = install_avatars(g, &mut settings)?;
         let mut sim = Sim::new(settings, log, rng).map_err(|e| e.0)?;
         sim.carry_first_rand_frame(first_rand);
 
@@ -327,6 +332,7 @@ impl App {
             fonts,
             kit,
             slider,
+            avatars,
             clear: [bg[0], bg[1], bg[2], 1.0],
             disable_input: g.disable_input,
             hide_mouse: g.hide_mouse,
@@ -348,6 +354,7 @@ impl App {
         live.sim
             .update_realtime(dt.as_secs_f32())
             .map_err(|e| e.0)?;
+        upload_avatars(&live.avatars, &mut live.r)?;
         let scene = live.sim.scene_view();
         let mut frame =
             live.kit
@@ -457,6 +464,7 @@ impl ApplicationHandler for App {
                 live.ss.width = s.width as f32;
                 live.ss.height = s.height as f32;
                 live.slider.resize(s.width, s.height);
+                live.kit.resize(s.width, s.height);
             }
             _ => {}
         }

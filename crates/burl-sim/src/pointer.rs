@@ -131,6 +131,11 @@ impl Sim {
         self.pointer_buttons & (Button::Left.mask() | Button::Right.mask()) != 0
     }
 
+    /// `grab_mouse`: a drag holds the mouse (the window should lock and hide the cursor).
+    pub fn is_grabbed(&self) -> bool {
+        self.grab_mouse
+    }
+
     /// `Gource::grabMouse`: the cursor hides while grabbed and comes back with a fresh idle clock.
     pub fn grab_mouse(&mut self, grab: bool) {
         self.grab_mouse = grab;
@@ -141,6 +146,24 @@ impl Sim {
         if !grab {
             self.cursor_idle = 0.0;
         }
+    }
+
+    /// The part of `mouseMove` that reads `xrel`/`yrel`: the camera drag and the right-button
+    /// rotation. Window systems report these apart from the position while the cursor is grabbed.
+    pub fn mouse_delta(&mut self, dx: f32, dy: f32) {
+        if self.s.disable_input || self.s.hide_mouse {
+            return;
+        }
+        if self.pointer_buttons & Button::Right.mask() != 0 {
+            self.apply(Command::Rotate { dx, dy });
+        } else if self.mousedragged {
+            self.apply(Command::Drag { dx, dy });
+        }
+    }
+
+    /// `mousedragged || mouseclicked || leftButtonPressed`: the `M` key is ignored while one holds.
+    pub fn pointer_busy(&self) -> bool {
+        self.mousedragged || self.mouseclicked || self.button_left()
     }
 
     /// `Gource::mouseMove` for a motion to window pixel `(x, y)` by `(xrel, yrel)`.

@@ -32,7 +32,11 @@ Use any real log, e.g. `burl --seconds-per-day 0.5 <repo>`.
 - [ ] Wheel zooms in/out and respects the zoom clamp
 - [ ] Left-drag on the background pans; clicking empty background deselects the user
 - [ ] Right-drag rotates the camera; middle click toggles camera mode
-- [ ] Hover shows names; clicking a user selects it; the timeline slider seeks on click and shows its hover caption
+- [ ] Clicking a user selects it: white sprite, larger name in `--selection-colour` drawn over everything; Tab moves to the next user and wraps
+- [ ] Clicking a file selects it the same way (its name sits a little lower); clicking empty background deselects
+- [ ] The click lands on what is under the cursor, also on Retina (pointer and drawable are both physical pixels in Burl: Gource mixes points and pixels with `--high-dpi`); a user that is fading out cannot be picked
+- [ ] The cursor stays hidden until it moves; after 3 s without moving, hover ends (a click then does nothing until the mouse moves)
+- [ ] The timeline slider seeks on click and shows its hover caption
 - [ ] Cursor grab starts on drag and releases when the last button is up
 
 ## Render

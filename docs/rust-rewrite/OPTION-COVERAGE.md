@@ -88,9 +88,9 @@ Two generic tests cover every option's parse path and are not repeated per row: 
 | `--caption-colour` | Str | `caption_colour` | Y | N | Wired | burl-render/src/overlays.rs:144 | R | Export only: the windowed frame draws no text (see Gap 1). |
 | `--caption-offset` | Int | `caption_offset` | Y | N | Wired | burl-render/src/overlays.rs:114 | R | Export only: the windowed frame draws no text (see Gap 1). |
 | `--caption-size` | Int | `caption_size` | Y | N | Wired | burl-render/src/overlays.rs:45, export.rs:168 | **none** | Export only: the windowed frame draws no text (see Gap 1). |
-| `--colour-images` | Bool | `colour_user_images` | N | N | Stored-unused (G9) | none | **none** | user.cpp:197,210 |
+| `--colour-images` | Bool | `colour_user_images` | N | N | Wired (G9) | none | **none** | user.cpp:197,210 |
 | `--date-format` | Str | `date_format` | Y | N | Wired | burl/src/export.rs:203 | UR | Export only: the windowed frame draws no text (see Gap 1). |
-| `--default-user-image` | Str | `default_user_image` | N | N | Stored-unused (G9) | none | **none** | user.cpp:209 |
+| `--default-user-image` | Str | `default_user_image` | N | N | Wired (G9) | none | **none** | user.cpp:209 |
 | `--dir-colour` | Str | `dir_colour` | Y | N | Wired | burl-render/src/labels.rs:27 via export.rs:155 | U | Export only: the windowed frame draws no text (see Gap 1). |
 | `--dir-font-size` | Int | `dirname_font_size`, `scaled_dirname_font_size` | Y | N | Wired | burl/src/export.rs:161 | **none** | Export only: the windowed frame draws no text (see Gap 1). |
 | `--dir-name-depth` | Int | `dir_name_depth` | Y | N | Wired | burl-render/src/labels.rs:116 | UR | Export only: the windowed frame draws no text (see Gap 1). |
@@ -123,7 +123,7 @@ Two generic tests cover every option's parse path and are not repeated per row: 
 | `--selection-colour` | Str | `selection_colour` | N | N | Stored-unused | none (labels.rs:5: selection not ported) | **none** | file.cpp:58,141; user.cpp:330; needs pointer selection, so windowed-relevant |
 | `--title` | Str | `title` | Y | N | Wired | burl-render/src/overlays.rs:96 | UE | Export only: the windowed frame draws no text (see Gap 1). |
 | `--user-font-size` | Int | `user_font_size`, `scaled_user_font_size` | Y | N | Wired | burl/src/export.rs:163 | U | Export only: the windowed frame draws no text (see Gap 1). |
-| `--user-image-dir` | Str | `user_image_dir`, `user_image_map` | N | N | Stored-unused (G9) | none | UE | user.cpp:183 |
+| `--user-image-dir` | Str | `user_image_dir`, `user_image_map` | N | N | Wired (G9) | none | UE | user.cpp:183 |
 
 ### Windowed-only and app
 
@@ -216,7 +216,7 @@ Sizes: **small** under a day and local to one or two files, **medium** a few day
 | 4 | **`--hide-root` does nothing.** The root spline is always drawn. | `hide-root` | `dirnode.cpp:1111,1124,1138` (`spline` skipped when `parent->parent == 0`); toggle `gource.cpp:784` | **small** (one condition in the `scene.rs` edge building; `hide_root` is already in `GourceSettings`; add it to `SceneSettings`) | no ticket |
 | 5 | **`--fixed-user-size` does nothing** (`scene.rs:7` says so). | `fixed-user-size` | `gource.cpp:2273` (`scaled_dims *= (-camera.getPos().z / -starting_z)`) | **small** | #51 |
 | 6 | **`--font-file` ignored**: export always uses bundled FreeSans (`export.rs:90`); the path is validated at import, then dropped. | `font-file` | `gource.cpp:50-67`, `142`; `file.cpp:55-62` | **small** (`FontManager::new` takes bytes; read the file) | #50 area; no ticket for the option |
-| 7 | **User avatars** (`colour-images`, `user-image-dir`, `default-user-image`): Stored-unused. | those three | `user.cpp:183-212` (`assignUserImage`) | **medium** (image decode for JPEG/GIF as well, per-user textures, texture cache) | DEVIATIONS G9, #51 |
+| 7 | **User avatars: done in `-o`.** `Avatars` (burl-render) scans the dir, decodes and caches per file; `Sim` gets a per-user `UserGraphic` hook so the avatar's ratio sizes the user bounds (pawn.cpp:60-72) and the colour is white unless `--colour-images`. Windowed path: not wired. | those three | `user.cpp:183-212`, `gource_settings.cpp:811-862` | done | DEVIATIONS G9, #51 |
 | 8 | **`--transparent` is only a window flag.** Export clears with alpha 1, never loads `bloom_alpha.tga`; the PPM has no alpha anyway, so the visible effect is the bloom texture. | `transparent` | `gource.cpp:74` (`bloom_alpha.tga`), `2028` (clear alpha 0), `2250` (PNG alpha); `main.cpp:139` | **small** (bloom texture choice) after #53 | #53 |
 | 9 | **`--selection-colour` and pointer selection**: no picking, hover or selected labels. | `selection-colour` | `file.cpp:58,141`, `user.cpp:330`, `gource.cpp:545` (`selectBackground`) and the mouse handlers | **large** (pointer picking, text box, selected-label drawing; windowed only) | #51 area; no ticket |
 | 10 | **`--multi-sampling`, `--screen`** stored, never used by `WindowedGl`/`window_attributes`. | `multi-sampling`, `screen` | `main.cpp:134` (`SDL_GL_MULTISAMPLE*`), `167` (`display.init(..., screen)`) | **small** each (glutin config samples; winit monitor index) | no ticket |

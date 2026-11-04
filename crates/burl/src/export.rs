@@ -9,14 +9,14 @@ use burl_conf::settings::{DebugOptions, DisplaySettings, GourceSettings};
 use burl_formats::fetch_log;
 use burl_gl::{GlContext, HeadlessEgl, Renderer};
 use burl_render::{
-    background_batch, build_frame, decode_image, draw_names, logo_batch, world_matrix, FontManager,
-    NameFonts, NameSettings, OverlaySettings, Overlays, SceneSettings, SceneTextures, TextureId,
-    FREE_SANS, PAGE_SIZE,
+    background_batch, build_frame, decode_image, draw_names, logo_batch, world_matrix, Avatars,
+    FontManager, NameFonts, NameSettings, OverlaySettings, Overlays, SceneSettings, SceneTextures,
+    TextureId, FREE_SANS, PAGE_SIZE,
 };
-use burl_sim::Sim;
+use burl_sim::{Sim, UserGraphicsHook};
 use burl_util::prng::SimRng;
 use std::io::Write;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 const BEAM: &[u8] = include_bytes!("../../../data/beam.png");
 const FILE: &[u8] = include_bytes!("../../../data/file.png");
@@ -46,13 +46,12 @@ pub fn upload_scene_textures<C: GlContext>(r: &mut Renderer<C>) -> Result<SceneT
     };
     load(1, BEAM)?;
     let file_ratio = load(2, FILE)?;
-    let user_ratio = load(3, USER)?;
+    load(3, USER)?;
     Ok(SceneTextures {
         beam: TextureId(1),
         file: TextureId(2),
         file_ratio,
         user: TextureId(3),
-        user_ratio,
     })
 }
 
@@ -89,7 +88,19 @@ pub fn run(
             g.font_scale = (1 + (display.height / 1600).max(0)) as f32;
             g.set_scaled_font_sizes();
         }
-        let settings = sim_settings(display, g, i as i32 + 1, repo_count as i32);
+        let mut settings = sim_settings(display, g, i as i32 + 1, repo_count as i32);
+        let avatars = Avatars::new(
+            &g.user_image_dir,
+            &g.default_user_image,
+            g.colour_user_images,
+        )?
+        .map(|a| Arc::new(Mutex::new(a)));
+        if let Some(a) = &avatars {
+            let a = Arc::clone(a);
+            settings.user_graphics = Some(UserGraphicsHook(Arc::new(move |name| {
+                a.lock().expect("avatar lock").assign(name)
+            })));
+        }
         let log = fetch_log(&g.path.clone(), Arc::new(log_settings(g))).map_err(|e| e.0)?;
         let mut sim = Sim::new(settings, log, carry.0).map_err(|e| e.0)?;
         sim.carry_first_rand_frame(carry.1);
@@ -167,6 +178,15 @@ pub fn run(
 
         while !sim.is_finished() {
             sim.update().map_err(|e| e.0)?;
+            if let Some(a) = &avatars {
+                let mut a = a.lock().expect("avatar lock");
+                if let Some(e) = a.take_error() {
+                    return Err(e);
+                }
+                for (id, img) in a.take_uploads() {
+                    r.upload_texture(id, img.width, img.height, &img.rgba, true)?;
+                }
+            }
             // Gource::update dumps every (frameskip + 1)-th tick only.
             if !sim.exports_frame() {
                 let last = sim.is_last_frame(max_frames);

@@ -54,8 +54,11 @@ Bloom set (bloom drawn, same fixtures; committed as `tests/golden/visual/bloom-*
 file-to-dir 0.99997/0.99982/0.99977/0.99979; real-burl-git-250 (frames 100/300/500/800) 0.9797/0.9923/0.9804/0.9944.
 Minimum 0.9797 against the structural threshold 0.959 (no threshold changed; the bloom check only reports). The
 real-repo shortfall from 1.0 is the oracle's one-frame jitter mode (its frame counts varied 351-360 / 1073 across the
-reference renders), as in the structural set. Mean luminance, Burl vs oracle, small-repo frames 30/70 (2026-11-03
-run): 29.648 vs 29.702, 33.153 vs 33.106 (0.2%, inside the 5%).
+reference renders), as in the structural set. **These 16 PNGs are report-only reference candidates, not gate inputs:**
+they were rendered under QEMU amd64 emulation on Apple silicon, not native x86, and nothing in CI compares against them
+yet. They become usable once regenerated on native amd64 (or compared on the runner) and the two agree. Mean
+luminance, Burl vs oracle, small-repo frames 30/70, is from the earlier 2026-11-03 run and was **not re-measured against
+these references**: 29.648 vs 29.702, 33.153 vs 33.106 (0.2%, inside the 5%).
 
 ## FMA (gcc on amd64)
 

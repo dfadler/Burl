@@ -24,11 +24,13 @@ mkdir -p "$OUT"
 docker build -q --platform linux/amd64 -t "$IMG" -f "$ROOT/docker/release.Dockerfile" "$ROOT" >/dev/null
 xtask() { (cd "$ROOT" && cargo run -q --locked -p xtask -- "$@"); }
 
+# --prng glibc: the oracle never calls srand, so its rand() is glibc srand(1); Burl's default PRNG is
+# clock-seeded, which made every CI run score differently (visual-gate.md, PR #75).
 render() { # LOG(relative to repo root) STOP FORMAT -> PPM stream on stdout
 	docker run --rm --platform linux/amd64 -v "$ROOT":/repo:ro "$IMG" "/repo/$1" --log-format "$3" \
 		-640x360 -r 25 --seconds-per-day 1 --hash-seed 31 --disable-auto-skip --disable-auto-rotate \
 		--file-idle-time 0 --time-scale 1 --hide mouse,date,dirnames,filenames,usernames,progress,bloom \
-		--stop-at-time "$2" -o -
+		--stop-at-time "$2" --prng glibc -o -
 }
 
 fail=0

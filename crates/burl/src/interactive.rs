@@ -6,6 +6,7 @@
 mod input;
 
 use super::export::upload_scene_textures;
+use super::frame::{new_fonts, FrameKit};
 use super::{fetch_log, log_settings, sim_settings};
 use burl_conf::settings::{DisplaySettings, GourceSettings};
 use burl_gl::winit::application::ApplicationHandler;
@@ -15,7 +16,7 @@ use burl_gl::winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use burl_gl::winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 use burl_gl::winit::window::{CursorGrabMode, Fullscreen, WindowAttributes, WindowId};
 use burl_gl::{GlContext, Renderer, WindowedGl};
-use burl_render::{build_frame, world_matrix, SceneSettings, SceneTextures};
+use burl_render::{world_matrix, FontManager, SceneSettings, SceneTextures};
 use burl_sim::{Command, Sim};
 use burl_util::prng::SimRng;
 use input::{key_action, wheel_command, Action, Arrows, Pointer, PointerOut};
@@ -78,6 +79,8 @@ struct Live {
     sim: Sim,
     tex: SceneTextures,
     ss: SceneSettings,
+    fonts: FontManager,
+    kit: FrameKit,
     clear: [f32; 4],
     last: Instant,
     /// Commands since the last frame, applied in order before the step.
@@ -178,6 +181,8 @@ impl App {
         ss.hide_files = g.hide_files;
         ss.hide_users = g.hide_users;
         ss.user_scale = g.user_scale;
+        let mut fonts = new_fonts()?;
+        let kit = FrameKit::new(&mut r, &mut fonts, g, w, h)?;
         let bg = g.background_colour;
         // `Cursor` starts hidden under --hide-mouse
         if g.hide_mouse {
@@ -188,6 +193,8 @@ impl App {
             sim,
             tex,
             ss,
+            fonts,
+            kit,
             clear: [bg[0], bg[1], bg[2], 1.0],
             last: Instant::now(),
             pending: Vec::new(),
@@ -216,7 +223,9 @@ impl App {
             .update_realtime(dt.as_secs_f32())
             .map_err(|e| e.0)?;
         let scene = live.sim.scene_view();
-        let frame = build_frame(&scene, &live.tex, &live.ss);
+        let frame = live
+            .kit
+            .compose(&mut live.fonts, &mut live.r, &scene, &live.tex, &live.ss)?;
         let world = world_matrix(&scene, &live.ss);
         live.r.render(live.clear, &frame.batches(), world)?;
         live.r.blit_to_screen()?;

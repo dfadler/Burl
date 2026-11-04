@@ -435,6 +435,7 @@ impl ApplicationHandler for App {
                 }
                 live.ss.width = s.width as f32;
                 live.ss.height = s.height as f32;
+                live.kit.resize(s.width, s.height);
             }
             _ => {}
         }

@@ -49,6 +49,15 @@ pub enum Command {
     RightButton(bool),
     /// Tab: `selectNextUser`.
     NextUser,
+    /// The pointer moved to window pixel `(x, y)` (`Gource::mouseMove`).
+    PointerAt { x: i32, y: i32 },
+    /// Relative motion while the cursor is grabbed (`xrel`, `yrel`): drag or rotate.
+    PointerDelta { dx: f32, dy: f32 },
+    /// A mouse button went down or up (`Gource::mouseClick`).
+    Button {
+        button: crate::pointer::Button,
+        down: bool,
+    },
 }
 
 impl Sim {
@@ -224,6 +233,9 @@ impl Sim {
             }
             Command::RightButton(down) => self.right_button = down,
             Command::NextUser => self.select_next_user(),
+            Command::PointerAt { x, y } => self.mouse_move(x, y, 0, 0),
+            Command::PointerDelta { dx, dy } => self.mouse_delta(dx, dy),
+            Command::Button { button, down } => self.mouse_button(button, down),
         }
     }
 }

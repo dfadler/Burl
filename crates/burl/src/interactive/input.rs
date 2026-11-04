@@ -5,7 +5,7 @@
 
 use burl_gl::winit::event::{MouseButton, MouseScrollDelta};
 use burl_gl::winit::keyboard::{Key, KeyCode, KeyLocation, NamedKey, PhysicalKey};
-use burl_sim::Command;
+use burl_sim::{Button, Command};
 
 /// What a key press asks of the app. `Sim` goes to the simulation before the next step.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -69,6 +69,9 @@ pub fn key_action(
     }
     if matches!(key, Key::Named(NamedKey::Space)) {
         return Some(Action::Sim(TogglePause));
+    }
+    if matches!(key, Key::Named(NamedKey::Tab)) {
+        return Some(Action::Sim(NextUser));
     }
     let Key::Character(c) = key else {
         return None;
@@ -143,82 +146,16 @@ pub fn wheel_command(d: &MouseScrollDelta) -> Option<Command> {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum PointerOut {
-    Cmd(Command),
-    /// `Gource::grabMouse`.
-    Grab(bool),
-}
-
-/// Button and drag state of `Gource::mouseClick` / `mouseMove`. Picking (users, files, the
-/// slider) is not here yet, so a left press always counts as a click on the background.
-#[derive(Debug, Default)]
-pub struct Pointer {
-    left: bool,
-    right: bool,
-    middle: bool,
-    dragged: bool,
-}
-
-impl Pointer {
-    pub fn button_pressed(&self) -> bool {
-        self.left || self.right || self.middle
-    }
-
-    /// `mousedragged || mouseclicked || leftButtonPressed`: `M` is ignored while one holds.
-    pub fn busy(&self) -> bool {
-        self.dragged || self.left
-    }
-
-    pub fn button(&mut self, b: MouseButton, down: bool) -> Vec<PointerOut> {
-        use PointerOut::*;
-        let mut out = Vec::new();
-        match b {
-            MouseButton::Left => self.left = down,
-            MouseButton::Right => self.right = down,
-            MouseButton::Middle => self.middle = down,
-            _ => return out,
-        }
-        if !down {
-            if b == MouseButton::Left {
-                self.dragged = false;
-            }
-            if b == MouseButton::Right {
-                out.push(Cmd(Command::RightButton(false)));
-            }
-            // also for the middle button: the C++ leaves the grab on when it is the last one up
-            if !self.button_pressed() {
-                out.push(Grab(false));
-            }
-            return out;
-        }
-        match b {
-            MouseButton::Right => {
-                out.push(Cmd(Command::RightButton(true)));
-                out.push(Grab(true));
-            }
-            MouseButton::Left => {
-                // selectBackground: deselect, take the camera, start dragging
-                self.dragged = true;
-                out.push(Cmd(Command::DragStart));
-                out.push(Grab(true));
-            }
-            // middle: toggleCameraMode needs the track camera, which the sim does not have yet
-            _ => {}
-        }
-        out
-    }
-
-    /// Relative motion while a button is held. The right button rotates and wins over a drag.
-    pub fn motion(&self, dx: f32, dy: f32) -> Option<Command> {
-        if self.right {
-            Some(Command::Rotate { dx, dy })
-        } else if self.dragged {
-            Some(Command::Drag { dx, dy })
-        } else {
-            None
-        }
-    }
+/// A winit button press or release as the sim's [`Command`]; the sim keeps the button and drag
+/// state (`Gource::mouseClick`), so nothing is tracked here.
+pub fn button_command(b: MouseButton, down: bool) -> Option<Command> {
+    let button = match b {
+        MouseButton::Left => Button::Left,
+        MouseButton::Middle => Button::Middle,
+        MouseButton::Right => Button::Right,
+        _ => return None,
+    };
+    Some(Command::Button { button, down })
 }
 
 #[cfg(test)]
@@ -358,40 +295,25 @@ mod tests {
     }
 
     #[test]
-    fn left_drag_pans_and_releases_the_grab_with_the_last_button() {
-        use PointerOut::*;
-        let mut p = Pointer::default();
-        assert_eq!(p.motion(3.0, 1.0), None);
+    fn buttons_map_to_the_sims_and_tab_selects_the_next_user() {
         assert_eq!(
-            p.button(MouseButton::Left, true),
-            [Cmd(Command::DragStart), Grab(true)]
+            button_command(MouseButton::Left, true),
+            Some(Command::Button {
+                button: Button::Left,
+                down: true
+            })
         );
-        assert_eq!(p.motion(3.0, 1.0), Some(Command::Drag { dx: 3.0, dy: 1.0 }));
-        // the right button joins: it rotates instead, and releasing the left keeps the grab
-        p.button(MouseButton::Right, true);
         assert_eq!(
-            p.motion(3.0, 1.0),
-            Some(Command::Rotate { dx: 3.0, dy: 1.0 })
+            button_command(MouseButton::Middle, false),
+            Some(Command::Button {
+                button: Button::Middle,
+                down: false
+            })
         );
-        assert!(p.button(MouseButton::Left, false).is_empty());
+        assert_eq!(button_command(MouseButton::Back, true), None);
         assert_eq!(
-            p.button(MouseButton::Right, false),
-            [Cmd(Command::RightButton(false)), Grab(false)]
-        );
-        assert_eq!(p.motion(3.0, 1.0), None);
-    }
-
-    #[test]
-    fn middle_button_does_nothing_yet_but_holds_the_grab_until_it_is_last_up() {
-        let mut p = Pointer::default();
-        assert!(p.button(MouseButton::Middle, true).is_empty());
-        p.button(MouseButton::Left, true);
-        // a held middle button counts as a pressed button, so the grab stays
-        assert!(p.button(MouseButton::Left, false).is_empty());
-        assert!(!p.busy());
-        assert_eq!(
-            p.button(MouseButton::Middle, false),
-            [PointerOut::Grab(false)]
+            act(&Key::Named(NamedKey::Tab)),
+            Some(Action::Sim(Command::NextUser))
         );
     }
 }

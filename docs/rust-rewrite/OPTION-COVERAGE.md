@@ -110,7 +110,7 @@ Two generic tests cover every option's parse path and are not repeated per row: 
 | `--hide-dirnames` | Bool | `hide_dirnames` | Y | N | Wired | burl-render/src/labels.rs:121 | R | Export only: the windowed frame draws no text (see Gap 1). |
 | `--hide-filenames` | Bool | `hide_filenames` | Y | N | Wired | burl-render/src/labels.rs:138 | R | Export only: the windowed frame draws no text (see Gap 1). |
 | `--hide-files` | Bool | `hide_files` | Y | Y | Wired | burl-render/src/scene.rs:146, labels.rs:138 | R |  |
-| `--hide-progress` | Bool | `hide_progress` | Y | N | Wired-partial | burl-render/src/overlays.rs:89 | R | Only moves the caption rows; the position slider it hides is not drawn (overlays.rs:5). C++ shows the slider only when not exporting and one repo (gource.cpp:167-168), so this matters for the windowed path. |
+| `--hide-progress` | Bool | `hide_progress` | Y | N | Wired-partial | burl-render/src/overlays.rs:89 | R | Only moves the caption rows; the position slider it hides is drawn in the window only (`slider.rs`, #93). C++ shows the slider only when not exporting and one repo (gource.cpp:167-168), so this matters for the windowed path. |
 | `--hide-root` | Bool | `hide_root` | N | N | Stored-unused | none | U | dirnode.cpp:1111,1124,1138 (spline to the root dir skipped); `h`-style toggle gource.cpp:784 |
 | `--hide-tree` | Bool | `hide_tree` | Y | Y | Wired | burl-render/src/scene.rs:138 | R | Also the `T`/`U` toggles in the windowed path. |
 | `--hide-usernames` | Bool | `hide_usernames` | Y | N | Wired | burl-render/src/labels.rs:160 | R | Export only: the windowed frame draws no text (see Gap 1). |

@@ -37,7 +37,8 @@ in_image() {
 # SSIM maths needs the comparator (cargo xtask ssim, PR #56); cutting frames does not.
 xtask() { (cd "$ROOT" && cargo run -q --locked -p xtask -- "$@"); }
 
-in_image build
+# The burl mode compares against committed references and needs no oracle binary.
+[ "$1" = burl ] || in_image build
 case "$1" in
 refs)
 	for f in $FIXTURES; do

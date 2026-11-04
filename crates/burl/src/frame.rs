@@ -2,13 +2,14 @@
 //! key, captions and logo, built from one set of settings. The exporter and the window each own
 //! a [`FrameKit`] and call [`FrameKit::compose`]; only where the pixels go differs.
 
-use super::export::{decode, FIRST_GLYPH_TEXTURE};
+use super::export::FIRST_GLYPH_TEXTURE;
 use burl_conf::settings::GourceSettings;
 use burl_gl::{GlContext, Renderer};
 use burl_render::glam::Vec2;
 use burl_render::{
-    background_batch, build_frame, draw_names, logo_batch, FontManager, Frame, NameFonts,
-    NameSettings, OverlaySettings, Overlays, SceneSettings, SceneTextures, TextureId, PAGE_SIZE,
+    background_batch, build_frame, decode_image, draw_names, logo_batch, FontManager, Frame,
+    NameFonts, NameSettings, OverlaySettings, Overlays, SceneSettings, SceneTextures, TextureId,
+    PAGE_SIZE,
 };
 use burl_sim::view::SceneView;
 
@@ -25,7 +26,7 @@ pub struct FrameKit {
     screen: Vec2,
 }
 
-/// --logo / --background-image: PNG only (Gource also reads JPEG and GIF).
+/// --logo / --background-image: PNG, JPEG or GIF by magic number.
 fn load_image<C: GlContext>(
     r: &mut Renderer<C>,
     path: &str,
@@ -36,9 +37,12 @@ fn load_image<C: GlContext>(
         return Ok(None);
     }
     let bytes = std::fs::read(path).map_err(|e| format!("could not read '{path}': {e}"))?;
-    let (iw, ih, px) = decode(&bytes).map_err(|e| format!("'{path}': {e}"))?;
-    r.upload_texture(TextureId(id), iw, ih, &px, mip)?;
-    Ok(Some((TextureId(id), Vec2::new(iw as f32, ih as f32))))
+    let i = decode_image(&bytes).map_err(|e| format!("'{path}': {e}"))?;
+    r.upload_texture(TextureId(id), i.width, i.height, &i.rgba, mip)?;
+    Ok(Some((
+        TextureId(id),
+        Vec2::new(i.width as f32, i.height as f32),
+    )))
 }
 
 impl FrameKit {

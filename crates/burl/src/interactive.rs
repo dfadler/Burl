@@ -13,9 +13,10 @@ use burl_gl::winit::application::ApplicationHandler;
 use burl_gl::winit::dpi::{LogicalSize, PhysicalPosition, PhysicalSize, Size};
 use burl_gl::winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
 use burl_gl::winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use burl_gl::winit::monitor::MonitorHandle;
 use burl_gl::winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 use burl_gl::winit::window::{CursorGrabMode, Fullscreen, WindowAttributes, WindowId};
-use burl_gl::{GlContext, Renderer, WindowedGl};
+use burl_gl::{monitor_index, GlContext, Renderer, WindowedGl};
 use burl_render::{world_matrix, FontManager, SceneSettings, SceneTextures};
 use burl_sim::{Command, Sim};
 use burl_util::prng::SimRng;
@@ -52,6 +53,19 @@ pub fn window_attributes(d: &DisplaySettings) -> WindowAttributes {
         a = a.with_position(PhysicalPosition::new(d.window_x, d.window_y));
     }
     a
+}
+
+/// `--screen`: fullscreen goes fullscreen on that monitor; a window with no `--window-position`
+/// opens at that monitor's origin (`SDL_WINDOWPOS_UNDEFINED_DISPLAY`). An explicit
+/// `--window-position` stays absolute, as the C++ applies it after creation.
+fn on_monitor(a: WindowAttributes, m: MonitorHandle, d: &DisplaySettings) -> WindowAttributes {
+    if d.fullscreen {
+        a.with_fullscreen(Some(Fullscreen::Borderless(Some(m))))
+    } else if d.window_x < 0 || d.window_y < 0 {
+        a.with_position(m.position())
+    } else {
+        a
+    }
 }
 
 /// `viewport_dpi_ratio.x`: a viewport given without `--high-dpi` is an exact-pixel window (ratio
@@ -151,7 +165,12 @@ struct App {
 
 impl App {
     fn start(&mut self, el: &ActiveEventLoop) -> Result<Live, String> {
-        let ctx = WindowedGl::new(el, window_attributes(&self.display), self.display.vsync)?;
+        let mut attrs = window_attributes(&self.display);
+        let monitors: Vec<_> = el.available_monitors().collect();
+        if let Some(m) = monitor_index(self.display.screen, monitors.len()).map(|i| &monitors[i]) {
+            attrs = on_monitor(attrs, m.clone(), &self.display);
+        }
+        let ctx = WindowedGl::new(el, attrs, self.display.vsync, self.display.multisample)?;
         let (w, h) = ctx.size();
         let ctx_scale = ctx.scale_factor();
         let mut r = Renderer::new(ctx)?;

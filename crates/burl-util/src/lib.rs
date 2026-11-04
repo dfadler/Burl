@@ -4,6 +4,7 @@
 
 pub mod bounds;
 pub mod cstr;
+pub mod log;
 pub mod math;
 pub mod prng;
 pub mod quadtree;

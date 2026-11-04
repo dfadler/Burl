@@ -62,6 +62,8 @@ struct CommandLine {
     load_config: String,
     save_config: String,
     output_custom_filename: String,
+    /// `--log-level`; unset (or an unknown value) leaves the C++'s `off`.
+    log_level: u8,
     /// Hidden test-only controls (ticket #22): `--debug-dump-*`, `--prng`, `--rand-script`.
     debug: DebugOptions,
 }
@@ -112,7 +114,10 @@ fn command_line_option(name: &str, value: &str, cl: &mut CommandLine) -> Result<
         return Ok(());
     }
     if name == "log-level" {
-        // warn/debug/info/error/pedantic set the level; anything else is silently ignored
+        // anything but warn/debug/info/error/pedantic is silently ignored
+        if let Some(l) = burl_util::log::parse_level(value) {
+            cl.log_level = l;
+        }
         return Ok(());
     }
     Err(ConfError(format!("invalid {name} value")))
@@ -344,6 +349,9 @@ fn run() -> Result<(), ConfError> {
             cl.load_config = files.remove(i);
         }
     }
+    // main.cpp:75; only now, so the config-probe loads above stay quiet as in the C++
+    burl_util::log::set_level(cl.log_level);
+
     if !cl.load_config.is_empty() {
         conf.clear();
         conf.load(&cl.load_config)?;

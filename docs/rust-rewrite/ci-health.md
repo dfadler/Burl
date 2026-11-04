@@ -33,7 +33,8 @@ gets a verdict, except that a still-pending run is replaced by a newer one.
 ## Repo settings (the user does these)
 
 1. Settings > Rules > Rulesets > New branch ruleset, target `master`.
-2. Require status checks: `linux`, `linux-pcre2`, `deny` (fast tier). Leave `macos` out (see above).
+2. Require status checks: `linux`, `linux-pcre2`, `deny`, `golden-label` (fast tier; #95 lists `golden-label`,
+   which is skipped on `merge_group`, and a skipped required check passes). Leave `macos` out (see above).
 3. Enable "Require merge queue". Merge method: merge commit (the repo uses plain merges).
 4. Leave heavy checks optional unless you want every queued merge to wait on Docker builds;
    if required, they must be listed in the ruleset so the queue waits for them.

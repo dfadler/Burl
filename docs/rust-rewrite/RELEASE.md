@@ -9,7 +9,7 @@ and the release design ([#21](https://github.com/dfadler/Burl/issues/21)). The f
 | Criterion (#14) | Check | Where it runs |
 |---|---|---|
 | Every gate green on Linux amd64 | `cargo xtask ci` (fmt, clippy, tests, sim comparator) and the heavy tier: goldens and sim goldens reproduce, slow tests, headless render smoke | `ci.yml`, `heavy.yml`; `release.yml` re-runs the heavy tier and `cargo xtask ci` on the tag |
-| Scene visual gate (SSIM, #12) | `cargo xtask` visual gate, `tests/visual/` | heavy tier once it lands; **verify it is wired into `heavy.yml` before tagging** |
+| Scene visual gate (SSIM, #12) | `scripts/visual-burl.sh` (`cargo xtask ssim --min 0.959` per frame), refs in `tests/golden/visual/` | `heavy.yml` `visual-ssim`, wired; **non-blocking until the criteria in `visual-gate.md` are met, so check its step summary before tagging** |
 | macOS native build, sim goldens within tolerance | the `macos` leg of `ci.yml`; `cargo xtask ci` on macOS | `ci.yml`, and `build-macos-arm64` in `release.yml` |
 | `--features pcre2` leg | `cargo xtask ci --pcre2` | `ci.yml` (`linux-pcre2`) |
 | Docker headless export gives a valid PPM stream for a fixture | `docker build --platform linux/amd64 -f docker/release.Dockerfile -t burl:release . && scripts/check-image.sh burl:release` | `image` job in `release.yml` |

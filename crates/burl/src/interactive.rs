@@ -196,6 +196,7 @@ impl App {
         ss.hide_tree = g.hide_tree;
         ss.hide_files = g.hide_files;
         ss.hide_users = g.hide_users;
+        ss.fixed_user_size = g.fixed_user_size;
         ss.user_scale = g.user_scale;
         let bg = g.background_colour;
         // `Cursor` starts hidden under --hide-mouse

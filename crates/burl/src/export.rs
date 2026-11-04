@@ -101,6 +101,7 @@ pub fn run(
         ss.hide_tree = g.hide_tree;
         ss.hide_files = g.hide_files;
         ss.hide_users = g.hide_users;
+        ss.fixed_user_size = g.fixed_user_size;
         ss.user_scale = g.user_scale;
         // --logo / --background-image: PNG, JPEG or GIF by magic number.
         let load_image = |path: &str, id: u32, r: &mut Renderer<_>, mip: bool| {

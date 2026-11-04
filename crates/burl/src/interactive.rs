@@ -279,8 +279,10 @@ impl ApplicationHandler for App {
             WindowEvent::MouseWheel { delta, .. } if !live.disable_input => {
                 live.pending.extend(wheel_command(&delta));
             }
+            // releases always pass: `M` can hide the mouse mid-drag, and a dropped release would
+            // leave the button (and the grab) stuck
             WindowEvent::MouseInput { state, button, .. }
-                if !live.disable_input && !live.hide_mouse =>
+                if !live.disable_input && (!live.hide_mouse || state == ElementState::Released) =>
             {
                 for o in live.pointer.button(button, state == ElementState::Pressed) {
                     match o {

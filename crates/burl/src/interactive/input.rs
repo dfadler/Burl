@@ -180,7 +180,8 @@ impl Pointer {
             if b == MouseButton::Right {
                 out.push(Cmd(Command::RightButton(false)));
             }
-            if matches!(b, MouseButton::Left | MouseButton::Right) && !self.button_pressed() {
+            // also for the middle button: the C++ leaves the grab on when it is the last one up
+            if !self.button_pressed() {
                 out.push(Grab(false));
             }
             return out;
@@ -374,13 +375,16 @@ mod tests {
     }
 
     #[test]
-    fn middle_button_does_nothing_yet_but_holds_the_grab() {
+    fn middle_button_does_nothing_yet_but_holds_the_grab_until_it_is_last_up() {
         let mut p = Pointer::default();
         assert!(p.button(MouseButton::Middle, true).is_empty());
         p.button(MouseButton::Left, true);
         // a held middle button counts as a pressed button, so the grab stays
         assert!(p.button(MouseButton::Left, false).is_empty());
         assert!(!p.busy());
-        assert!(p.button(MouseButton::Middle, false).is_empty());
+        assert_eq!(
+            p.button(MouseButton::Middle, false),
+            [PointerOut::Grab(false)]
+        );
     }
 }

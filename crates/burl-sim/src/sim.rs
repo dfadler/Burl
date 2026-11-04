@@ -14,7 +14,7 @@ use burl_util::strhash::{colour_hash, vec2_hash};
 use glam::{vec2, vec3, Vec2, Vec3};
 use std::collections::{BTreeMap, VecDeque};
 
-use crate::settings::SimSettings;
+use crate::settings::{SimSettings, UserGraphic};
 
 pub type FileId = usize;
 pub type DirId = usize;
@@ -98,6 +98,8 @@ pub(crate) struct User {
     pub name_interval: f32,
     pub nametime: f32,
     pub usercol: Vec3,
+    pub graphic_ratio: f32,
+    pub graphic_texture: Option<u32>,
     pub highlighted: bool,
     pub actions: Vec<Action>,
     pub active_actions: Vec<Action>,
@@ -476,6 +478,16 @@ impl Sim {
     /// section's Sim continues the same stream (`rand_calls`, script position, libc state).
     pub fn into_carry(self) -> (SimRng, i64) {
         (self.rng, self.first_rand_frame)
+    }
+
+    /// [`Self::into_carry`] for a Sim that stays in place: the generator is replaced by a fresh
+    /// one, so this Sim must be dropped without being stepped again.
+    pub fn take_carry(&mut self) -> (SimRng, i64) {
+        let spent = SimRng::new(burl_util::prng::PrngMode::Glibc, None);
+        (
+            std::mem::replace(&mut self.rng, spent),
+            self.first_rand_frame,
+        )
     }
 
     /// Resume the carried `first_rand_frame` (set once, by the first `rand()` of the whole run).
@@ -905,8 +917,23 @@ impl Sim {
         let tagid = self.tag_seq;
         self.tag_seq += 1;
 
-        // RUser::RUser + assignUserImage (no images): colourHash, then lighten and dim
-        let usercol = Vec3::from_array(colour_hash(username.as_bytes(), self.s.hash_seed));
+        // RUser::RUser + assignUserImage: colourHash (white for an avatar unless --colour-images),
+        // then lighten and dim
+        let g = self
+            .s
+            .user_graphics
+            .as_ref()
+            .and_then(|h| (h.0)(username))
+            .unwrap_or(UserGraphic {
+                ratio: USER_GRAPHIC_RATIO,
+                texture: None,
+                white: false,
+            });
+        let usercol = if g.white {
+            Vec3::ONE
+        } else {
+            Vec3::from_array(colour_hash(username.as_bytes(), self.s.hash_seed))
+        };
         let usercol = usercol * 0.6 + Vec3::splat(1.0) * 0.4;
         let usercol = usercol * 0.9;
 
@@ -922,6 +949,8 @@ impl Sim {
             name_interval: 5.0,
             nametime: 5.0,
             usercol,
+            graphic_ratio: g.ratio,
+            graphic_texture: g.texture,
             highlighted: false,
             actions: Vec::new(),
             active_actions: Vec::new(),
@@ -947,7 +976,7 @@ impl Sim {
             // Pawn::updateQuadItemBounds
             let u = self.user_mut(uid);
             let halfsize_x = u.size * 0.5;
-            let halfsize = vec2(halfsize_x, halfsize_x * USER_GRAPHIC_RATIO);
+            let halfsize = vec2(halfsize_x, halfsize_x * u.graphic_ratio);
             u.quad = Bounds2D::new(u.pos - halfsize, u.pos + halfsize);
             let quad = u.quad;
             let idle = u.active_actions.is_empty() && u.actions.is_empty();
@@ -2614,5 +2643,41 @@ mod tests {
         assert!(f.alpha > 0.0 && f.alpha <= 1.0);
         assert_eq!(v.users.len(), 1);
         assert_eq!(v.camera.max_distance, s.s.camera_zoom_max);
+    }
+
+    #[test]
+    fn avatar_hook_sets_ratio_bounds_colour_and_texture() {
+        let run = |hook: Option<crate::UserGraphicsHook>| {
+            let mut st = ok_settings();
+            st.user_graphics = hook;
+            let mut s = sim(st).unwrap();
+            for _ in 0..30 {
+                s.update().unwrap();
+                s.end_frame();
+            }
+            let v = s.scene_view();
+            (v.users[0].clone(), s.user_bounds)
+        };
+        let (stock, stock_bounds) = run(None);
+        assert_eq!(
+            (stock.graphic, stock.graphic_ratio),
+            (None, USER_GRAPHIC_RATIO)
+        );
+        let hook = |white| {
+            Some(crate::UserGraphicsHook(Arc::new(move |_| {
+                Some(UserGraphic {
+                    ratio: 1.0,
+                    texture: Some(7),
+                    white,
+                })
+            })))
+        };
+        let (white, white_bounds) = run(hook(true));
+        assert_eq!((white.graphic, white.graphic_ratio), (Some(7), 1.0));
+        assert_eq!(white.colour, Vec3::splat(0.9));
+        // a squarer sprite is shorter, so the user's bounds shrink in y
+        assert!(white_bounds.max.y - white_bounds.min.y < stock_bounds.max.y - stock_bounds.min.y);
+        let (coloured, _) = run(hook(false));
+        assert_eq!(coloured.colour, stock.colour);
     }
 }

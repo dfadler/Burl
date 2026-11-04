@@ -17,12 +17,16 @@ pub enum Action {
     ToggleTree,
     /// `G`: `hide_users`.
     ToggleUsers,
+    /// `R`: `hide_root`.
+    ToggleRoot,
     /// `M`: hide the cursor and `hide_mouse`.
     ToggleMouse,
     /// F11: `toggleWindowFrame`.
     ToggleFrame,
     /// Alt+Return: `toggleFullscreen`.
     ToggleFullscreen,
+    /// Return: `GourceShell::next`, honoured only with more than one `[gource]` section.
+    NextSection,
 }
 
 /// The action for a key press. `key` is the layout key without modifiers (SDL's `keysym.sym`,
@@ -59,6 +63,7 @@ pub fn key_action(
         match key {
             Key::Named(NamedKey::F11) => return Some(Action::ToggleFrame),
             Key::Named(NamedKey::Enter) if alt => return Some(Action::ToggleFullscreen),
+            Key::Named(NamedKey::Enter) => return Some(Action::NextSection),
             _ => {}
         }
     }
@@ -79,6 +84,7 @@ pub fn key_action(
         "n" | "N" => Action::Sim(SkipIdle),
         "t" | "T" => Action::ToggleTree,
         "g" | "G" => Action::ToggleUsers,
+        "r" | "R" => Action::ToggleRoot,
         "m" | "M" => Action::ToggleMouse,
         _ => return None,
     })
@@ -254,6 +260,7 @@ mod tests {
         }
         assert_eq!(act(&ch("t")), Some(Action::ToggleTree));
         assert_eq!(act(&ch("g")), Some(Action::ToggleUsers));
+        assert_eq!(act(&ch("r")), Some(Action::ToggleRoot));
         assert_eq!(act(&ch("m")), Some(Action::ToggleMouse));
         assert_eq!(
             act(&Key::Named(NamedKey::Space)),
@@ -303,7 +310,7 @@ mod tests {
         assert_eq!(k(&esc, false, false, true), Some(Action::Quit));
         assert_eq!(k(&esc, true, false, false), None);
         let enter = Key::Named(NamedKey::Enter);
-        assert_eq!(k(&enter, false, false, false), None);
+        assert_eq!(k(&enter, false, false, false), Some(Action::NextSection));
         assert_eq!(
             k(&enter, false, true, false),
             Some(Action::ToggleFullscreen)

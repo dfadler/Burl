@@ -106,6 +106,42 @@ struct Live {
     /// `hide_mouse`: all mouse input is ignored and the cursor is hidden.
     hide_mouse: bool,
     grabbed: bool,
+    /// Return was pressed with several sections: leave this one now (`GourceShell::next`).
+    next: bool,
+}
+
+/// What one section needs on screen; replaced as a whole when the next section starts.
+struct Loaded {
+    sim: Sim,
+    ss: SceneSettings,
+    fonts: FontManager,
+    kit: FrameKit,
+    clear: [f32; 4],
+    disable_input: bool,
+    hide_mouse: bool,
+}
+
+/// `GourceShell`'s walk over the `[gource]` sections: each is taken from the untouched imported
+/// settings (as `getNext` re-imports), and with several the walk wraps to the first after the
+/// last, so a windowed run only ends by quitting. A single section is played once.
+struct Sections {
+    repos: Vec<GourceSettings>,
+    idx: usize,
+}
+
+impl Sections {
+    /// The next section's 1-based number and settings with the shell fixups applied.
+    fn next(&mut self) -> Option<(i32, GourceSettings)> {
+        let n = self.repos.len();
+        let mut g = self.repos.get(self.idx)?.clone();
+        g.apply_shell_fixups(n, false);
+        let section = self.idx as i32 + 1;
+        self.idx += 1;
+        if self.idx == n && n > 1 {
+            self.idx = 0;
+        }
+        Some((section, g))
+    }
 }
 
 impl Live {
@@ -134,6 +170,7 @@ impl Live {
             Action::Sim(c) => self.pending.push(c),
             Action::Quit => {}
             Action::ToggleTree => self.ss.hide_tree = !self.ss.hide_tree,
+            Action::ToggleRoot => self.ss.hide_root = !self.ss.hide_root,
             Action::ToggleUsers => self.ss.hide_users = !self.ss.hide_users,
             // ignored while a button is down or dragging
             Action::ToggleMouse if !self.pointer.busy() => {
@@ -151,14 +188,16 @@ impl Live {
                 let on = w.fullscreen().is_none();
                 w.set_fullscreen(on.then_some(Fullscreen::Borderless(None)));
             }
+            Action::NextSection => self.next = true,
         }
     }
 }
 
 struct App {
     display: DisplaySettings,
-    repo: GourceSettings,
-    rng: Option<SimRng>,
+    sections: Sections,
+    /// The generator and `first_rand_frame` between sections.
+    carry: Option<(SimRng, i64)>,
     live: Option<Live>,
     error: Option<String>,
 }
@@ -175,9 +214,77 @@ impl App {
         let ctx_scale = ctx.scale_factor();
         let mut r = Renderer::new(ctx)?;
         let tex = upload_scene_textures(&mut r)?;
+        let l = self.load_section(&mut r, w, h, ctx_scale)?;
+        // `Cursor` starts hidden under --hide-mouse
+        if l.hide_mouse {
+            r.context().window().set_cursor_visible(false);
+        }
+        Ok(Live {
+            r,
+            sim: l.sim,
+            tex,
+            ss: l.ss,
+            fonts: l.fonts,
+            kit: l.kit,
+            clear: l.clear,
+            last: Instant::now(),
+            pending: Vec::new(),
+            arrows: Arrows::default(),
+            pointer: Pointer::default(),
+            alt: false,
+            disable_input: l.disable_input,
+            hide_mouse: l.hide_mouse,
+            grabbed: false,
+            next: false,
+        })
+    }
 
-        let g = &mut self.repo;
-        g.apply_shell_fixups(1, false);
+    /// `GourceShell::getNext`: the section after the one that ended. `Ok(false)` when there is
+    /// none (a single section, played once). Loading blocks the event loop while the log is read,
+    /// as `getNext` blocks the SDL loop in the C++ original.
+    fn advance(&mut self, live: &mut Live) -> Result<bool, String> {
+        let carry = live.sim.take_carry();
+        self.carry = Some(carry);
+        let ctx = live.r.context();
+        let (w, h) = ctx.size();
+        let scale = ctx.scale_factor();
+        if self.sections.repos.len() == 1 {
+            return Ok(false);
+        }
+        let l = self.load_section(&mut live.r, w, h, scale)?;
+        live.sim = l.sim;
+        live.ss = l.ss;
+        live.fonts = l.fonts;
+        live.kit = l.kit;
+        live.clear = l.clear;
+        live.disable_input = l.disable_input;
+        if live.disable_input {
+            // Button releases are ignored while input is disabled, so drop the drag and its grab.
+            live.pointer = Pointer::default();
+            if live.grabbed {
+                live.set_grab(false);
+            }
+        }
+        live.hide_mouse = l.hide_mouse;
+        live.next = false;
+        live.pending.clear();
+        let hidden = live.hide_mouse || live.grabbed;
+        live.window().set_cursor_visible(!hidden);
+        Ok(true)
+    }
+
+    /// Build the next section's simulation and scene settings (`Gource::init`), continuing the
+    /// generator from the previous section.
+    fn load_section(
+        &mut self,
+        r: &mut Renderer<WindowedGl>,
+        w: u32,
+        h: u32,
+        ctx_scale: f64,
+    ) -> Result<Loaded, String> {
+        let repo_count = self.sections.repos.len() as i32;
+        let (section, mut g) = self.sections.next().ok_or("no [gource] section to play")?;
+        let g = &mut g;
         if g.default_font_scale {
             g.font_scale = font_scale(dpi_ratio(&self.display, ctx_scale), h);
             g.set_scaled_font_sizes();
@@ -187,10 +294,11 @@ impl App {
         d.width = w as i32;
         d.height = h as i32;
         let log = fetch_log(&g.path.clone(), Arc::new(log_settings(g))).map_err(|e| e.0)?;
-        let rng = self.rng.take().ok_or("simulation already started")?;
-        let mut settings = sim_settings(&d, g, 1, 1);
+        let (rng, first_rand) = self.carry.take().ok_or("simulation already started")?;
+        let mut settings = sim_settings(&d, g, section, repo_count);
         settings.exporting = false;
-        let sim = Sim::new(settings, log, rng).map_err(|e| e.0)?;
+        let mut sim = Sim::new(settings, log, rng).map_err(|e| e.0)?;
+        sim.carry_first_rand_frame(first_rand);
 
         let mut ss = SceneSettings::new(w, h);
         ss.bloom_multiplier = g.bloom_multiplier;
@@ -199,31 +307,20 @@ impl App {
         ss.hide_tree = g.hide_tree;
         ss.hide_files = g.hide_files;
         ss.hide_users = g.hide_users;
+        ss.hide_root = g.hide_root;
         ss.fixed_user_size = g.fixed_user_size;
         ss.user_scale = g.user_scale;
         let mut fonts = new_fonts(&g.font_file)?;
-        let kit = FrameKit::new(&mut r, &mut fonts, g, w, h)?;
+        let kit = FrameKit::new(r, &mut fonts, g, w, h)?;
         let bg = g.background_colour;
-        // `Cursor` starts hidden under --hide-mouse
-        if g.hide_mouse {
-            r.context().window().set_cursor_visible(false);
-        }
-        Ok(Live {
-            r,
+        Ok(Loaded {
             sim,
-            tex,
             ss,
             fonts,
             kit,
             clear: [bg[0], bg[1], bg[2], 1.0],
-            last: Instant::now(),
-            pending: Vec::new(),
-            arrows: Arrows::default(),
-            pointer: Pointer::default(),
-            alt: false,
             disable_input: g.disable_input,
             hide_mouse: g.hide_mouse,
-            grabbed: false,
         })
     }
 
@@ -250,7 +347,7 @@ impl App {
         live.r.render(live.clear, &frame.batches(), world)?;
         live.r.blit_to_screen()?;
         live.r.context().present()?;
-        let done = live.sim.is_finished();
+        let done = live.sim.is_finished() || live.next;
         live.sim.end_frame();
         Ok(!done)
     }
@@ -301,6 +398,9 @@ impl ApplicationHandler for App {
                 );
                 match action {
                     Some(Action::Quit) => el.exit(),
+                    // C++: only with more than one section
+                    Some(Action::NextSection) if self.sections.repos.len() > 1 => live.next = true,
+                    Some(Action::NextSection) => {}
                     Some(a) => live.act(a),
                     None => {}
                 }
@@ -347,10 +447,15 @@ impl ApplicationHandler for App {
     }
 
     fn about_to_wait(&mut self, el: &ActiveEventLoop) {
-        let Some(live) = self.live.as_mut() else {
+        let Some(mut live) = self.live.take() else {
             return;
         };
-        match Self::frame(live) {
+        let step = match Self::frame(&mut live) {
+            Ok(false) => self.advance(&mut live),
+            r => r,
+        };
+        self.live = Some(live);
+        match step {
             Ok(true) => el.set_control_flow(ControlFlow::WaitUntil(Instant::now() + MIN_DELTA)),
             Ok(false) => el.exit(),
             Err(e) => {
@@ -361,17 +466,18 @@ impl ApplicationHandler for App {
     }
 }
 
-/// Open the window for the first `[gource]` section and run until it is closed or the log ends.
+/// Open the window and play the `[gource]` sections in turn until it is closed or, with a single
+/// section, the log ends.
 pub fn run(
     display: DisplaySettings,
-    mut repos: Vec<GourceSettings>,
+    repos: Vec<GourceSettings>,
     rng: SimRng,
 ) -> Result<(), String> {
     let event_loop = EventLoop::new().map_err(|e| format!("could not open a display: {e}"))?;
     let mut app = App {
         display,
-        repo: repos.swap_remove(0),
-        rng: Some(rng),
+        sections: Sections { repos, idx: 0 },
+        carry: Some((rng, -1)),
         live: None,
         error: None,
     };
@@ -382,6 +488,46 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sections(n: usize) -> Sections {
+        let repos = (0..n)
+            .map(|i| GourceSettings {
+                title: format!("s{}", i + 1),
+                ..GourceSettings::default()
+            })
+            .collect();
+        Sections { repos, idx: 0 }
+    }
+
+    #[test]
+    fn a_single_section_plays_once() {
+        let mut s = sections(1);
+        let (n, g) = s.next().unwrap();
+        assert_eq!(n, 1);
+        // no 60-second stop for a lone repo, and the window never exports
+        assert!(g.stop_at_time <= 0.0 && !g.stop_at_end);
+        assert!(s.next().is_none());
+    }
+
+    #[test]
+    fn several_sections_cycle_with_the_sixty_second_rule() {
+        let mut s = sections(3);
+        let got: Vec<_> = (0..7).map(|_| s.next().unwrap()).collect();
+        let order: Vec<_> = got.iter().map(|(n, _)| *n).collect();
+        assert_eq!(order, [1, 2, 3, 1, 2, 3, 1]);
+        assert!(got.iter().all(|(_, g)| g.stop_at_time == 60.0));
+        assert_eq!(got[4].1.title, "s2");
+        // the walk works on copies: the imported settings keep no stop time
+        assert!(s.repos.iter().all(|g| g.stop_at_time <= 0.0));
+    }
+
+    #[test]
+    fn a_stop_time_set_in_a_section_is_kept() {
+        let mut s = sections(2);
+        s.repos[0].stop_at_time = 5.0;
+        assert_eq!(s.next().unwrap().1.stop_at_time, 5.0);
+        assert_eq!(s.next().unwrap().1.stop_at_time, 60.0);
+    }
 
     fn size(a: &WindowAttributes) -> Size {
         a.inner_size.unwrap()

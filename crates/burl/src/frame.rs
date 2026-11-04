@@ -209,7 +209,6 @@ mod tests {
             file: TextureId(2),
             file_ratio: 1.0,
             user: TextureId(3),
-            user_ratio: 1.0,
         };
         let ss = SceneSettings::new(d.width as u32, d.height as u32);
         let mut fonts = new_fonts(burl_render::DEFAULT_FONT_FILE).unwrap();

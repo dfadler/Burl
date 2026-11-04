@@ -99,7 +99,7 @@ pub fn draw_names(
     mgr: &mut FontManager,
     fonts: &mut NameFonts,
     scene: &SceneView,
-    tex: &SceneTextures,
+    _tex: &SceneTextures,
     s: &SceneSettings,
     n: &NameSettings,
 ) {
@@ -171,7 +171,7 @@ pub fn draw_names(
             _ => continue,
         };
         // RUser::calcScreenPos: above the sprite, centred on the name's width.
-        let at = screen(u.pos - Vec2::new(0.0, u.size * tex.user_ratio * 0.5));
+        let at = screen(u.pos - Vec2::new(0.0, u.size * u.graphic_ratio * 0.5));
         let x = at.x - mgr.width(&fonts.user, &u.name) * 0.5;
         let y = at.y - mgr.max_height(&fonts.user);
         let c = if u.highlighted {

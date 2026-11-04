@@ -207,6 +207,7 @@ fn sim_settings(
     repo_count: i32,
 ) -> SimSettings {
     SimSettings {
+        user_graphics: None,
         display_width: d.width,
         display_height: d.height,
         output_framerate: d.output_framerate,

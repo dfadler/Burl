@@ -24,6 +24,7 @@ fn scene(time: i64, seekable: bool, captions: &[(&str, f32)], activated: usize) 
             })
             .collect(),
         captions_activated: activated,
+        key_events: vec![],
     }
 }
 
@@ -38,6 +39,10 @@ fn settings() -> OverlaySettings {
         font_colour: Vec3::ONE,
         caption_colour: Vec3::new(1.0, 1.0, 0.0),
         caption_offset: 0,
+        show_key: false,
+        font_scale: 1.0,
+        scaled_font_size: 16.0,
+        file_extension_fallback: false,
     }
 }
 
@@ -192,4 +197,112 @@ fn caption_offset_modes() {
     assert!(x(100) >= 100.0 && x(100) < 110.0);
     assert!(x(-100) > 440.0 && x(-100) < 540.0);
     assert!((x(0) - 320.0).abs() < 30.0);
+}
+
+fn inc(path: &str, c: [f32; 3]) -> KeyEvent {
+    KeyEvent::Inc {
+        path: path.into(),
+        colour: Vec3::from_array(c),
+    }
+}
+
+/// One frame of the key: a 1/60 s tick first (as the sim orders it), then `events`.
+fn key_frame(r: &mut Rig, o: &OverlaySettings, events: Vec<KeyEvent>) -> Vec<Batch> {
+    let mut s = scene(0, false, &[], 0);
+    s.key_events = std::iter::once(KeyEvent::Tick(1.0 / 60.0))
+        .chain(events)
+        .collect();
+    r.draw(&s, "", o)
+}
+
+/// The gradient bars of a frame: (right-hand colour, top y), in draw order.
+fn bars(b: &[Batch]) -> Vec<([f32; 4], f32)> {
+    b.iter()
+        .filter_map(|b| match &b.vertices {
+            Vertices::Quads(v) if b.texture.is_none() && v[0].colour[0] != v[2].colour[0] => {
+                Some((v[2].colour, v[0].pos[1]))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn key_lists_extensions_by_count_and_fades_in() {
+    let mut r = rig();
+    let mut o = settings();
+    o.show_key = true;
+    let (red, blue) = ([1.0, 0.0, 0.0], [0.2, 0.0, 1.0]);
+    key_frame(
+        &mut r,
+        &o,
+        vec![inc("a/x.py", blue), inc("a/y.rs", red), inc("b/z.rs", red)],
+    );
+    // The first tick recounts (setShow zeroed the interval), the second fades in.
+    key_frame(&mut r, &o, vec![]);
+    let b = key_frame(&mut r, &o, vec![]);
+    let now = bars(&b);
+    // rs (2 files) sorts above py (1), each at offset_y = size + 6 = 22 steps.
+    assert_eq!(now.len(), 2);
+    assert_eq!(now[0].0[..3], red);
+    assert_eq!(now[1].0[..3], blue);
+    assert_eq!((now[0].1, now[1].1), (22.0, 44.0));
+    assert!(now[0].0[3] > 0.0 && now[0].0[3] < 0.1, "fading in");
+    // After a second it is opaque: per entry a shadow, a bar, the ext label and the count with its text shadow.
+    let mut b = vec![];
+    for _ in 0..70 {
+        b = key_frame(&mut r, &o, vec![]);
+    }
+    assert_eq!(bars(&b)[0].0[3], 1.0);
+    // The shadow is the bar's rectangle at (3, 3), black at a third of the opacity.
+    assert_eq!(b[0].offset, [3.0, 3.0]);
+    assert_eq!(colours(&b[..1])[0], [0.0, 0.0, 0.0, 0.333]);
+    assert_eq!(b.len(), 2 * (1 + 1 + 1 + 2));
+}
+
+#[test]
+fn key_is_hidden_without_the_flag_and_drops_empty_entries() {
+    let mut r = rig();
+    let mut o = settings();
+    key_frame(&mut r, &o, vec![inc("x.rs", [1.0; 3])]);
+    for _ in 0..90 {
+        assert!(key_frame(&mut r, &o, vec![]).is_empty());
+    }
+    o.show_key = true;
+    for _ in 0..90 {
+        key_frame(&mut r, &o, vec![]);
+    }
+    assert_eq!(bars(&key_frame(&mut r, &o, vec![])).len(), 1);
+    // The last file goes: the entry fades out over a second, then disappears.
+    key_frame(
+        &mut r,
+        &o,
+        vec![KeyEvent::Dec {
+            path: "x.rs".into(),
+        }],
+    );
+    assert_eq!(bars(&key_frame(&mut r, &o, vec![])).len(), 1);
+    for _ in 0..70 {
+        key_frame(&mut r, &o, vec![]);
+    }
+    assert!(key_frame(&mut r, &o, vec![]).is_empty());
+}
+
+#[test]
+fn key_shows_only_the_entries_that_fit_the_window() {
+    let mut r = rig();
+    let mut o = settings();
+    o.show_key = true;
+    o.height = 190.0; // (190 - 150) / 20 = 2 rows
+    key_frame(
+        &mut r,
+        &o,
+        vec![
+            inc("a.c", [1.0; 3]),
+            inc("b.h", [1.0; 3]),
+            inc("c.rs", [1.0; 3]),
+        ],
+    );
+    key_frame(&mut r, &o, vec![]);
+    assert_eq!(bars(&key_frame(&mut r, &o, vec![])).len(), 2);
 }

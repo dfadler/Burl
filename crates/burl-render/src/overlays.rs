@@ -1,10 +1,11 @@
 //! The text overlays drawn after the names in `Gource::draw` (src/gource.cpp:2655-2675): the date
 //! (`updateTime`), the title and the captions (`Gource::logic` places them, `RCaption::draw`).
 //! They go to `Frame::overlay` in that order, each with its drop shadow (`FXFont::draw` in
-//! immediate mode). Not ported: the splash screen (never on screen when exporting), the file key,
-//! the slider and the hover text box.
+//! immediate mode), then the file key (`--key`). Not ported: the splash screen (never on screen
+//! when exporting), the slider and the hover text box.
 
-use crate::{Batch, Font, FontManager};
+use crate::key::FileKey;
+use crate::{Batch, Font, FontManager, KeySettings};
 use burl_sim::view::SceneView;
 use glam::{Vec3, Vec4};
 
@@ -20,6 +21,11 @@ pub struct OverlaySettings {
     pub font_colour: Vec3,
     pub caption_colour: Vec3,
     pub caption_offset: i32,
+    /// `--key`.
+    pub show_key: bool,
+    pub font_scale: f32,
+    pub scaled_font_size: f32,
+    pub file_extension_fallback: bool,
 }
 
 /// `fontmedium` and `fontcaption` plus the state `Gource` keeps between frames.
@@ -30,6 +36,7 @@ pub struct Overlays {
     date_x_offset: i32,
     /// Placed captions: `(activation number, x, y)`; a caption keeps its row until it expires.
     rows: Vec<(usize, f32, f32)>,
+    key: FileKey,
 }
 
 impl Overlays {
@@ -44,6 +51,7 @@ impl Overlays {
             caption,
             date_x_offset: 0,
             rows: Vec::new(),
+            key: FileKey::new(mgr, font_size),
         }
     }
 
@@ -57,6 +65,15 @@ impl Overlays {
         date: &str,
         s: &OverlaySettings,
     ) {
+        // Gource::logic: file_key.logic and the inc/dec calls of this frame.
+        let ks = KeySettings {
+            font_scale: s.font_scale,
+            scaled_font_size: s.scaled_font_size,
+            height: s.height,
+            fallback: s.file_extension_fallback,
+        };
+        self.key.apply(mgr, &scene.key_events, &ks);
+
         // Gource::updateTime (a zero time clears the date and leaves the offset alone).
         if scene.time != 0 {
             let half = ((mgr.width(&self.medium, date) as i32) as f64 * 0.5) as i32;
@@ -128,6 +145,8 @@ impl Overlays {
             self.caption.set_colour(col);
             mgr.draw(&self.caption, out, x, y, &c.text);
         }
+        self.key.draw(mgr, out);
+        self.key.set_show(s.show_key);
     }
 }
 

@@ -2,7 +2,7 @@
 //! the offscreen framebuffer and written as one binary PPM (`P6`), the stream Gource pipes to
 //! ffmpeg (`PPMWriter`, reference/gource-cpp-dump/src/core/ppm.cpp). `--debug-dump-max-frames N`
 //! stops after N frames. Names, date, title, captions, the logo and the background image are
-//! drawn; the file key and the slider are not yet.
+//! drawn; the slider is not yet.
 
 use super::{log_settings, sim_settings};
 use burl_conf::settings::{DebugOptions, DisplaySettings, GourceSettings};
@@ -177,6 +177,10 @@ pub fn run(
             font_colour: g.font_colour.into(),
             caption_colour: g.caption_colour.into(),
             caption_offset: g.caption_offset,
+            show_key: g.show_key,
+            font_scale: g.font_scale,
+            scaled_font_size: g.scaled_font_size as f32,
+            file_extension_fallback: g.file_extension_fallback,
         };
         let bg = g.background_colour;
         let clear = [bg[0], bg[1], bg[2], 1.0];

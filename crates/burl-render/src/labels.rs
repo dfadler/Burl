@@ -85,7 +85,7 @@ pub fn name_alpha(nametime: f32, name_interval: f32) -> Option<f32> {
 }
 
 /// `RFile::ext`: the text after the last `.`, or the whole name with the fallback.
-fn extension(name: &str, fallback: bool) -> &str {
+pub(crate) fn extension(name: &str, fallback: bool) -> &str {
     match name.rfind('.') {
         Some(i) if i + 1 != name.len() => &name[i + 1..],
         _ if fallback => name,

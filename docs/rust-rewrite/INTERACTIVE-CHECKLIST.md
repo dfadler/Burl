@@ -36,7 +36,7 @@ Use any real log, e.g. `burl --seconds-per-day 0.5 <repo>`.
 - [ ] Clicking a file selects it the same way (its name sits a little lower); clicking empty background deselects
 - [ ] The click lands on what is under the cursor, also on Retina (pointer and drawable are both physical pixels in Burl: Gource mixes points and pixels with `--high-dpi`); a user that is fading out cannot be picked
 - [ ] The cursor stays hidden until it moves; after 3 s without moving, hover ends (a click then does nothing until the mouse moves)
-- [ ] The timeline slider seeks on click and shows its hover caption
+- [ ] Hover shows names; clicking a user selects it; the timeline slider (bottom strip, fades in on hover, out after 1 s) seeks on click, shows its date caption over the cursor clamped to the window, and is absent with `--hide-progress` or a stdin log
 - [ ] Cursor grab starts on drag and releases when the last button is up
 
 ## Render
@@ -44,6 +44,7 @@ Use any real log, e.g. `burl --seconds-per-day 0.5 <repo>`.
 - [ ] Bloom, shadows, file and user textures, beams and the key legend look like Gource's at the same settings
 - [ ] Text (user, file, directory names, captions, title, date) is readable and positioned like Gource's
 - [ ] Pause/resume and seeking leave no stale frame or flicker
+- [ ] `burl --user-image-dir DIR <repo>` (DIR holds `<user name>.png/.jpg`) shows each user as their own image, white unless `--colour-images`; `--default-user-image F` gives the rest F; a corrupt file in DIR exits with an error naming it (#91)
 
 ## Sign-off
 

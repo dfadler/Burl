@@ -30,6 +30,7 @@ dump (Script-mode PRNG, `reference/gource-cpp-dump/tests/dump/rand-script.txt`).
 | `small-repo-fps30` | `-r 30`: the output frame rate halves the dumped frames; `--debug-dump-every 5` counts those (the other fixtures run at `-r 60`) |
 | `small-repo-stop-position` | `--stop-position 0.5` (run ends early) |
 | `small-repo-start-position` | `--start-position 0.5`: the log seeks to byte 460 (mid-line, so the rest of that line is thrown away) before the first frame |
+| `small-repo-start-random` | `--start-position random` in Script mode: `main.cpp` imports the first section once to validate and the shell imports it again, so the fork draws twice and `start_position` is the script's second value (0.775), `rand_calls` 4 at frame 0 (#90) |
 | `small-repo-loop` | `--loop --loop-delay-seconds 1`: after the log ends and the users idle, `Gource::reset` and a seek to 0 replay it from a live state, several times in the 10 s run |
 | `auto-skip` | multi-day gaps with `--auto-skip-seconds 1` (the other fixtures run with auto-skip off) |
 | `time-travel`, `no-time-travel` | a log whose timestamps go backwards, default and with `--no-time-travel` |

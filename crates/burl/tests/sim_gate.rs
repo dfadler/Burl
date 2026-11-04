@@ -267,3 +267,8 @@ fn deviation_g4_default_build_rejects_pcre2_only_filters() {
         "burl: pcre2-filters.conf, line 3: invalid file-filter regular expression\nTry 'burl --help' for more information.\n\n"
     );
 }
+
+#[test]
+fn sim_gate_small_repo_start_random() {
+    gate("small-repo-start-random");
+}

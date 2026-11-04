@@ -62,7 +62,7 @@ fork with default flags on real x86; the oracle goldens use clang with `-ffp-con
 
 | check | status |
 |---|---|
-| structural SSIM, threshold 0.959 | **non-blocking until** (a) Burl's frame cadence matches the oracle, (b) one real x86 run confirms the spread. Then blocking. |
+| structural SSIM, threshold 0.959 | **blocking** in `heavy.yml` `visual-ssim` (real x86 run with `--prng glibc`: 16 frames, min 0.979, max 1.000). |
 | text pixels | none (#12) |
 | bloom luminance within 5% | non-blocking |
 | full-render SSIM | reported only |

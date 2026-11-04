@@ -45,10 +45,10 @@ Gource dumps every `frameskip + 1`-th (3rd at `-r 25`), so Burl emitted ~3x the 
 clock-seeded, so frame counts varied 355-387 between identical runs; the oracle never calls `srand`, so its `rand()`
 is glibc `srand(1)`. `scripts/visual.sh burl` therefore runs Burl with `--prng glibc` (same image, amd64).
 
-Structural set (bloom hidden), 16 frames, SSIM vs the committed references: 12 of 16 frames 0.9998-0.99997; the
-other four are file-removal frame 30 (0.9969) and real-burl-git-250 frame 100 (0.9856) and two more real-repo
-frames, all at or near the oracle's own one-frame load-jitter values above. Minimum 0.9856 against threshold 0.959.
-Bloom set (bloom drawn, same fixtures, oracle re-rendered with bloom): worst 0.9797 (small-repo frame 30, real-repo
+Structural set (bloom hidden), 16 frames, SSIM vs the committed references: 11 frames 0.9995-0.99997; the lowest are
+real-burl-git-250 frames 100/300/500/800 = 0.9856/0.9968/0.9899/0.9996 and file-removal frame 30 = 0.9969 (the
+oracle's own jitter value 0.9969 above). Minimum 0.9856 against threshold 0.959.
+Bloom set (bloom drawn, same fixtures, oracle re-rendered with bloom; 15 of 16 frames recorded, real-repo frame 500 missing): worst 0.9797 (small-repo frame 30, real-repo
 frame 100), the rest 0.985-0.99996. small-repo frame 30 scored 0.9792 against one oracle run and 0.9991 against a
 second oracle run (the oracle differs from itself by 0.9794 there), so the shortfall is the oracle's jitter mode, not
 bloom. Mean luminance, Burl vs oracle, small-repo frames 30/70: 29.648 vs 29.702, 33.153 vs 33.106 (0.2%, inside the 5%).

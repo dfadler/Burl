@@ -48,10 +48,17 @@ is glibc `srand(1)`. `scripts/visual.sh burl` therefore runs Burl with `--prng g
 Structural set (bloom hidden), 16 frames, SSIM vs the committed references: 11 frames 0.9995-0.99997; the lowest are
 real-burl-git-250 frames 100/300/500/800 = 0.9856/0.9968/0.9899/0.9996 and file-removal frame 30 = 0.9969 (the
 oracle's own jitter value 0.9969 above). Minimum 0.9856 against threshold 0.959.
-Bloom set (bloom drawn, same fixtures, oracle re-rendered with bloom; 15 of 16 frames recorded, real-repo frame 500 missing): worst 0.9797 (small-repo frame 30, real-repo
-frame 100), the rest 0.985-0.99996. small-repo frame 30 scored 0.9792 against one oracle run and 0.9991 against a
-second oracle run (the oracle differs from itself by 0.9794 there), so the shortfall is the oracle's jitter mode, not
-bloom. Mean luminance, Burl vs oracle, small-repo frames 30/70: 29.648 vs 29.702, 33.153 vs 33.106 (0.2%, inside the 5%).
+Bloom set (bloom drawn, same fixtures; committed as `tests/golden/visual/bloom-*.png`, **16 of 16 frames**, regenerated
+2026-11-04 in the pinned amd64 image by `scripts/visual.sh refs bloom`; provenance in `PROVENANCE-bloom.txt`).
+`scripts/visual.sh burl bloom` against them: small-repo 0.9991/0.9979/0.9981/0.9991; file-removal 0.99981/0.99975/0.99991/0.99996;
+file-to-dir 0.99997/0.99982/0.99977/0.99979; real-burl-git-250 (frames 100/300/500/800) 0.9797/0.9923/0.9804/0.9944.
+Minimum 0.9797 against the structural threshold 0.959 (no threshold changed; the bloom check only reports). The
+real-repo shortfall from 1.0 is the oracle's one-frame jitter mode (its frame counts varied 351-360 / 1073 across the
+reference renders), as in the structural set. **These 16 PNGs are report-only reference candidates, not gate inputs:**
+they were rendered under QEMU amd64 emulation on Apple silicon, not native x86, and nothing in CI compares against them
+yet. They become usable once regenerated on native amd64 (or compared on the runner) and the two agree. Mean
+luminance, Burl vs oracle, small-repo frames 30/70, is from the earlier 2026-11-03 run and was **not re-measured against
+these references**: 29.648 vs 29.702, 33.153 vs 33.106 (0.2%, inside the 5%).
 
 ## FMA (gcc on amd64)
 
@@ -62,7 +69,7 @@ fork with default flags on real x86; the oracle goldens use clang with `-ffp-con
 
 | check | status |
 |---|---|
-| structural SSIM, threshold 0.959 | **non-blocking until** (a) Burl's frame cadence matches the oracle, (b) one real x86 run confirms the spread. Then blocking. |
+| structural SSIM, threshold 0.959 | **blocking** in `heavy.yml` `visual-ssim` (real x86 run with `--prng glibc`: 16 frames, min 0.979, max 1.000). |
 | text pixels | none (#12) |
 | bloom luminance within 5% | non-blocking |
 | full-render SSIM | reported only |

@@ -46,6 +46,13 @@ fn decode(png_bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), String> {
     Ok((info.width, info.height, rgba))
 }
 
+/// `Gource::drawBackground` (gource.cpp:2028): the clear alpha is 0 under `--transparent`. The PPM
+/// drops alpha and the shader path never samples `bloom_alpha.tga` (only `--ffp` does, D4), so this
+/// does not change the frames; it is kept so a future alpha-carrying output starts correct.
+fn clear_colour(bg: [f32; 3], transparent: bool) -> [f32; 4] {
+    [bg[0], bg[1], bg[2], if transparent { 0.0 } else { 1.0 }]
+}
+
 /// Binary PPM: the RGBA frame's colour channels, alpha dropped.
 fn write_ppm(out: &mut dyn Write, w: u32, h: u32, rgba: &[u8]) -> std::io::Result<()> {
     write!(out, "P6\n{w} {h}\n255\n")?;
@@ -183,7 +190,7 @@ pub fn run(
             file_extension_fallback: g.file_extension_fallback,
         };
         let bg = g.background_colour;
-        let clear = [bg[0], bg[1], bg[2], 1.0];
+        let clear = clear_colour(bg, display.transparent);
 
         while !sim.is_finished() {
             sim.update().map_err(|e| e.0)?;
@@ -227,4 +234,15 @@ pub fn run(
         carry = sim.into_carry();
     }
     out.flush().map_err(io)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transparent_clears_with_alpha_zero() {
+        assert_eq!(clear_colour([0.1, 0.2, 0.3], false), [0.1, 0.2, 0.3, 1.0]);
+        assert_eq!(clear_colour([0.1, 0.2, 0.3], true), [0.1, 0.2, 0.3, 0.0]);
+    }
 }

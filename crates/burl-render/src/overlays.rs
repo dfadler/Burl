@@ -2,7 +2,7 @@
 //! (`updateTime`), the title and the captions (`Gource::logic` places them, `RCaption::draw`).
 //! They go to `Frame::overlay` in that order, each with its drop shadow (`FXFont::draw` in
 //! immediate mode), then the file key (`--key`). Not ported: the splash screen (never on screen
-//! when exporting) and the slider. The hover text box is [`crate::TextBox`], windowed only.
+//! when exporting). The slider (`slider.rs`) and the hover text box ([`crate::TextBox`]) are added by the window only.
 
 use crate::key::FileKey;
 use crate::{Batch, Font, FontManager, KeySettings};

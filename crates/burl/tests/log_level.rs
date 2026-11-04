@@ -1,6 +1,7 @@
-//! `--log-level` (audit gap 11). Expected stderr is derived from `logger.cpp` / `logmill.cpp` /
-//! `conffile.cpp` by reading; the oracle could not be run (amd64 image hung), so these are not
-//! oracle-captured.
+//! `--log-level` (audit gap 11, #90). Expected stderr was captured from the untouched oracle
+//! (`src/` built with autotools in the pinned `burl-golden:amd64` image) running
+//! `gource --log-level L --output-custom-log - c.log`, and the conf case below; Burl matches it byte
+//! for byte.
 
 use std::process::Command;
 
@@ -29,6 +30,7 @@ fn levels_filter_and_unknown_is_off() {
     assert_eq!(run("error"), "");
     assert_eq!(run("info"), "");
     assert_eq!(run("bogus"), "");
+    assert_eq!(run("trace"), "");
     let want = "  DEBUG: trying git...\n  DEBUG: trying mercurial...\n  DEBUG: trying bzr...\n  DEBUG: trying git raw...\n  DEBUG: trying cvs-exp...\n  DEBUG: trying svn...\n  DEBUG: trying cvs2cl...\n  DEBUG: trying custom...\n";
     assert_eq!(run("debug"), want);
     // warn is above debug in the C++ enum, so it prints the same lines
@@ -49,11 +51,23 @@ fn levels_filter_and_unknown_is_off() {
         ],
         &dir,
     );
-    assert!(
-        conf.starts_with(
-            "  DEBUG: ConfFile::load(x.conf)\n  DEBUG: x.conf: [gource] log-level => debug\n"
-        ),
-        "{conf}"
+    assert_eq!(
+        conf,
+        "  DEBUG: ConfFile::load(x.conf)\n  DEBUG: x.conf: [gource] log-level => debug\n  DEBUG: log-format = custom\n"
     );
+    // the conf's own `log-level` is applied only after the load, so it logs nothing by itself
+    let conf_only = stderr(
+        &[
+            "--load-config",
+            "x.conf",
+            "--log-format",
+            "custom",
+            "--output-custom-log",
+            "-",
+            "c.log",
+        ],
+        &dir,
+    );
+    assert_eq!(conf_only, "");
     let _ = std::fs::remove_dir_all(&dir);
 }

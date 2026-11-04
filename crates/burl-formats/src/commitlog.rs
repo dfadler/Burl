@@ -255,6 +255,36 @@ pub trait CommitLog {
         }
     }
 
+    /// `findNextCommit(commit, attempts)`: the first commit of the next `attempts` tries.
+    fn find_next_commit(&mut self, attempts: usize) -> Option<RCommit> {
+        for _ in 0..attempts {
+            let mut c = RCommit::default();
+            if self.next_commit(&mut c, true) {
+                return Some(c);
+            }
+        }
+        None
+    }
+
+    /// `getCommitAt(percent)`: peek at the commit after `percent`, then put the read position
+    /// and the pushed-back line as they were.
+    fn get_commit_at(&mut self, percent: f32) -> Option<RCommit> {
+        if !self.is_seekable() {
+            return None;
+        }
+        let base = self.base_mut();
+        let pointer = base.seek_log().map(|l| l.pointer());
+        let lastline = base.lastline.clone();
+        self.seek_to(percent);
+        let found = self.find_next_commit(500);
+        let base = self.base_mut();
+        if let (Some(p), Some(l)) = (pointer, base.seek_log()) {
+            l.set_pointer(p);
+        }
+        base.lastline = lastline;
+        found
+    }
+
     /// `bufferCommit`.
     fn buffer_commit(&mut self, commit: RCommit) {
         let base = self.base_mut();

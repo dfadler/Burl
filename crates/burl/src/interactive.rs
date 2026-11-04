@@ -4,14 +4,15 @@
 //! in [`input`]; they queue up and are applied before the next step.
 
 mod input;
+mod slider;
 
 use super::export::upload_scene_textures;
-use super::frame::{new_fonts, FrameKit};
+use super::frame::{install_avatars, new_fonts, upload_avatars, FrameKit, SharedAvatars};
 use super::{fetch_log, log_settings, sim_settings};
 use burl_conf::settings::{DisplaySettings, GourceSettings};
 use burl_gl::winit::application::ApplicationHandler;
 use burl_gl::winit::dpi::{LogicalSize, PhysicalPosition, PhysicalSize, Size};
-use burl_gl::winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
+use burl_gl::winit::event::{DeviceEvent, DeviceId, ElementState, MouseButton, WindowEvent};
 use burl_gl::winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use burl_gl::winit::monitor::MonitorHandle;
 use burl_gl::winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
@@ -22,6 +23,7 @@ use burl_render::{world_matrix, FontManager, SceneSettings, SceneTextures, TextB
 use burl_sim::{Command, Sim};
 use burl_util::prng::SimRng;
 use input::{button_command, key_action, wheel_command, Action, Arrows};
+use slider::SliderHook;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -97,6 +99,8 @@ struct Live {
     fonts: FontManager,
     kit: FrameKit,
     textbox: TextBox,
+    slider: SliderHook,
+    avatars: Option<SharedAvatars>,
     clear: [f32; 4],
     last: Instant,
     /// Commands since the last frame, applied in order before the step.
@@ -118,6 +122,8 @@ struct Loaded {
     fonts: FontManager,
     kit: FrameKit,
     textbox: TextBox,
+    slider: SliderHook,
+    avatars: Option<SharedAvatars>,
     clear: [f32; 4],
     disable_input: bool,
     hide_mouse: bool,
@@ -233,6 +239,8 @@ impl App {
             fonts: l.fonts,
             kit: l.kit,
             textbox: l.textbox,
+            slider: l.slider,
+            avatars: l.avatars,
             clear: l.clear,
             last: Instant::now(),
             pending: Vec::new(),
@@ -263,6 +271,8 @@ impl App {
         live.fonts = l.fonts;
         live.kit = l.kit;
         live.textbox = l.textbox;
+        live.slider = l.slider;
+        live.avatars = l.avatars;
         live.clear = l.clear;
         live.disable_input = l.disable_input;
         // the new sim holds no drag, so release a grab the old one left
@@ -301,6 +311,7 @@ impl App {
         let (rng, first_rand) = self.carry.take().ok_or("simulation already started")?;
         let mut settings = sim_settings(&d, g, section, repo_count);
         settings.exporting = false;
+        let avatars = install_avatars(g, &mut settings)?;
         let mut sim = Sim::new(settings, log, rng).map_err(|e| e.0)?;
         sim.carry_first_rand_frame(first_rand);
 
@@ -317,12 +328,15 @@ impl App {
         let mut fonts = new_fonts(&g.font_file)?;
         let kit = FrameKit::new(r, &mut fonts, g, w, h)?;
         let textbox = TextBox::new(&mut fonts, (18.0 * g.font_scale) as u32);
+        let slider = SliderHook::new(&mut fonts, g, w, h, repo_count);
         let bg = g.background_colour;
         Ok(Loaded {
             sim,
             ss,
             fonts,
             kit,
+            slider,
+            avatars,
             textbox,
             clear: [bg[0], bg[1], bg[2], 1.0],
             disable_input: g.disable_input,
@@ -351,10 +365,19 @@ impl App {
         if live.sim.is_grabbed() != live.grabbed {
             live.set_grab(live.sim.is_grabbed());
         }
+        upload_avatars(&live.avatars, &mut live.r)?;
         let scene = live.sim.scene_view();
         let mut frame =
             live.kit
                 .compose(&mut live.fonts, &mut live.r, &scene, &live.tex, &live.ss)?;
+        live.slider.frame(
+            &mut live.fonts,
+            &mut live.r,
+            &live.sim,
+            &mut frame,
+            scene.seekable,
+            dt.as_secs_f32(),
+        )?;
         // the hover text box comes last in `Gource::draw`, after the overlays
         if let Some(h) = live.sim.hover_text() {
             live.textbox.draw(
@@ -440,10 +463,19 @@ impl ApplicationHandler for App {
             WindowEvent::MouseInput { state, button, .. }
                 if !live.disable_input && (!live.hide_mouse || state == ElementState::Released) =>
             {
+                // `Gource::mouseClick`: a left press on the slider seeks (then also starts the
+                // background drag, as in the C++)
+                if button == MouseButton::Left && state == ElementState::Pressed {
+                    live.pending.extend(live.slider.click());
+                }
                 live.pending
                     .extend(button_command(button, state == ElementState::Pressed));
             }
             WindowEvent::CursorMoved { position, .. } if !live.disable_input => {
+                if !live.hide_mouse && !live.grabbed {
+                    let pos = Vec2::new(position.x as f32, position.y as f32);
+                    live.slider.moved(pos, &mut live.sim, &mut live.fonts);
+                }
                 live.pending.push(Command::PointerAt {
                     x: position.x as i32,
                     y: position.y as i32,
@@ -460,6 +492,8 @@ impl ApplicationHandler for App {
                 live.ss.width = s.width as f32;
                 live.ss.height = s.height as f32;
                 live.sim.set_display_size(s.width as i32, s.height as i32);
+                live.slider.resize(s.width, s.height);
+                live.kit.resize(s.width, s.height);
             }
             _ => {}
         }

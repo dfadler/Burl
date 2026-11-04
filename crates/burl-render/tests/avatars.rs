@@ -1,6 +1,6 @@
 //! Avatars (`RUser::assignUserImage`, user.cpp:183-212; directory scan gource_settings.cpp:811-862).
 
-use burl_render::{scan_user_image_dir, Avatars};
+use burl_render::{scan_dir, scan_user_image_dir, Avatars};
 use std::path::PathBuf;
 
 const JPG: &[u8] = include_bytes!("images/halves.jpg"); // 16x16
@@ -93,4 +93,24 @@ fn no_options_means_no_avatars_and_a_bad_file_is_reported() {
         .unwrap();
     assert!(a.assign("alice").is_none());
     assert!(a.take_error().unwrap().contains("alice.png"));
+}
+
+/// macOS lists "é" decomposed (e + U+0301); the key is composed so a log's "é" finds the file.
+/// The path keeps the listed bytes. Off macOS the key is left as listed (`#ifdef __APPLE__`).
+#[test]
+fn nfc_key_for_a_decomposed_file_name() {
+    let d = dir("nfc");
+    let decomposed = "Jose\u{301}";
+    std::fs::write(d.join(format!("{decomposed}.png")), b"x").unwrap();
+    let dd = format!("{}/", d.display());
+
+    let m = scan_dir(&dd, true).unwrap();
+    assert_eq!(m.keys().collect::<Vec<_>>(), ["Jos\u{e9}"]);
+    assert_eq!(
+        m["Jos\u{e9}"],
+        PathBuf::from(format!("{dd}{decomposed}.png"))
+    );
+
+    let raw = scan_dir(&dd, false).unwrap();
+    assert_eq!(raw.keys().collect::<Vec<_>>(), [decomposed]);
 }

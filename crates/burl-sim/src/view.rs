@@ -78,6 +78,20 @@ pub struct SceneView {
     pub dirs: Vec<DirView>,
     /// In name order (`std::map<std::string, RUser*>`).
     pub users: Vec<UserView>,
+    /// `Gource::updateTime`'s argument: `currtime`, or `lasttime` once the queue is empty.
+    pub time: i64,
+    /// `commitlog->isSeekable()` (`canSeek` also needs `--hide progress` off).
+    pub seekable: bool,
+    /// `active_captions`, oldest first, with how many captions have ever been activated.
+    pub captions: Vec<CaptionView>,
+    pub captions_activated: usize,
+}
+
+/// An active `RCaption`: its text and current opacity.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CaptionView {
+    pub text: String,
+    pub alpha: f32,
 }
 
 impl Sim {
@@ -145,6 +159,21 @@ impl Sim {
             },
             dirs,
             users,
+            time: if self.commitqueue.is_empty() {
+                self.lasttime
+            } else {
+                self.currtime
+            },
+            seekable: self.log.is_seekable(),
+            captions: self
+                .active_captions
+                .iter()
+                .map(|c| CaptionView {
+                    text: c.text.clone(),
+                    alpha: c.alpha,
+                })
+                .collect(),
+            captions_activated: self.captions_activated,
         }
     }
 

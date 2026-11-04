@@ -57,8 +57,13 @@ impl Sim {
         use crate::pointer::PointerKind;
         match e.kind {
             PointerKind::Tab => self.apply(Command::NextUser),
-            // mouse events arrive with the picking pieces
-            PointerKind::Move { .. } | PointerKind::Button { .. } => {}
+            PointerKind::Move { x, y } => {
+                let (px, py) = (self.pointer_x, self.pointer_y);
+                self.pointer_x = x;
+                self.pointer_y = y;
+                self.mouse_move(x, y, x - px, y - py);
+            }
+            PointerKind::Button { button, down } => self.mouse_button(button, down),
         }
     }
 }

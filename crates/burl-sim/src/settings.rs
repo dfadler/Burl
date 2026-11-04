@@ -30,6 +30,12 @@ pub struct SimSettings {
     /// `-WxH` (camera aspect ratio).
     pub display_width: i32,
     pub display_height: i32,
+    /// `hide_users` / `hide_files` (`--hide`, keys G and F): pointer picking skips them.
+    pub hide_users: bool,
+    pub hide_files: bool,
+    /// `hide_mouse` and `disable_input`: mouse events are ignored.
+    pub hide_mouse: bool,
+    pub disable_input: bool,
     /// `-r`, the video frame rate that fixes the tick rate (`setFrameExporter`).
     pub output_framerate: i32,
     /// `-o` or `--debug-dump-state` was given: fixed tick rate instead of wall-clock `dt`.
@@ -83,6 +89,10 @@ impl Default for SimSettings {
             user_graphics: None,
             display_width: 1024,
             display_height: 768,
+            hide_users: false,
+            hide_files: false,
+            hide_mouse: false,
+            disable_input: false,
             output_framerate: 60,
             exporting: false,
             stop_at_time: -1.0,

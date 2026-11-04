@@ -36,6 +36,8 @@ pub struct SceneSettings {
     pub hide_tree: bool,
     pub hide_files: bool,
     pub hide_users: bool,
+    /// `--hide-root` (and the `R` toggle): no edges to the root's children (`RDirNode::updateEdgeVBO`).
+    pub hide_root: bool,
     /// `--fixed-user-size`: user quads scale by `-camera.z / 300` (`Gource::updateVBOs`).
     pub fixed_user_size: bool,
     /// `--user-scale`, which also scales the user shadow offset.
@@ -53,6 +55,7 @@ impl SceneSettings {
             hide_tree: false,
             hide_files: false,
             hide_users: false,
+            hide_root: false,
             fixed_user_size: false,
             user_scale: 1.0,
         }
@@ -143,6 +146,9 @@ pub fn build_frame(scene: &SceneView, tex: &SceneTextures, s: &SceneSettings) ->
     // Edges: every visible dir with a parent (an invisible dir has no visible descendants).
     for (i, d) in scene.dirs.iter().enumerate().filter(|_| !s.hide_tree) {
         if let (Some(p), true) = (d.parent, d.visible) {
+            if s.hide_root && scene.dirs[p].parent.is_none() {
+                continue;
+            }
             let (pp, _) = proj[p];
             let (dp, ds) = proj[i];
             spline_edge(&mut f.edges, pp, col(&scene.dirs[p]), dp, col(d), ds);

@@ -181,3 +181,25 @@ fn fixed_user_size_scales_users_with_camera_distance() {
     let fixed = width(&build_frame(&sc, &tex, &ss));
     assert!((fixed - 2.0 * plain).abs() < 1e-3, "{plain} {fixed}");
 }
+
+#[test]
+fn hide_root_skips_edges_to_the_roots_children() {
+    let tex = SceneTextures {
+        beam: TextureId(1),
+        file: TextureId(2),
+        file_ratio: 1.0,
+        user: TextureId(3),
+        user_ratio: 1.0,
+    };
+    let mut sc = scene();
+    // a grandchild keeps its edge under hide_root
+    sc.dirs
+        .push(dir(Some(1), Vec2::new(60.0, 20.0), true, vec![]));
+    let mut ss = SceneSettings::new(640, 480);
+    let both = build_frame(&sc, &tex, &ss).edges.vertices().len();
+    ss.hide_root = true;
+    let one = build_frame(&sc, &tex, &ss).edges.vertices().len();
+    assert!(one > 0 && one < both);
+    sc.dirs.pop();
+    assert_eq!(build_frame(&sc, &tex, &ss).edges.vertices().len(), 0);
+}

@@ -111,6 +111,7 @@ pub fn run(
         ss.hide_tree = g.hide_tree;
         ss.hide_files = g.hide_files;
         ss.hide_users = g.hide_users;
+        ss.hide_root = g.hide_root;
         ss.fixed_user_size = g.fixed_user_size;
         ss.user_scale = g.user_scale;
         // --logo / --background-image: PNG, JPEG or GIF by magic number.

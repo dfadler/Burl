@@ -4,14 +4,13 @@
 //! stops after N frames. Names, date, title, captions, the logo and the background image are
 //! drawn; the slider is not yet.
 
+use super::frame::FrameKit;
 use super::{log_settings, sim_settings};
 use burl_conf::settings::{DebugOptions, DisplaySettings, GourceSettings};
 use burl_formats::fetch_log;
 use burl_gl::{GlContext, HeadlessEgl, Renderer};
 use burl_render::{
-    background_batch, build_frame, decode_image, draw_names, load_font_file, logo_batch,
-    world_matrix, Avatars, FontManager, NameFonts, NameSettings, OverlaySettings, Overlays,
-    SceneSettings, SceneTextures, TextureId, DEFAULT_FONT_FILE, PAGE_SIZE,
+    decode_image, world_matrix, Avatars, SceneSettings, SceneTextures, TextureId, DEFAULT_FONT_FILE,
 };
 use burl_sim::{Sim, UserGraphicsHook};
 use burl_util::prng::SimRng;
@@ -23,7 +22,7 @@ const FILE: &[u8] = include_bytes!("../../../data/file.png");
 const USER: &[u8] = include_bytes!("../../../data/user.png");
 
 /// First texture id of the glyph pages (1-3 are the scene graphics).
-const FIRST_GLYPH_TEXTURE: u32 = 10;
+pub(crate) const FIRST_GLYPH_TEXTURE: u32 = 10;
 
 /// `Gource::drawBackground` (gource.cpp:2028): the clear alpha is 0 under `--transparent`. The PPM
 /// drops alpha and the shader path never samples `bloom_alpha.tga` (only `--ffp` does, D4), so this
@@ -76,7 +75,7 @@ pub fn run(
     let font_file = repos
         .first()
         .map_or(DEFAULT_FONT_FILE, |g| g.font_file.as_str());
-    let mut fonts = FontManager::new(&load_font_file(font_file)?, FIRST_GLYPH_TEXTURE)?;
+    let mut fonts = super::frame::new_fonts(font_file)?;
 
     let name = &display.output_ppm_filename;
     let mut out: Box<dyn Write> = if name == "-" {
@@ -125,66 +124,7 @@ pub fn run(
         ss.hide_root = g.hide_root;
         ss.fixed_user_size = g.fixed_user_size;
         ss.user_scale = g.user_scale;
-        // --logo / --background-image: PNG, JPEG or GIF by magic number.
-        let load_image = |path: &str, id: u32, r: &mut Renderer<_>, mip: bool| {
-            let bytes = std::fs::read(path).map_err(|e| format!("could not read '{path}': {e}"))?;
-            let i = decode_image(&bytes).map_err(|e| format!("'{path}': {e}"))?;
-            let (iw, ih) = (i.width, i.height);
-            r.upload_texture(TextureId(id), iw, ih, &i.rgba, mip)?;
-            Ok::<_, String>((
-                TextureId(id),
-                burl_render::glam::Vec2::new(iw as f32, ih as f32),
-            ))
-        };
-        let screen = burl_render::glam::Vec2::new(w as f32, h as f32);
-        let background = match g.background_image.as_str() {
-            "" => None,
-            p => Some(load_image(p, 4, &mut r, true)?),
-        };
-        let logo = match g.logo.as_str() {
-            "" => None,
-            p => Some(load_image(p, 5, &mut r, false)?),
-        };
-        let ns = NameSettings {
-            hide_dirnames: g.hide_dirnames,
-            hide_filenames: g.hide_filenames,
-            hide_usernames: g.hide_usernames,
-            dir_name_depth: g.dir_name_depth,
-            dir_name_position: g.dir_name_position,
-            highlight_dirs: g.highlight_dirs,
-            highlight_all_users: g.highlight_all_users,
-            file_extensions: g.file_extensions,
-            file_extension_fallback: g.file_extension_fallback,
-            dir_colour: g.dir_colour.into(),
-            filename_colour: g.filename_colour.into(),
-            highlight_colour: g.highlight_colour.into(),
-        };
-        let mut name_fonts = NameFonts::new(
-            &mut fonts,
-            g.scaled_dirname_font_size as u32,
-            g.scaled_filename_font_size as u32,
-            g.scaled_user_font_size as u32,
-        );
-        let mut overlays = Overlays::new(
-            &mut fonts,
-            g.scaled_font_size as u32,
-            g.caption_size.clamp(1, 100) as u32,
-        );
-        let os = OverlaySettings {
-            width: w as f32,
-            height: h as f32,
-            hide_date: g.hide_date,
-            hide_progress: g.hide_progress,
-            title: g.title.clone(),
-            date_format: g.date_format.clone(),
-            font_colour: g.font_colour.into(),
-            caption_colour: g.caption_colour.into(),
-            caption_offset: g.caption_offset,
-            show_key: g.show_key,
-            font_scale: g.font_scale,
-            scaled_font_size: g.scaled_font_size as f32,
-            file_extension_fallback: g.file_extension_fallback,
-        };
+        let mut kit = FrameKit::new(&mut r, &mut fonts, g, w, h)?;
         let bg = g.background_colour;
         let clear = clear_colour(bg, display.transparent);
 
@@ -209,24 +149,7 @@ pub fn run(
                 continue;
             }
             let scene = sim.scene_view();
-            let mut frame = build_frame(&scene, &tex, &ss);
-            frame.underlay = background
-                .map(|(t, size)| background_batch(t, size, screen))
-                .into_iter()
-                .collect();
-            frame.overlay = logo
-                .map(|(t, size)| logo_batch(t, size, screen, g.logo_offset.into()))
-                .into_iter()
-                .collect();
-            fonts.start_buffer();
-            draw_names(&mut fonts, &mut name_fonts, &scene, &tex, &ss, &ns);
-            frame.names = std::mem::take(&mut fonts.buffer);
-            let date = burl_util::timeparse::format_local(scene.time, &os.date_format);
-            overlays.draw(&mut fonts, &mut frame.overlay, &scene, &date, &os);
-            // Glyphs cached while drawing the names must be on the GPU before the render.
-            for u in fonts.take_updates() {
-                r.upload_texture(u.id, PAGE_SIZE as u32, PAGE_SIZE as u32, &u.rgba, false)?;
-            }
+            let frame = kit.compose(&mut fonts, &mut r, &scene, &tex, &ss)?;
             let world = world_matrix(&scene, &ss);
             r.render(clear, &frame.batches(), world)?;
             write_ppm(&mut out, w, h, &r.read_frame()?).map_err(io)?;

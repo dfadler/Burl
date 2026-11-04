@@ -6,6 +6,7 @@
 mod input;
 
 use super::export::upload_scene_textures;
+use super::frame::{new_fonts, FrameKit};
 use super::{fetch_log, log_settings, sim_settings};
 use burl_conf::settings::{DisplaySettings, GourceSettings};
 use burl_gl::winit::application::ApplicationHandler;
@@ -16,7 +17,7 @@ use burl_gl::winit::monitor::MonitorHandle;
 use burl_gl::winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 use burl_gl::winit::window::{CursorGrabMode, Fullscreen, WindowAttributes, WindowId};
 use burl_gl::{monitor_index, GlContext, Renderer, WindowedGl};
-use burl_render::{build_frame, world_matrix, SceneSettings, SceneTextures};
+use burl_render::{world_matrix, FontManager, SceneSettings, SceneTextures};
 use burl_sim::{Command, Sim};
 use burl_util::prng::SimRng;
 use input::{key_action, wheel_command, Action, Arrows, Pointer, PointerOut};
@@ -92,6 +93,8 @@ struct Live {
     sim: Sim,
     tex: SceneTextures,
     ss: SceneSettings,
+    fonts: FontManager,
+    kit: FrameKit,
     clear: [f32; 4],
     last: Instant,
     /// Commands since the last frame, applied in order before the step.
@@ -111,6 +114,8 @@ struct Live {
 struct Loaded {
     sim: Sim,
     ss: SceneSettings,
+    fonts: FontManager,
+    kit: FrameKit,
     clear: [f32; 4],
     disable_input: bool,
     hide_mouse: bool,
@@ -209,7 +214,7 @@ impl App {
         let ctx_scale = ctx.scale_factor();
         let mut r = Renderer::new(ctx)?;
         let tex = upload_scene_textures(&mut r)?;
-        let l = self.load_section(w, h, ctx_scale)?;
+        let l = self.load_section(&mut r, w, h, ctx_scale)?;
         // `Cursor` starts hidden under --hide-mouse
         if l.hide_mouse {
             r.context().window().set_cursor_visible(false);
@@ -219,6 +224,8 @@ impl App {
             sim: l.sim,
             tex,
             ss: l.ss,
+            fonts: l.fonts,
+            kit: l.kit,
             clear: l.clear,
             last: Instant::now(),
             pending: Vec::new(),
@@ -244,9 +251,11 @@ impl App {
         if self.sections.repos.len() == 1 {
             return Ok(false);
         }
-        let l = self.load_section(w, h, scale)?;
+        let l = self.load_section(&mut live.r, w, h, scale)?;
         live.sim = l.sim;
         live.ss = l.ss;
+        live.fonts = l.fonts;
+        live.kit = l.kit;
         live.clear = l.clear;
         live.disable_input = l.disable_input;
         if live.disable_input {
@@ -266,7 +275,13 @@ impl App {
 
     /// Build the next section's simulation and scene settings (`Gource::init`), continuing the
     /// generator from the previous section.
-    fn load_section(&mut self, w: u32, h: u32, ctx_scale: f64) -> Result<Loaded, String> {
+    fn load_section(
+        &mut self,
+        r: &mut Renderer<WindowedGl>,
+        w: u32,
+        h: u32,
+        ctx_scale: f64,
+    ) -> Result<Loaded, String> {
         let repo_count = self.sections.repos.len() as i32;
         let (section, mut g) = self.sections.next().ok_or("no [gource] section to play")?;
         let g = &mut g;
@@ -295,10 +310,14 @@ impl App {
         ss.hide_root = g.hide_root;
         ss.fixed_user_size = g.fixed_user_size;
         ss.user_scale = g.user_scale;
+        let mut fonts = new_fonts(&g.font_file)?;
+        let kit = FrameKit::new(r, &mut fonts, g, w, h)?;
         let bg = g.background_colour;
         Ok(Loaded {
             sim,
             ss,
+            fonts,
+            kit,
             clear: [bg[0], bg[1], bg[2], 1.0],
             disable_input: g.disable_input,
             hide_mouse: g.hide_mouse,
@@ -321,7 +340,9 @@ impl App {
             .update_realtime(dt.as_secs_f32())
             .map_err(|e| e.0)?;
         let scene = live.sim.scene_view();
-        let frame = build_frame(&scene, &live.tex, &live.ss);
+        let frame = live
+            .kit
+            .compose(&mut live.fonts, &mut live.r, &scene, &live.tex, &live.ss)?;
         let world = world_matrix(&scene, &live.ss);
         live.r.render(live.clear, &frame.batches(), world)?;
         live.r.blit_to_screen()?;

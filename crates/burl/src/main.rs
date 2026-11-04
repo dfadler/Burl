@@ -313,6 +313,13 @@ fn run_state_dump(
 
     let repo_count = repos.len();
     let mut carry = (rng, -1i64);
+    // main.cpp's validating `importGourceSettings` runs on the first section before the shell
+    // imports each one again; both draw `start-position random`, so the first draw is discarded.
+    // The real clock-seeded generator never shows it, a Script or --prng stream does.
+    if repos.first().is_some_and(|g| g.start_position_random) {
+        carry.0.next_i31();
+        carry.1 = 0;
+    }
     for (i, g) in repos.iter_mut().enumerate() {
         // GourceShell::getNext, exporter case
         g.apply_shell_fixups(repo_count, true);

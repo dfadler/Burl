@@ -84,6 +84,11 @@ impl SeekLog {
         self.current_percent
     }
 
+    /// `getPointer`.
+    pub fn pointer(&self) -> usize {
+        self.pos
+    }
+
     /// `setPointer`.
     pub fn set_pointer(&mut self, pointer: usize) {
         self.clear();

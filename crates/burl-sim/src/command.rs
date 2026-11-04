@@ -49,6 +49,8 @@ pub enum Command {
     RightButton(bool),
     /// Tab: `selectNextUser`.
     NextUser,
+    /// A click on the position slider (`Gource::seekTo`): `percent` of the log.
+    SeekTo(f32),
 }
 
 impl Sim {
@@ -169,6 +171,7 @@ impl Sim {
     /// Apply one command; the driver calls this before each step.
     pub fn apply(&mut self, c: Command) {
         match c {
+            Command::SeekTo(percent) => self.seek_to(percent),
             Command::Faster => self.s.days_per_second = days_per_second_up(self.s.days_per_second),
             Command::Slower => {
                 self.s.days_per_second = days_per_second_down(self.s.days_per_second)

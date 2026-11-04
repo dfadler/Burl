@@ -169,6 +169,11 @@ fn sim_gate_small_repo_tuning() {
 }
 
 #[test]
+fn sim_gate_small_repo_fps30() {
+    gate("small-repo-fps30");
+}
+
+#[test]
 fn sim_gate_small_repo_stop_position() {
     gate("small-repo-stop-position");
 }

@@ -5,6 +5,13 @@ name: heavy
 on:
   pull_request:
     paths: [".github/workflows/heavy.yml", "tests/golden/**", "docs/rust-rewrite/discovery/golden/**", "docker/**", "reference/**", "src/**", "crates/burl-gl/**", "crates/burl-render/**", "scripts/render-smoke.sh", "scripts/visual-burl.sh", "docker/release.Dockerfile", "xtask/**", "crates/**", "data/**"]
+  # Tests the merged result: two PRs can each pass and still break master together (#104-era).
+  push:
+    branches: [master]
+    paths: [".github/workflows/heavy.yml", "tests/golden/**", "docs/rust-rewrite/discovery/golden/**", "docker/**", "reference/**", "src/**", "crates/burl-gl/**", "crates/burl-render/**", "scripts/render-smoke.sh", "scripts/visual-burl.sh", "docker/release.Dockerfile", "xtask/**", "crates/**", "data/**"]
+  # Lets a GitHub merge queue (repo setting, #95) run this tier on the queued merge. merge_group
+  # does not support `paths`, so every queued merge runs it.
+  merge_group:
   schedule:
     - cron: "17 3 * * 1"
   workflow_dispatch:
@@ -15,7 +22,8 @@ permissions:
 
 concurrency:
   group: heavy-${{ github.ref }}
-  cancel-in-progress: true
+  # Only PR runs are superseded; a newer master push must not cancel the run testing an earlier merge.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   goldens-reproduce:

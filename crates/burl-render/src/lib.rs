@@ -18,6 +18,7 @@ pub use labels::*;
 pub use overlays::*;
 pub use scene::*;
 
+pub use glam;
 use glam::{Mat4, Vec2, Vec4};
 
 /// `quadbuf_vertex`: pos, colour, uv (32 bytes).
@@ -150,6 +151,8 @@ impl BloomBuf {
 /// The passes of `Gource::drawScene`, in draw order (output-pipeline.md rows 2-8).
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Pass {
+    /// The `--background-image`, drawn right after the clear (`Gource::drawBackground`).
+    Background,
     EdgeShadows,
     Edges,
     FileShadows,
@@ -225,6 +228,8 @@ pub struct Frame {
     pub bloom: BloomBuf,
     /// `fontmanager.font_vbo`: dir and user names, drawn after the scene under the text shader.
     pub names: QuadBuf,
+    /// Pre-built batches drawn first, in order (the background image).
+    pub underlay: Vec<Batch>,
     /// Pre-built batches drawn last, in order (the 2D overlays).
     pub overlay: Vec<Batch>,
     /// The beam image `edges` and `actions` are textured with.
@@ -238,7 +243,7 @@ pub struct Frame {
 impl Frame {
     /// The batches in draw order. Empty buffers produce no batch (the C++ returns early).
     pub fn batches(&self) -> Vec<Batch> {
-        let mut out = Vec::new();
+        let mut out = self.underlay.clone();
         let mut quads =
             |pass, pipeline, space, offset: [f32; 2], buf: &QuadBuf, tex: Option<TextureId>| {
                 for (t, v) in buf.ranges() {
@@ -370,6 +375,7 @@ impl Default for Frame {
             users: QuadBuf::default(),
             bloom: BloomBuf::default(),
             names: QuadBuf::default(),
+            underlay: Vec::new(),
             overlay: Vec::new(),
             beam: None,
             file_graphic: None,
@@ -377,6 +383,34 @@ impl Default for Frame {
             user_scale: 1.0,
         }
     }
+}
+
+/// One white, untinted image quad in screen space (the background and logo draws).
+fn image_batch(pass: Pass, texture: TextureId, pos: Vec2, dims: Vec2) -> Batch {
+    let mut buf = QuadBuf::default();
+    buf.add(Some(texture), pos, dims, Vec4::ONE, FULL_TEXCOORD);
+    quad_batches(
+        pass,
+        Pipeline::Plain,
+        Blend::Alpha,
+        Space::Screen,
+        [0.0; 2],
+        &buf,
+        None,
+    )
+    .remove(0)
+}
+
+/// `Gource::drawBackground`: the image at its own size, centred (integer halves, as in C++).
+pub fn background_batch(texture: TextureId, image: Vec2, screen: Vec2) -> Batch {
+    let half = |s: f32, i: f32| ((s as i32) / 2 - (i as i32) / 2) as f32;
+    let pos = Vec2::new(half(screen.x, image.x), half(screen.y, image.y));
+    image_batch(Pass::Background, texture, pos, image)
+}
+
+/// The logo block of `Gource::draw`: the image at its own size, bottom right, `--logo-offset` in.
+pub fn logo_batch(texture: TextureId, image: Vec2, screen: Vec2, offset: Vec2) -> Batch {
+    image_batch(Pass::Overlay, texture, screen - image - offset, image)
 }
 
 /// `glOrtho(0, w, h, 0, -1, 1)` (`Display::mode2D`): pixels, y down.

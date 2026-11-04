@@ -1,16 +1,17 @@
 //! Headless frame export (`-o FILE|-`, phase 5, ticket #19): each tick is simulated, drawn into
 //! the offscreen framebuffer and written as one binary PPM (`P6`), the stream Gource pipes to
 //! ffmpeg (`PPMWriter`, reference/gource-cpp-dump/src/core/ppm.cpp). `--debug-dump-max-frames N`
-//! stops after N frames. Names, date, title and captions are drawn; the file key and the slider
-//! are not yet.
+//! stops after N frames. Names, date, title, captions, the logo and the background image are
+//! drawn; the file key and the slider are not yet.
 
 use super::{log_settings, sim_settings};
 use burl_conf::settings::{DebugOptions, DisplaySettings, GourceSettings};
 use burl_formats::fetch_log;
 use burl_gl::{GlContext, HeadlessEgl, Renderer};
 use burl_render::{
-    build_frame, draw_names, world_matrix, FontManager, NameFonts, NameSettings, OverlaySettings,
-    Overlays, SceneSettings, SceneTextures, TextureId, FREE_SANS, PAGE_SIZE,
+    background_batch, build_frame, draw_names, logo_batch, world_matrix, FontManager, NameFonts,
+    NameSettings, OverlaySettings, Overlays, SceneSettings, SceneTextures, TextureId, FREE_SANS,
+    PAGE_SIZE,
 };
 use burl_sim::Sim;
 use burl_util::prng::SimRng;
@@ -122,6 +123,25 @@ pub fn run(
         ss.hide_files = g.hide_files;
         ss.hide_users = g.hide_users;
         ss.user_scale = g.user_scale;
+        // --logo / --background-image: PNG only (Gource also reads JPEG and GIF).
+        let load_image = |path: &str, id: u32, r: &mut Renderer<_>, mip: bool| {
+            let bytes = std::fs::read(path).map_err(|e| format!("could not read '{path}': {e}"))?;
+            let (iw, ih, px) = decode(&bytes).map_err(|e| format!("'{path}': {e}"))?;
+            r.upload_texture(TextureId(id), iw, ih, &px, mip)?;
+            Ok::<_, String>((
+                TextureId(id),
+                burl_render::glam::Vec2::new(iw as f32, ih as f32),
+            ))
+        };
+        let screen = burl_render::glam::Vec2::new(w as f32, h as f32);
+        let background = match g.background_image.as_str() {
+            "" => None,
+            p => Some(load_image(p, 4, &mut r, true)?),
+        };
+        let logo = match g.logo.as_str() {
+            "" => None,
+            p => Some(load_image(p, 5, &mut r, false)?),
+        };
         let ns = NameSettings {
             hide_dirnames: g.hide_dirnames,
             hide_filenames: g.hide_filenames,
@@ -165,6 +185,14 @@ pub fn run(
             sim.update().map_err(|e| e.0)?;
             let scene = sim.scene_view();
             let mut frame = build_frame(&scene, &tex, &ss);
+            frame.underlay = background
+                .map(|(t, size)| background_batch(t, size, screen))
+                .into_iter()
+                .collect();
+            frame.overlay = logo
+                .map(|(t, size)| logo_batch(t, size, screen, g.logo_offset.into()))
+                .into_iter()
+                .collect();
             fonts.start_buffer();
             draw_names(&mut fonts, &mut name_fonts, &scene, &tex, &ss, &ns);
             frame.names = std::mem::take(&mut fonts.buffer);

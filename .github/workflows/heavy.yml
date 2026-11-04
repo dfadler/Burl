@@ -70,16 +70,16 @@ jobs:
         run: bash scripts/render-smoke.sh
 
   visual-ssim:
-    # Non-blocking until docs/rust-rewrite/visual-gate.md "What blocks" is met (Burl's frame cadence
-    # matches the oracle's, and one real x86 run confirms the spread). Then drop continue-on-error.
+    # Blocking (visual-gate.md "What blocks"): one real x86 run scored 0.979 to 1.000 against 0.959.
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Render the structural fixtures with Burl and SSIM them against tests/golden/visual
+        # explicit shell: bash adds pipefail, so a failing gate is not hidden by `| tee`
+        shell: bash
         run: bash scripts/visual-burl.sh 0.959 | tee "$RUNNER_TEMP/ssim.txt"
       - name: Report per-frame SSIM
         if: ${{ !cancelled() }}

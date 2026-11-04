@@ -3,4 +3,4 @@ built image id: sha256:4f15fd20db679f7001ceefc23feaf5313084f5ee8b7c98fb8839b2357
 source sha: ceb39a8c2b339748ca2ce03c70c9802608203b5e (src/ must be unmodified at this commit)
 oracle: clang++ -O1 -fsigned-char -ffp-contract=off; Xvfb 1280x720x24, LIBGL_ALWAYS_SOFTWARE=1 LP_NUM_THREADS=1, warm-up render discarded
 frames: small-repo:30,70,110,170 file-removal:30,70,110,170 file-to-dir:30,70,110,170 real-burl-git-250:100,300,500,800 (bloom drawn; files bloom-*)
-regenerate: scripts/visual.sh refs (golden-refresh PR only)
+regenerate: scripts/visual.sh refs bloom (golden-refresh PR only)

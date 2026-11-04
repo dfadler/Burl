@@ -51,7 +51,7 @@ refs)
 		echo "source sha: $(git -C "$ROOT" rev-parse HEAD) (src/ must be unmodified at this commit)"
 		echo "oracle: clang++ -O1 -fsigned-char -ffp-contract=off; Xvfb 1280x720x24, LIBGL_ALWAYS_SOFTWARE=1 LP_NUM_THREADS=1, warm-up render discarded"
 		echo "frames: $FIXTURES${PFX:+ (bloom drawn; files bloom-*)}"
-		echo "regenerate: scripts/visual.sh refs (golden-refresh PR only)"
+		echo "regenerate: scripts/visual.sh refs${PFX:+ bloom} (golden-refresh PR only)"
 	} > "$REFS/PROVENANCE${PFX:+-bloom}.txt"
 	;;
 self)

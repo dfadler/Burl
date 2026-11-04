@@ -225,7 +225,7 @@ mod tests {
 
     /// Real glibc 2.41 `rand()` output (ticket #16, M1; aarch64 and x86_64 identical).
     #[test]
-    fn glibc_matches_real_libc_10000_values_seed1() {
+    fn deviation_d3_glibc_matches_real_libc_10000_values_seed1() {
         let want = fixture(include_str!("../tests/fixtures/glibc-seed1-10000.txt"));
         assert_eq!(want.len(), 10_000);
         assert_eq!(draw(SimRng::new(PrngMode::Glibc, Some(1)), 10_000), want);
@@ -235,7 +235,7 @@ mod tests {
     }
 
     #[test]
-    fn glibc_matches_real_libc_other_seeds() {
+    fn deviation_d3_glibc_matches_real_libc_other_seeds() {
         for (seed, text) in [
             (0u32, include_str!("../tests/fixtures/glibc-seed0-200.txt")),
             (
@@ -262,7 +262,7 @@ mod tests {
 
     /// macOS 26.5.1 libc `rand()` archived from ticket #16 (first 1000 values per seed).
     #[test]
-    fn park_matches_archived_macos_vectors() {
+    fn deviation_d3_park_matches_archived_macos_vectors() {
         for (seed, text) in [
             (0u32, include_str!("../tests/fixtures/macos-seed0-1000.txt")),
             (1, include_str!("../tests/fixtures/macos-seed1-1000.txt")),
@@ -294,7 +294,7 @@ mod tests {
     }
 
     #[test]
-    fn default_is_deterministic_per_seed_and_in_range() {
+    fn deviation_d3_default_prng_is_frozen() {
         let a = draw(SimRng::new(PrngMode::Default, Some(42)), 1000);
         assert_eq!(a, draw(SimRng::new(PrngMode::Default, Some(42)), 1000));
         assert_ne!(a, draw(SimRng::new(PrngMode::Default, Some(43)), 1000));

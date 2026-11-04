@@ -9,9 +9,9 @@ use burl_conf::settings::{DebugOptions, DisplaySettings, GourceSettings};
 use burl_formats::fetch_log;
 use burl_gl::{GlContext, HeadlessEgl, Renderer};
 use burl_render::{
-    background_batch, build_frame, draw_names, logo_batch, world_matrix, FontManager, NameFonts,
-    NameSettings, OverlaySettings, Overlays, SceneSettings, SceneTextures, TextureId, FREE_SANS,
-    PAGE_SIZE,
+    background_batch, build_frame, decode_image, draw_names, logo_batch, world_matrix, FontManager,
+    NameFonts, NameSettings, OverlaySettings, Overlays, SceneSettings, SceneTextures, TextureId,
+    FREE_SANS, PAGE_SIZE,
 };
 use burl_sim::Sim;
 use burl_util::prng::SimRng;
@@ -24,27 +24,6 @@ const USER: &[u8] = include_bytes!("../../../data/user.png");
 
 /// First texture id of the glyph pages (1-3 are the scene graphics).
 const FIRST_GLYPH_TEXTURE: u32 = 10;
-
-/// Decode a PNG to RGBA8, top row first.
-fn decode(png_bytes: &[u8]) -> Result<(u32, u32, Vec<u8>), String> {
-    let mut dec = png::Decoder::new(std::io::Cursor::new(png_bytes));
-    dec.set_transformations(png::Transformations::EXPAND);
-    let mut reader = dec.read_info().map_err(|e| e.to_string())?;
-    let mut buf = vec![0; reader.output_buffer_size().ok_or("png too large")?];
-    let info = reader.next_frame(&mut buf).map_err(|e| e.to_string())?;
-    let px = &buf[..info.buffer_size()];
-    let rgba = match info.color_type {
-        png::ColorType::Rgba => px.to_vec(),
-        png::ColorType::Rgb => px
-            .as_chunks::<3>()
-            .0
-            .iter()
-            .flat_map(|p| [p[0], p[1], p[2], 255])
-            .collect(),
-        c => return Err(format!("unsupported png colour type {c:?}")),
-    };
-    Ok((info.width, info.height, rgba))
-}
 
 /// Binary PPM: the RGBA frame's colour channels, alpha dropped.
 fn write_ppm(out: &mut dyn Write, w: u32, h: u32, rgba: &[u8]) -> std::io::Result<()> {
@@ -61,9 +40,9 @@ fn write_ppm(out: &mut dyn Write, w: u32, h: u32, rgba: &[u8]) -> std::io::Resul
 /// Upload the beam, file and user graphics (ids 1-3) and return their handles.
 pub fn upload_scene_textures<C: GlContext>(r: &mut Renderer<C>) -> Result<SceneTextures, String> {
     let mut load = |id, bytes| -> Result<f32, String> {
-        let (tw, th, px) = decode(bytes)?;
-        r.upload_texture(TextureId(id), tw, th, &px, true)?;
-        Ok(th as f32 / tw as f32)
+        let i = decode_image(bytes)?;
+        r.upload_texture(TextureId(id), i.width, i.height, &i.rgba, true)?;
+        Ok(i.height as f32 / i.width as f32)
     };
     load(1, BEAM)?;
     let file_ratio = load(2, FILE)?;
@@ -123,11 +102,12 @@ pub fn run(
         ss.hide_files = g.hide_files;
         ss.hide_users = g.hide_users;
         ss.user_scale = g.user_scale;
-        // --logo / --background-image: PNG only (Gource also reads JPEG and GIF).
+        // --logo / --background-image: PNG, JPEG or GIF by magic number.
         let load_image = |path: &str, id: u32, r: &mut Renderer<_>, mip: bool| {
             let bytes = std::fs::read(path).map_err(|e| format!("could not read '{path}': {e}"))?;
-            let (iw, ih, px) = decode(&bytes).map_err(|e| format!("'{path}': {e}"))?;
-            r.upload_texture(TextureId(id), iw, ih, &px, mip)?;
+            let i = decode_image(&bytes).map_err(|e| format!("'{path}': {e}"))?;
+            let (iw, ih) = (i.width, i.height);
+            r.upload_texture(TextureId(id), iw, ih, &i.rgba, mip)?;
             Ok::<_, String>((
                 TextureId(id),
                 burl_render::glam::Vec2::new(iw as f32, ih as f32),

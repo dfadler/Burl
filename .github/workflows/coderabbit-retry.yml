@@ -1,0 +1,40 @@
+name: coderabbit-retry
+
+# Re-asks CodeRabbit for a review on open PRs where its latest comment says the
+# free review limit was reached. Skips if a retry was already posted since.
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coderabbit-retry
+  cancel-in-progress: false
+
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Re-request rate-limited reviews
+        run: |
+          prs=$(gh pr list --state open --limit 1000 --json number --jq '.[].number') || { echo "::error::Failed to list open PRs"; exit 1; }
+          for pr in $prs; do
+            comments=$(gh api "repos/$GH_REPO/issues/$pr/comments" --paginate | jq -s 'add // []')
+            # latest CodeRabbit "limit reached" comment; empty if none
+            limited=$(jq -r '[.[] | select(.user.login == "coderabbitai[bot]" and (.body | contains("Review limit reached")))] | last | .updated_at // empty' <<<"$comments")
+            [ -z "$limited" ] && continue
+            # already retried since it was last updated?
+            retried=$(jq --arg t "$limited" '[.[] | select(.body == "@coderabbitai review" and .created_at > $t)] | length' <<<"$comments")
+            [ "$retried" -gt 0 ] && continue
+            gh pr comment "$pr" --body "@coderabbitai review"
+          done

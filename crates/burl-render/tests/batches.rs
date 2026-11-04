@@ -185,11 +185,14 @@ fn background_is_centred_with_integer_halves_and_drawn_first() {
     // 640/2 - 101/2 = 270, 480/2 - 51/2 = 215 (not 269.5 / 214.5).
     assert_eq!(v[0].pos, [270.0, 215.0]);
     assert_eq!(v[2].pos, [371.0, 266.0]);
+    // Even with a populated scene the background is the first batch.
     let f = Frame {
         underlay: vec![b],
-        ..Frame::default()
+        ..synthetic()
     };
-    assert_eq!(f.batches()[0].pass, Pass::Background);
+    let batches = f.batches();
+    assert!(batches.len() > 1);
+    assert_eq!(batches[0].pass, Pass::Background);
 }
 
 #[test]

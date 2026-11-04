@@ -203,6 +203,7 @@ impl ConfFile {
 
     pub fn load(&mut self, filename: &str) -> Result<(), ConfError> {
         self.filename = filename.to_string();
+        burl_util::log::debug(|| format!("ConfFile::load({filename})"));
         self.clear();
         let data = std::fs::read(filename)
             .map_err(|_| ConfError(format!("failed to open config file {filename}")))?;
@@ -233,8 +234,11 @@ impl ConfFile {
                     .map(|v| String::from_utf8_lossy(v).into_owned())
                     .unwrap_or_default();
                 let value = value.trim_end_matches([' ', '\t', '\x0c', '\x0b', '\n', '\r']);
-                sec.get_or_insert_with(|| ConfSection::new("", lineno))
-                    .add_entry(&key, value, lineno);
+                let s = sec.get_or_insert_with(|| ConfSection::new("", lineno));
+                s.add_entry(&key, value, lineno);
+                burl_util::log::debug(|| {
+                    format!("{}: [{}] {} => {}", self.filename, s.name(), key, value)
+                });
             } else {
                 return Err(ConfError(format!(
                     "{}, line {}: could not parse line",

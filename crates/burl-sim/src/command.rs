@@ -24,6 +24,29 @@ pub enum Command {
     ZoomIn,
     /// Mouse wheel down, keypad `+`.
     ZoomOut,
+    /// Space.
+    TogglePause,
+    /// `N`: the next commit pass skips ahead over idle time.
+    SkipIdle,
+    /// `[`: force gravity `/= 1.1`.
+    GravityDown,
+    /// `]`: force gravity `*= 1.1`.
+    GravityUp,
+    /// The arrow keys held this frame (polled every frame, also paused).
+    Arrows {
+        right: bool,
+        left: bool,
+        up: bool,
+        down: bool,
+    },
+    /// Left button down on the background (`selectBackground`): the camera goes manual.
+    DragStart,
+    /// Mouse motion while dragging on the background (`xrel`, `yrel`).
+    Drag { dx: f32, dy: f32 },
+    /// Mouse motion while the right button is held: rotate the tree.
+    Rotate { dx: f32, dy: f32 },
+    /// The right button went down or up (`cursor.rightButtonPressed()`).
+    RightButton(bool),
 }
 
 /// Keys `=`/`+`: `days_per_second`.
@@ -60,6 +83,34 @@ pub fn time_scale_down(v: f32) -> f32 {
     } else {
         f32::max(0.25, v * 0.5)
     }
+}
+
+/// `[` / `]`: `gGourceForceGravity /= 1.1` / `*= 1.1`; `1.1` is a double, the result narrows.
+pub fn force_gravity_step(v: f32, up: bool) -> f32 {
+    if up {
+        (v as f64 * 1.1) as f32
+    } else {
+        (v as f64 / 1.1) as f32
+    }
+}
+
+/// The polled arrow keys of `Gource::logic`: assignments in the order right, left, up, down,
+/// so left beats right and down beats up. `None` keeps that component.
+pub fn arrow_move(right: bool, left: bool, up: bool, down: bool) -> (Option<f32>, Option<f32>) {
+    let (mut x, mut y) = (None, None);
+    if right {
+        x = Some(10.0);
+    }
+    if left {
+        x = Some(-10.0);
+    }
+    if up {
+        y = Some(-10.0);
+    }
+    if down {
+        y = Some(10.0);
+    }
+    (x, y)
 }
 
 /// `Gource::zoom`: the new camera distance for one step (x1.1), clamped to `[min, max]`.
@@ -122,6 +173,33 @@ impl Sim {
                 );
                 self.camera.dest.z = -d;
             }
+            Command::TogglePause => self.paused = !self.paused,
+            Command::SkipIdle => self.idle_time = self.s.auto_skip_seconds,
+            Command::GravityDown | Command::GravityUp => {
+                self.force_gravity = force_gravity_step(self.force_gravity, c == Command::GravityUp)
+            }
+            Command::Arrows {
+                right,
+                left,
+                up,
+                down,
+            } => {
+                let (x, y) = arrow_move(right, left, up, down);
+                if let Some(x) = x {
+                    self.cursor_move.x = x;
+                }
+                if let Some(y) = y {
+                    self.cursor_move.y = y;
+                }
+                self.manual_camera |= x.is_some() || y.is_some();
+            }
+            Command::DragStart => self.manual_camera = true,
+            Command::Drag { dx, dy } => self.cursor_move += glam::vec2(dx, dy),
+            Command::Rotate { dx, dy } => {
+                self.manual_rotate = true;
+                self.rotate_angle = drag_rotation(dx, dy);
+            }
+            Command::RightButton(down) => self.right_button = down,
         }
     }
 }
@@ -162,6 +240,21 @@ mod tests {
         assert_eq!(zoom_distance(51.0, true, 50.0, 10000.0), 50.0);
         assert!((zoom_distance(100.0, false, 50.0, 10000.0) - 110.0).abs() < 1e-3);
         assert_eq!(zoom_distance(9500.0, false, 50.0, 10000.0), 10000.0);
+    }
+
+    #[test]
+    fn arrows_and_gravity_rows() {
+        // right then left: left wins; up then down: down wins; nothing held keeps both
+        assert_eq!(arrow_move(true, true, false, false), (Some(-10.0), None));
+        assert_eq!(
+            arrow_move(true, false, true, true),
+            (Some(10.0), Some(10.0))
+        );
+        assert_eq!(arrow_move(false, false, true, false), (None, Some(-10.0)));
+        assert_eq!(arrow_move(false, false, false, false), (None, None));
+        // `1.1` is a double: 10 * 1.1 narrows to the f32 nearest 11.000000000000002
+        assert_eq!(force_gravity_step(10.0, true), 11.0);
+        assert!((force_gravity_step(11.0, false) - 10.0).abs() < 1e-5);
     }
 
     #[test]

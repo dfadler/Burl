@@ -32,6 +32,7 @@ impl std::fmt::Display for SimError {
 
 // gource.cpp / dirnode.cpp / file.cpp / user.cpp globals (all `float`).
 const FILE_DIAMETER: f32 = 8.0;
+/// `gGourceForceGravity`'s initial value; `[` / `]` scale it at run time.
 const FORCE_GRAVITY: f32 = 10.0;
 const DIR_PADDING: f32 = 1.5;
 const BEAM_DIST: f32 = 100.0;
@@ -208,6 +209,18 @@ impl Camera {
         self.dest.z = -distance;
     }
 
+    /// `ZoomCamera::setPos(pos, keep_angle = true)`.
+    fn set_pos_keep_angle(&mut self, pos: Vec3) {
+        let dir = self.target - self.pos;
+        self.pos = pos;
+        self.target = pos + dir;
+    }
+
+    /// `ZoomCamera::stop`.
+    fn stop(&mut self) {
+        self.dest = self.pos;
+    }
+
     /// `ZoomCamera::logic`.
     fn logic(&mut self, dt: f32) {
         let dp = self.dest - self.pos;
@@ -223,6 +236,15 @@ impl Camera {
         }
         self.pos += dpt;
         self.target = vec3(self.pos.x, self.pos.y, 0.0);
+    }
+}
+
+/// `rotate_vec2` about the origin, or about `centre` (kept apart so the origin case does not
+/// pick up `x - 0 + 0`, which turns a `-0.0` into `+0.0`).
+fn rotate_about(v: Vec2, s: f32, c: f32, centre: Option<Vec2>) -> Vec2 {
+    match centre {
+        None => rotate_vec2(v, s, c),
+        Some(o) => rotate_vec2(v - o, s, c) + o,
     }
 }
 
@@ -255,6 +277,15 @@ pub struct Sim {
     pub(crate) camera: Camera,
     /// Set by a zoom command (`manual_zoom`): the camera stops fitting the bounds' distance.
     pub(crate) manual_zoom: bool,
+    /// Input state (T2.2): `paused`, `manual_camera`, `manual_rotate`, `cursor_move`,
+    /// `gGourceForceGravity`.
+    pub(crate) paused: bool,
+    pub(crate) manual_camera: bool,
+    pub(crate) manual_rotate: bool,
+    pub(crate) cursor_move: Vec2,
+    pub(crate) force_gravity: f32,
+    /// `cursor.rightButtonPressed()`.
+    pub(crate) right_button: bool,
     pub(crate) app_finished: bool,
     /// `file_idle_time` is overwritten once the log ends (`file_idle_time_at_end`).
     file_idle_time: f32,
@@ -347,6 +378,12 @@ impl Sim {
             dir_bounds: Bounds2D::default(),
             camera,
             manual_zoom: false,
+            paused: false,
+            manual_camera: false,
+            manual_rotate: false,
+            cursor_move: Vec2::ZERO,
+            force_gravity: FORCE_GRAVITY,
+            right_button: false,
             app_finished: false,
             file_idle_time,
             first_rand_frame: -1,
@@ -438,8 +475,10 @@ impl Sim {
         let mut scaled_dt = tick;
         scaled_dt *= self.s.time_scale;
 
-        // runtime is managed internally (paused is never set here)
-        self.runtime += scaled_dt;
+        // runtime is managed internally
+        if !self.paused {
+            self.runtime += scaled_dt;
+        }
 
         if self.s.stop_at_time > 0.0 && self.runtime >= self.s.stop_at_time {
             self.stop_position_reached = true;
@@ -462,6 +501,15 @@ impl Sim {
 
     fn logic(&mut self, t: f32, dt: f32) -> Result<(), SimError> {
         self.apply_rotation();
+
+        // still want to update the camera while paused
+        if self.paused {
+            self.update_bounds();
+            self.interact_users();
+            self.interact_dirs();
+            self.update_camera(dt);
+            return Ok(());
+        }
 
         // get more entries
         if self.commitqueue.is_empty() {
@@ -1797,7 +1845,8 @@ impl Sim {
         let parent_dist = self.dir_distance_to_parent(d);
         let ppos = self.dir(parent).pos;
         let pos = self.dir(d).pos;
-        self.dir_mut(d).accel += FORCE_GRAVITY * parent_dist * normalise_vec2(ppos - pos);
+        let gravity = self.force_gravity;
+        self.dir_mut(d).accel += gravity * parent_dist * normalise_vec2(ppos - pos);
 
         // dirs should be pushed along the parent_parent to parent normal by a force smaller
         // than the parent radius force
@@ -1943,13 +1992,29 @@ impl Sim {
     }
 
     fn update_camera(&mut self, dt: f32) {
-        // camera mode overview: bounds are the visible dirs
-        let cambounds = self.dir_bounds;
-        self.camera.adjust(&cambounds, &self.s, !self.manual_zoom);
+        let mut auto_rotate = !self.manual_rotate && !self.s.disable_auto_rotate;
+
+        if self.manual_camera {
+            if self.cursor_move.length_squared() > 0.0 {
+                let cam_rate = (-self.camera.pos.z) / 5000.0f32;
+                let mut cam_pos = self.camera.pos;
+                let delta = self.cursor_move * cam_rate * 10.0f32;
+                cam_pos.x += delta.x;
+                cam_pos.y += delta.y;
+                self.camera.set_pos_keep_angle(cam_pos);
+                self.camera.stop();
+                auto_rotate = false;
+                self.cursor_move = Vec2::ZERO;
+            }
+        } else {
+            // camera mode overview: bounds are the visible dirs
+            let cambounds = self.dir_bounds;
+            self.camera.adjust(&cambounds, &self.s, !self.manual_zoom);
+        }
         self.camera.logic(dt);
 
-        // automatically rotate camera (manual_rotate is input, never set here)
-        if self.s.disable_auto_rotate {
+        // automatically rotate camera
+        if !auto_rotate {
             self.rotation_remaining_angle = 0.0;
         } else if self.rotation_remaining_angle > 0.0 {
             // rotation through 90 degrees, speed peaks at half way. `fabs(x - 0.5)` is a double
@@ -1964,7 +2029,7 @@ impl Sim {
             // `float *= double`: the product is a double, narrowed on assignment
             self.rotate_angle =
                 (self.rotate_angle as f64 * burl_util::math::DEGREES_TO_RADIANS) as f32;
-        } else if self.dir_bounds.area() > 10000.0f32 {
+        } else if !self.right_button && self.dir_bounds.area() > 10000.0f32 {
             let aspect_ratio = self.s.display_width as f32 / self.s.display_height as f32;
             let b = &self.dir_bounds;
             let bounds_ratio = if aspect_ratio > 1.0 {
@@ -1986,21 +2051,26 @@ impl Sim {
         let s = self.rotate_angle.sin();
         let c = self.rotate_angle.cos();
         let root = self.root;
-        self.dir_rotate(root, s, c);
+        // a manual (right-drag) rotation turns the tree about the camera, an automatic one
+        // about the origin
+        let centre = self
+            .manual_rotate
+            .then(|| vec2(self.camera.pos.x, self.camera.pos.y));
+        self.dir_rotate(root, s, c, centre);
         for &uid in self.user_map.values().copied().collect::<Vec<_>>().iter() {
             let u = self.user_mut(uid);
-            u.pos = rotate_vec2(u.pos, s, c);
+            u.pos = rotate_about(u.pos, s, c, centre);
         }
         self.rotate_angle = 0.0;
     }
 
-    /// `RDirNode::rotate(s, c)`.
-    fn dir_rotate(&mut self, d: DirId, s: f32, c: f32) {
+    /// `RDirNode::rotate(s, c)` / `rotate(s, c, centre)`.
+    fn dir_rotate(&mut self, d: DirId, s: f32, c: f32, centre: Option<Vec2>) {
         let dir = self.dir_mut(d);
-        dir.pos = rotate_vec2(dir.pos, s, c);
-        dir.spos = rotate_vec2(dir.spos, s, c);
+        dir.pos = rotate_about(dir.pos, s, c, centre);
+        dir.spos = rotate_about(dir.spos, s, c, centre);
         for child in self.dir(d).children.clone() {
-            self.dir_rotate(child, s, c);
+            self.dir_rotate(child, s, c, centre);
         }
     }
 
@@ -2117,6 +2187,7 @@ impl Sim {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Command;
     use burl_formats::{fetch_log, LogSettings};
     use std::sync::Arc;
 
@@ -2148,6 +2219,129 @@ mod tests {
             disable_auto_rotate: true,
             ..SimSettings::default()
         }
+    }
+
+    fn run(s: &mut Sim, frames: usize) {
+        for _ in 0..frames {
+            s.update().unwrap();
+            s.end_frame();
+        }
+    }
+
+    const THREE: &str =
+        "1277787455|bob|A|a/b.txt\n1277787456|bob|A|c/d.txt\n1277787457|bob|A|c/e/f.txt\n";
+
+    #[test]
+    fn paused_freezes_the_clock_but_not_the_camera() {
+        let mut s = sim_with(THREE, ok_settings()).unwrap();
+        run(&mut s, 10);
+        s.apply(Command::TogglePause);
+        let (runtime, currtime, files) = (s.runtime, s.currtime, s.file_map.len());
+        // a zoom moves dest.z (and stops the fit), which only camera.logic can follow
+        s.apply(Command::ZoomOut);
+        let z = s.camera.pos.z;
+        run(&mut s, 5);
+        assert_eq!(
+            (s.runtime, s.currtime, s.file_map.len()),
+            (runtime, currtime, files)
+        );
+        assert_ne!(s.camera.pos.z, z);
+        s.apply(Command::TogglePause);
+        run(&mut s, 5);
+        assert!(s.runtime > runtime);
+    }
+
+    #[test]
+    fn arrows_assign_in_cursor_order_and_make_the_camera_manual() {
+        let mut s = sim(ok_settings()).unwrap();
+        s.apply(Command::Arrows {
+            right: true,
+            left: true,
+            up: true,
+            down: true,
+        });
+        assert_eq!(s.cursor_move, vec2(-10.0, 10.0));
+        assert!(s.manual_camera);
+        // nothing held leaves a drag's accumulated move alone
+        s.apply(Command::Drag { dx: 1.0, dy: 2.0 });
+        s.apply(Command::Arrows {
+            right: false,
+            left: false,
+            up: false,
+            down: false,
+        });
+        assert_eq!(s.cursor_move, vec2(-9.0, 12.0));
+    }
+
+    #[test]
+    fn manual_camera_pans_by_cam_rate_and_stays_put() {
+        let mut s = sim(ok_settings()).unwrap();
+        s.camera.pos.z = -500.0;
+        s.camera.dest = s.camera.pos;
+        let p = s.camera.pos;
+        s.apply(Command::DragStart);
+        s.apply(Command::Drag { dx: 5.0, dy: -2.0 });
+        s.update().unwrap();
+        // cam_rate = 500/5000, times 10
+        assert!((s.camera.pos.x - (p.x + 5.0)).abs() < 1e-4);
+        assert!((s.camera.pos.y - (p.y - 2.0)).abs() < 1e-4);
+        assert_eq!(s.cursor_move, Vec2::ZERO);
+        // and the overview fit no longer drags it back
+        let q = s.camera.pos;
+        run(&mut s, 5);
+        assert_eq!(s.camera.pos, q);
+    }
+
+    #[test]
+    fn manual_rotation_turns_the_tree_about_the_camera() {
+        let mut s = sim_with(THREE, ok_settings()).unwrap();
+        run(&mut s, 200);
+        s.camera.pos.x = 3.0;
+        s.camera.pos.y = 4.0;
+        let centre = vec2(3.0, 4.0);
+        let dist = |s: &Sim| -> Vec<f32> {
+            s.dirs
+                .iter()
+                .flatten()
+                .map(|d| (d.pos - centre).length())
+                .collect()
+        };
+        let before = dist(&s);
+        let pos: Vec<Vec2> = s.dirs.iter().flatten().map(|d| d.pos).collect();
+        s.apply(Command::Rotate { dx: 10.0, dy: 0.0 });
+        s.apply_rotation();
+        let after = dist(&s);
+        assert!(before.iter().zip(&after).all(|(a, b)| (a - b).abs() < 1e-3));
+        let moved: Vec<Vec2> = s.dirs.iter().flatten().map(|d| d.pos).collect();
+        assert_ne!(pos, moved);
+        assert_eq!(s.rotate_angle, 0.0);
+    }
+
+    #[test]
+    fn force_gravity_scales_the_pull_toward_the_parent() {
+        let go = |g: f32| {
+            let mut s = sim_with(THREE, ok_settings()).unwrap();
+            s.force_gravity = g;
+            run(&mut s, 120);
+            s.dirs.iter().flatten().map(|d| d.pos).collect::<Vec<_>>()
+        };
+        assert_ne!(go(10.0), go(0.0));
+        let mut s = sim(ok_settings()).unwrap();
+        s.apply(Command::GravityUp);
+        assert!(s.force_gravity > FORCE_GRAVITY);
+        s.apply(Command::GravityDown);
+        assert!((s.force_gravity - FORCE_GRAVITY).abs() < 1e-5);
+    }
+
+    #[test]
+    fn skip_idle_sets_the_idle_clock() {
+        let mut s = sim(SimSettings {
+            auto_skip_seconds: 3.0,
+            ..ok_settings()
+        })
+        .unwrap();
+        s.apply(Command::SkipIdle);
+        assert_eq!(s.idle_time, 3.0);
     }
 
     #[test]

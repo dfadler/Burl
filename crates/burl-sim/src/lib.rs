@@ -16,6 +16,6 @@ pub mod view;
 
 pub use command::Command;
 pub use dump::DumpOptions;
-pub use pointer::{Button, PointerEvent, PointerKind};
+pub use pointer::{Button, HoverText, PointerEvent, PointerKind};
 pub use settings::{SimSettings, UserGraphic, UserGraphicsHook};
 pub use sim::{Sim, SimError};

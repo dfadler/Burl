@@ -120,7 +120,7 @@ Two generic tests cover every option's parse path and are not repeated per row: 
 | `--key` | Bool | `show_key` | Y | N | Wired | burl-render/src/overlays.rs:149 | UR | Export only: the windowed frame draws no text (see Gap 1). |
 | `--logo` | Str | `logo` | Y* | N | Wired | burl/src/export.rs:141 | R* | PNG only; export only. #51. |
 | `--logo-offset` | Str | `logo_offset` | Y | N | Wired | burl/src/export.rs:197 | UR* |  |
-| `--selection-colour` | Str | `selection_colour` | N | N | Stored-unused | none (labels.rs:5: selection not ported) | **none** | file.cpp:58,141; user.cpp:330; needs pointer selection, so windowed-relevant |
+| `--selection-colour` | Str | `selection_colour` | N | N | Wired | `small-repo-pick`, `small-repo-select` (sim state), `names.rs` (label colour) | **none** | file.cpp:58,141; user.cpp:330; needs pointer selection, so windowed-relevant |
 | `--title` | Str | `title` | Y | N | Wired | burl-render/src/overlays.rs:96 | UE | Export only: the windowed frame draws no text (see Gap 1). |
 | `--user-font-size` | Int | `user_font_size`, `scaled_user_font_size` | Y | N | Wired | burl/src/export.rs:163 | U | Export only: the windowed frame draws no text (see Gap 1). |
 | `--user-image-dir` | Str | `user_image_dir`, `user_image_map` | N | N | Wired (G9) | none | UE | user.cpp:183 |

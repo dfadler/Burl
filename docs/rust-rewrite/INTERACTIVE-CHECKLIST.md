@@ -35,6 +35,7 @@ Use any real log, e.g. `burl --seconds-per-day 0.5 <repo>`.
 - [ ] Clicking a user selects it: white sprite, larger name in `--selection-colour` drawn over everything; Tab moves to the next user and wraps
 - [ ] Clicking a file selects it the same way (its name sits a little lower); clicking empty background deselects
 - [ ] The click lands on what is under the cursor, also on Retina (pointer and drawable are both physical pixels in Burl: Gource mixes points and pixels with `--high-dpi`); a user that is fading out cannot be picked
+- [ ] Hovering a user shows a box with its name above-left of the cursor; hovering a file shows its name and directory; the box flips to stay inside the window near the right and top edges; a selected user or file shows no box
 - [ ] The cursor stays hidden until it moves; after 3 s without moving, hover ends (a click then does nothing until the mouse moves)
 - [ ] The timeline slider seeks on click and shows its hover caption
 - [ ] Cursor grab starts on drag and releases when the last button is up

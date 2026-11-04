@@ -28,6 +28,7 @@ boundary), `dumpJson` members on `RDirNode`, `RFile`, `RUser`, `ZoomCamera`, `RC
 | `--debug-dump-max-frames N` | stop the run after frame N-1 (per section); 0 = no cap |
 | `--prng default\|glibc\|park` | `default`: libc `rand()` untouched (unseeded = seed 1). `glibc`: libc `rand()` after an explicit `srand(1)` (or the seed). `park`: built-in Park-Miller (macOS libc), seed 1 |
 | `--prng-seed N` | seed for any non-script mode |
+| `--debug-pointer-script FILE` | Scripted pointer: inject mouse and Tab events (below). Needs `--debug-dump-state`, and the mouse shown (`dump-run.sh` pseudo-argument `@mouse`) |
 | `--rand-script FILE` | Script mode: one integer per line, cyclic. Cannot be combined with `--prng` |
 
 `start-position=random` no longer calls `srand(time(0))` unless `--prng default` is unseeded.
@@ -50,6 +51,44 @@ JSON Lines, one run per file, fixed key order, f32 as `%.9g`. Record types:
 
 Arrays are sorted by key (`std::map` order): dirs by `abspath`, files by `fullpath`, users by
 name; actions are queued first, then active.
+
+## Scripted pointer (`--debug-pointer-script`)
+
+A headless run has no pointer, so `mousetrace` (hover, click-select), `selectBackground` and Tab never run.
+The script injects them. One event per line, `#` starts a comment, frames never decrease:
+
+```
+FRAME move X Y        # SDL mouse motion to window pixel (X, Y) -> Gource::mouseMove
+FRAME down l|m|r      # button down -> Gource::mouseClick
+FRAME up l|m|r        # button up
+FRAME key tab         # Tab key down -> Gource::keyPress (selectNextUser)
+```
+
+Events for frame N are applied **after the dump of frame N and before `draw()`**. So `mousetrace` and the
+click it makes run in frame N, and the result first shows in the dump of frame N+1. A `down` and `up` on the same
+frame therefore leave the left button released at `draw` time: `selectBackground` does nothing (Gource's
+frame-time quirk, scope paper 1.2). Burl's `D13` row decides selection at event time instead.
+
+What differs from a real run, and why:
+
+- `SDL_GetMouseState` is never changed by injected events, so the button tests in `gource.cpp`
+  (`rightmouse` in `mouseMove`, the grab release in `mouseClick`, `selectBackground`, the `M` key guard) go through
+  `Gource::buttonLeft/Right/Any`, which read the scripted mask while the script is active.
+- `MouseCursor::isVisible` needs window focus, which Xvfb never gives. While scripted, the cursor is visible when it is
+  not hidden (`grabMouse` hides it) and the last scripted move or click was less than 3 s ago
+  (`MouseCursor::timeout`, counted in fixed ticks: `max_tick_rate` per update, so it does not depend on wall time).
+  It starts idle, so nothing is traced before the first `move`.
+- `dump-run.sh @mouse` drops `--hide mouse` and passes `--hide progress` instead, so a click cannot hit the
+  slider (`canSeek`). Nothing else about the run changes; with no script the fork behaves as before
+  (`file-removal` regenerated with this change is byte-identical to its committed golden).
+
+With a script, the `g` object of every frame ends with
+`"pointer":{"mousepos":[x,y],"buttons":N,"grab":b,"dragged":b,"hover_user":name|null,"hover_file":path|null,
+"selected_user":name|null,"selected_file":path|null}`. `buttons` is the SDL mask (1 left, 2 middle, 4 right). Without
+a script the key is absent, so no existing golden changes.
+
+Overlaps are not reproducible: Gource picks the first of a `std::set<QuadItem*>` ordered by heap address
+(`D12`). Fixtures must not put two pawns under one scripted point.
 
 ## Build and run
 

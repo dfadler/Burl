@@ -289,6 +289,13 @@ public:
 
     void update(float t, float dt);
     void dumpState(); // state-dump fork
+    // state-dump fork, scripted pointer (--debug-pointer-script)
+    void dumpPointer();
+    void dumpPointerJson(FILE* f) const;
+    bool dumpCursorVisible() const;
+    bool buttonLeft() const;
+    bool buttonRight() const;
+    bool buttonAny() const;
     void keyPress(SDL_KeyboardEvent *e);
     void mouseMove(SDL_MouseMotionEvent *e);
     void mouseClick(SDL_MouseButtonEvent *e);

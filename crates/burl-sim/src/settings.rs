@@ -15,6 +15,8 @@ pub struct SimSettings {
     pub stop_position: f32,
     pub stop_timestamp: i64,
     pub start_position: f32,
+    /// `--start-position random`: `Sim::new` draws `start_position` from the run's PRNG.
+    pub start_position_random: bool,
     pub days_per_second: f32,
     pub auto_skip_seconds: f32,
     pub no_time_travel: bool,
@@ -63,6 +65,7 @@ impl Default for SimSettings {
             stop_position: 0.0,
             stop_timestamp: 0,
             start_position: 0.0,
+            start_position_random: false,
             days_per_second: 0.1,
             auto_skip_seconds: 3.0,
             no_time_travel: false,

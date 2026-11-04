@@ -277,31 +277,93 @@ fn ignored_options_are_stored_and_do_nothing() {
     }
 }
 
+/// A value that moves each valued option off its default (and passes its validator). Bools take
+/// none; `Ignored` and command-line options never reach an import.
+fn sample(name: &str) -> &'static str {
+    match name {
+        "viewport" => "800x600",
+        "screen" => "2",
+        "window-position" => "10x20",
+        "output-ppm-stream" => "-",
+        "output-framerate" => "30",
+        "bloom-intensity" | "bloom-multiplier" | "elasticity" | "seconds-per-day"
+        | "time-scale" | "max-user-speed" | "user-friction" | "auto-skip-seconds"
+        | "stop-at-time" | "loop-delay-seconds" | "font-scale" | "filename-time"
+        | "caption-duration" => "2",
+        "dir-name-position" | "padding" => "0.25",
+        "max-files" | "hash-seed" | "dir-name-depth" | "caption-offset" => "7",
+        "font-size" | "file-font-size" | "dir-font-size" | "user-font-size" | "caption-size" => {
+            "21"
+        }
+        "user-filter" | "user-show-filter" | "file-filter" | "file-show-filter" | "follow-user"
+        | "highlight-user" => "a.*",
+        // the import checks that these exist; the tests run in the crate directory
+        "background-image" | "logo" | "default-user-image" | "font-file" | "caption-file" => {
+            "Cargo.toml"
+        }
+        "user-image-dir" | "path" => "src",
+        "logo-offset" => "5x6",
+        "background-colour" | "font-colour" | "dir-colour" | "highlight-colour"
+        | "selection-colour" | "filename-colour" | "caption-colour" => "123456",
+        "file-idle-time" | "file-idle-time-at-end" | "max-file-lag" | "user-scale" => "3",
+        "date-format" => "%Y",
+        "log-format" => "custom",
+        "git-branch" => "dev",
+        "start-position" | "stop-position" => "0.5",
+        "start-date" | "stop-date" => "2020-01-02",
+        "crop" => "vertical",
+        "hide" => "date",
+        "camera-mode" => "track",
+        "title" => "T",
+        _ => "",
+    }
+}
+
+/// Each option, given on the command line, must change the imported settings (display or
+/// gource), so it has a live import arm; deleting an arm fails its own row. `windowed` and the
+/// aliases need a partner: windowed only undoes fullscreen.
 #[test]
 fn every_option_has_an_import_arm() {
-    let src = include_str!("../src/settings.rs");
-    let display: Vec<_> = CONF_SECTIONS
-        .iter()
-        .filter(|(_, s)| *s == Section::Display)
-        .map(|(n, _)| *n)
-        .collect();
+    let import_all = |a: &[&str]| {
+        let (c, _, _) = cli(a).unwrap_or_else(|e| panic!("{a:?}: {}", e.0));
+        let g = c
+            .section("gource")
+            .map(|sec| import_gource_settings(&c, sec).unwrap_or_else(|e| panic!("{a:?}: {}", e.0)))
+            .unwrap_or_default();
+        let d = import_display_settings(&c).unwrap_or_else(|e| panic!("{a:?}: {}", e.0));
+        format!("{d:?} {g:?}")
+    };
+    let base = import_all(&[]);
     for (name, ty) in ARG_TYPES {
         let command_line = CONF_SECTIONS
             .iter()
             .any(|(n, s)| n == name && *s == Section::CommandLine);
-        if *ty == ArgType::Ignored
-            || command_line
-            || (name.starts_with("hide-") && *ty == ArgType::Bool)
-        {
+        if *ty == ArgType::Ignored || command_line {
             continue;
         }
-        // highlight-all-users is an alias, `viewport`/`windowed` are display keys
-        assert!(
-            src.contains(&format!("\"{name}\"")),
-            "{name} has no import arm (display: {})",
-            display.contains(name)
-        );
+        let flag = format!("--{name}");
+        let mut a = vec![flag.as_str()];
+        if *ty != ArgType::Bool {
+            let v = sample(name);
+            assert!(!v.is_empty(), "{name}: no sample value");
+            a.push(v);
+        }
+        let (before, got) = if *name == "windowed" {
+            a.insert(0, "--fullscreen");
+            (import_all(&["--fullscreen"]), import_all(&a))
+        } else {
+            (base.clone(), import_all(&a))
+        };
+        assert_ne!(got, before, "{name} changed nothing: no import arm");
     }
+}
+
+/// `--disable-input` is windowed-only: the key and mouse handlers read `disable_input`
+/// (`key_action`'s own tests cover what it blocks), so the import is what a test can reach.
+#[test]
+fn disable_input_reaches_the_settings() {
+    assert!(!import("").unwrap().disable_input);
+    assert!(import("disable-input=true").unwrap().disable_input);
 }
 
 #[test]

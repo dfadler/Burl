@@ -165,9 +165,12 @@ impl FrameKit {
     }
 }
 
-/// A fresh glyph cache whose pages are texture ids from [`FIRST_GLYPH_TEXTURE`] up.
-pub fn new_fonts() -> Result<FontManager, String> {
-    FontManager::new(burl_render::FREE_SANS, FIRST_GLYPH_TEXTURE)
+/// A fresh glyph cache of `font_file` whose pages are texture ids from [`FIRST_GLYPH_TEXTURE`] up.
+pub fn new_fonts(font_file: &str) -> Result<FontManager, String> {
+    FontManager::new(
+        &burl_render::load_font_file(font_file)?,
+        FIRST_GLYPH_TEXTURE,
+    )
 }
 
 #[cfg(test)]
@@ -209,7 +212,7 @@ mod tests {
             user_ratio: 1.0,
         };
         let ss = SceneSettings::new(d.width as u32, d.height as u32);
-        let mut fonts = new_fonts().unwrap();
+        let mut fonts = new_fonts(burl_render::DEFAULT_FONT_FILE).unwrap();
         let mut kit =
             FrameKit::with_images(&mut fonts, g, d.width as u32, d.height as u32, bg, logo);
         kit.batches(&mut fonts, &sim.scene_view(), &tex, &ss)

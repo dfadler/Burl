@@ -9,7 +9,9 @@ use super::{log_settings, sim_settings};
 use burl_conf::settings::{DebugOptions, DisplaySettings, GourceSettings};
 use burl_formats::fetch_log;
 use burl_gl::{GlContext, HeadlessEgl, Renderer};
-use burl_render::{decode_image, world_matrix, SceneSettings, SceneTextures, TextureId};
+use burl_render::{
+    decode_image, world_matrix, SceneSettings, SceneTextures, TextureId, DEFAULT_FONT_FILE,
+};
 use burl_sim::Sim;
 use burl_util::prng::SimRng;
 use std::io::Write;
@@ -21,6 +23,13 @@ const USER: &[u8] = include_bytes!("../../../data/user.png");
 
 /// First texture id of the glyph pages (1-3 are the scene graphics).
 pub(crate) const FIRST_GLYPH_TEXTURE: u32 = 10;
+
+/// `Gource::drawBackground` (gource.cpp:2028): the clear alpha is 0 under `--transparent`. The PPM
+/// drops alpha and the shader path never samples `bloom_alpha.tga` (only `--ffp` does, D4), so this
+/// does not change the frames; it is kept so a future alpha-carrying output starts correct.
+fn clear_colour(bg: [f32; 3], transparent: bool) -> [f32; 4] {
+    [bg[0], bg[1], bg[2], if transparent { 0.0 } else { 1.0 }]
+}
 
 /// Binary PPM: the RGBA frame's colour channels, alpha dropped.
 fn write_ppm(out: &mut dyn Write, w: u32, h: u32, rgba: &[u8]) -> std::io::Result<()> {
@@ -63,8 +72,11 @@ pub fn run(
     let mut r = Renderer::new(HeadlessEgl::new(w, h)?)?;
     let tex = upload_scene_textures(&mut r)?;
 
-    // --font-file is not honoured yet: the bundled FreeSans (the default) is always used.
-    let mut fonts = super::frame::new_fonts()?;
+    // Gource grabs every font from the one global --font-file; with several sections the first wins.
+    let font_file = repos
+        .first()
+        .map_or(DEFAULT_FONT_FILE, |g| g.font_file.as_str());
+    let mut fonts = super::frame::new_fonts(font_file)?;
 
     let name = &display.output_ppm_filename;
     let mut out: Box<dyn Write> = if name == "-" {
@@ -98,10 +110,11 @@ pub fn run(
         ss.hide_tree = g.hide_tree;
         ss.hide_files = g.hide_files;
         ss.hide_users = g.hide_users;
+        ss.fixed_user_size = g.fixed_user_size;
         ss.user_scale = g.user_scale;
         let mut kit = FrameKit::new(&mut r, &mut fonts, g, w, h)?;
         let bg = g.background_colour;
-        let clear = [bg[0], bg[1], bg[2], 1.0];
+        let clear = clear_colour(bg, display.transparent);
 
         while !sim.is_finished() {
             sim.update().map_err(|e| e.0)?;
@@ -128,4 +141,15 @@ pub fn run(
         carry = sim.into_carry();
     }
     out.flush().map_err(io)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transparent_clears_with_alpha_zero() {
+        assert_eq!(clear_colour([0.1, 0.2, 0.3], false), [0.1, 0.2, 0.3, 1.0]);
+        assert_eq!(clear_colour([0.1, 0.2, 0.3], true), [0.1, 0.2, 0.3, 0.0]);
+    }
 }

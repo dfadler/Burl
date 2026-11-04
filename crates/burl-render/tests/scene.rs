@@ -159,3 +159,25 @@ fn hide_flags_empty_their_buffers() {
     // Each flag leaves the other buffers alone.
     assert!(!go(|s| s.hide_users = true).files.vertices().is_empty());
 }
+
+#[test]
+fn fixed_user_size_scales_users_with_camera_distance() {
+    let tex = SceneTextures {
+        beam: TextureId(1),
+        file: TextureId(2),
+        file_ratio: 1.0,
+        user: TextureId(3),
+        user_ratio: 1.0,
+    };
+    let mut sc = scene();
+    sc.camera.pos.z = -600.0;
+    let mut ss = SceneSettings::new(640, 480);
+    let width = |f: &Frame| {
+        let v = f.users.vertices();
+        v[2].pos[0] - v[0].pos[0]
+    };
+    let plain = width(&build_frame(&sc, &tex, &ss));
+    ss.fixed_user_size = true;
+    let fixed = width(&build_frame(&sc, &tex, &ss));
+    assert!((fixed - 2.0 * plain).abs() < 1e-3, "{plain} {fixed}");
+}

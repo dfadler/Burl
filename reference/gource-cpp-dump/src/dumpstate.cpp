@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <ctime>
 #include <fstream>
 #include <sstream>
@@ -114,6 +115,51 @@ void dumpSetOption(const std::string& name, const std::string& value) {
         gDump.script_pos = 0;
         gDump.script_set = true;
         if(gDump.prng_set) throw ConfFileException("--prng and --rand-script cannot be combined", "", 0);
+
+    } else if(name == "debug-pointer-script") {
+        std::ifstream in(value.c_str());
+        if(!in) throw ConfFileException("could not read '" + value + "'", "", 0);
+
+        gDump.pointer.clear();
+        std::string line;
+        int last = 0;
+        while(std::getline(in, line)) {
+            size_t hash = line.find('#');
+            if(hash != std::string::npos) line.erase(hash);
+            std::istringstream ls(line);
+            int frame;
+            std::string kind;
+            if(!(ls >> frame)) {
+                if(line.find_first_not_of(" \t\r") == std::string::npos) continue;
+                throw ConfFileException("invalid line in pointer script '" + value + "'", "", 0);
+            }
+            PointerEvent ev;
+            ev.frame = frame; ev.kind = 0; ev.a = ev.b = 0;
+            std::string arg;
+            if(!(ls >> kind) || frame < last) throw ConfFileException("invalid line in pointer script '" + value + "'", "", 0);
+            last = frame;
+            if(kind == "move") {
+                ev.kind = 'm';
+                if(!(ls >> ev.a >> ev.b)) throw ConfFileException("invalid move in pointer script '" + value + "'", "", 0);
+            } else if(kind == "down" || kind == "up") {
+                ev.kind = kind == "down" ? 'd' : 'u';
+                ls >> arg;
+                if(arg == "l") ev.a = SDL_BUTTON_LEFT;
+                else if(arg == "m") ev.a = SDL_BUTTON_MIDDLE;
+                else if(arg == "r") ev.a = SDL_BUTTON_RIGHT;
+                else throw ConfFileException("invalid button in pointer script '" + value + "'", "", 0);
+            } else if(kind == "key") {
+                ev.kind = 'k';
+                ls >> arg;
+                if(arg != "tab") throw ConfFileException("invalid key in pointer script '" + value + "'", "", 0);
+            } else {
+                throw ConfFileException("invalid event in pointer script '" + value + "'", "", 0);
+            }
+            gDump.pointer.push_back(ev);
+        }
+
+        gDump.pointer_pos = 0;
+        gDump.pointer_active = true;
     }
 }
 
@@ -346,6 +392,7 @@ void Gource::dumpState() {
                 (unsigned) gGourceRemovedFiles.size(), tag_seq);
         fputs(",\"dir_bounds\":", f); jbounds(f, dir_bounds);
         fputs(",\"user_bounds\":", f); jbounds(f, user_bounds);
+        if(gDump.pointer_active) dumpPointerJson(f);
 
         fputs("},\"camera\":", f); camera.dumpJson(f);
 
@@ -376,4 +423,74 @@ void Gource::dumpState() {
         fflush(f);
         appFinished = true;   // cap reached (or already finished)
     }
+}
+
+// ---- scripted pointer (--debug-pointer-script) -------------------------------
+
+// The scripted button mask stands in for SDL_GetMouseState, which injected events never change.
+bool Gource::buttonLeft() const {
+    return gDump.pointer_active ? (gDump.pointer_buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0 : cursor.leftButtonPressed();
+}
+
+bool Gource::buttonRight() const {
+    return gDump.pointer_active ? (gDump.pointer_buttons & SDL_BUTTON(SDL_BUTTON_RIGHT)) != 0 : cursor.rightButtonPressed();
+}
+
+bool Gource::buttonAny() const {
+    return gDump.pointer_active ? (gDump.pointer_buttons & (SDL_BUTTON(SDL_BUTTON_LEFT) | SDL_BUTTON(SDL_BUTTON_RIGHT))) != 0
+                                : cursor.buttonPressed();
+}
+
+// MouseCursor::isVisible without the window-focus test (Xvfb has no pointer): not hidden and
+// moved or clicked within the last 3 s (MouseCursor::timeout), counted in fixed ticks.
+bool Gource::dumpCursorVisible() const {
+    if(!gDump.pointer_active) return cursor.isVisible();
+    return !cursor.isHidden() && gDump.pointer_idle < 3.0f;
+}
+
+void Gource::dumpPointer() {
+    while(gDump.pointer_pos < gDump.pointer.size() && gDump.pointer[gDump.pointer_pos].frame <= framecount) {
+        const PointerEvent& ev = gDump.pointer[gDump.pointer_pos++];
+
+        if(ev.kind == 'm') {
+            SDL_MouseMotionEvent e;
+            memset(&e, 0, sizeof(e));
+            e.type = SDL_MOUSEMOTION;
+            e.x = ev.a; e.y = ev.b;
+            e.xrel = ev.a - gDump.pointer_x; e.yrel = ev.b - gDump.pointer_y;
+            gDump.pointer_x = ev.a; gDump.pointer_y = ev.b;
+            mouseMove(&e);
+
+        } else if(ev.kind == 'd' || ev.kind == 'u') {
+            int bit = SDL_BUTTON(ev.a);
+            if(ev.kind == 'd') gDump.pointer_buttons |= bit; else gDump.pointer_buttons &= ~bit;
+            SDL_MouseButtonEvent e;
+            memset(&e, 0, sizeof(e));
+            e.type = ev.kind == 'd' ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
+            e.button = ev.a;
+            mouseClick(&e);
+
+        } else {
+            SDL_KeyboardEvent e;
+            memset(&e, 0, sizeof(e));
+            e.type = SDL_KEYDOWN;
+            e.keysym.sym = SDLK_TAB;
+            keyPress(&e);
+        }
+    }
+}
+
+static void jnamed(FILE* f, const char* key, const std::string* name) {
+    fprintf(f, ",\"%s\":", key);
+    if(name) jstr(f, *name); else fputs("null", f);
+}
+
+void Gource::dumpPointerJson(FILE* f) const {
+    fputs(",\"pointer\":{\"mousepos\":", f); jvec2(f, mousepos);
+    fprintf(f, ",\"buttons\":%d,\"grab\":%s,\"dragged\":%s", gDump.pointer_buttons, jbool(grab_mouse), jbool(mousedragged));
+    jnamed(f, "hover_user", hoverUser ? &hoverUser->getName() : 0);
+    jnamed(f, "hover_file", hoverFile ? &hoverFile->fullpath : 0);
+    jnamed(f, "selected_user", selectedUser ? &selectedUser->getName() : 0);
+    jnamed(f, "selected_file", selectedFile ? &selectedFile->fullpath : 0);
+    fputc('}', f);
 }

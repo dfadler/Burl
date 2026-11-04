@@ -15,6 +15,13 @@
 
 #define DUMP_SCHEMA 1
 
+// One line of the pointer script: `FRAME move X Y`, `FRAME down|up l|m|r`, `FRAME key tab`.
+struct PointerEvent {
+    int frame;
+    char kind;                       // 'm' move, 'd' down, 'u' up, 'k' key
+    int a, b;                        // move: x, y; down/up: button (1 left, 2 middle, 3 right)
+};
+
 struct DumpOptions {
     FILE* out;                       // 0 unless --debug-dump-state given
     int every;
@@ -29,9 +36,18 @@ struct DumpOptions {
     bool libc_seeded;
     int section;                     // 0 until the first section boundary
     bool header_written;
+    // --debug-pointer-script: scripted mouse/key events (see ../README.md, "Scripted pointer")
+    bool pointer_active;
+    std::vector<PointerEvent> pointer;
+    size_t pointer_pos;
+    int pointer_buttons;             // SDL_BUTTON(n): bit 0 left, 1 middle, 2 right
+    float pointer_idle;              // seconds since the last scripted move/click (cursor timeout)
+    int pointer_x, pointer_y;
     DumpOptions() : out(0), every(1), max_frames(0), prng("default"), prng_set(false),
                     script_set(false), have_seed(false), seed(0), script_pos(0),
-                    park_state(0), libc_seeded(false), section(0), header_written(false) {}
+                    park_state(0), libc_seeded(false), section(0), header_written(false),
+                    pointer_active(false), pointer_pos(0), pointer_buttons(0), pointer_idle(3.0f),
+                    pointer_x(0), pointer_y(0) {}
 };
 
 extern DumpOptions gDump;

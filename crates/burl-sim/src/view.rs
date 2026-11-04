@@ -48,6 +48,8 @@ pub struct FileView {
     /// `Pawn::nametime` / `name_interval`: the label's fade clock.
     pub nametime: f32,
     pub name_interval: f32,
+    /// `selectedFile`: drawn white with an unscaled label, over everything.
+    pub selected: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -73,6 +75,8 @@ pub struct UserView {
     pub nametime: f32,
     pub name_interval: f32,
     pub highlighted: bool,
+    /// `selectedUser`: drawn white with an unscaled label in `--selection-colour`, over everything.
+    pub selected: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -137,8 +141,8 @@ impl Sim {
         let users = self
             .user_map
             .values()
-            .map(|&u| {
-                let u = self.user(u);
+            .map(|&uid| {
+                let u = self.user(uid);
                 let idle = u.elapsed - u.last_action;
                 let mut alpha = (u.elapsed / FADE_TIME).min(1.0);
                 if idle > self.s.user_idle_time {
@@ -155,6 +159,7 @@ impl Sim {
                     nametime: u.nametime,
                     name_interval: u.name_interval,
                     highlighted: u.highlighted,
+                    selected: self.selected_user == Some(uid),
                     actions: u
                         .active_actions
                         .iter()
@@ -206,9 +211,9 @@ impl Sim {
         let files = dd
             .files
             .iter()
-            .map(|&f| self.file(f))
-            .filter(|f| !f.hidden)
-            .map(|f| {
+            .map(|&fid| (fid, self.file(fid)))
+            .filter(|(_, f)| !f.hidden)
+            .map(|(fid, f)| {
                 let lc = f.elapsed - f.last_action;
                 let colour = if lc < 1.0 {
                     f.touch_colour * (1.0 - lc) + f.file_colour * lc
@@ -228,6 +233,7 @@ impl Sim {
                     name: name.to_string(),
                     nametime: f.nametime,
                     name_interval: f.name_interval,
+                    selected: self.selected_file == Some(fid),
                 }
             })
             .collect();

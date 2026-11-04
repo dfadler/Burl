@@ -3,6 +3,7 @@
 //! form rather than `%.9g`; both parse back to the same f32, which is how the comparator reads
 //! them. Non-finite values are the strings `"nan"`, `"inf"`, `"-inf"`.
 
+use crate::pointer::PointerEvent;
 use crate::sim::{Caption, Kind, Sim, SimError};
 use burl_util::bounds::Bounds2D;
 use std::fmt::Write;
@@ -241,6 +242,9 @@ impl Sim {
         bounds(&mut o, &self.dir_bounds);
         o.push_str(",\"user_bounds\":");
         bounds(&mut o, &self.user_bounds);
+        if self.pointer_dump {
+            self.dump_pointer(&mut o);
+        }
 
         let c = &self.camera;
         o.push_str("},\"camera\":{\"pos\":");
@@ -281,6 +285,33 @@ impl Sim {
         dump_captions(&mut o, self.active_captions.iter());
         o.push_str("}}\n");
         o
+    }
+
+    /// `dumpPointerJson`: the pointer and selection state a pointer script drives.
+    fn dump_pointer(&self, o: &mut String) {
+        o.push_str(",\"pointer\":{\"mousepos\":");
+        arr(o, &[self.mousepos.x, self.mousepos.y]);
+        let _ = write!(
+            o,
+            ",\"buttons\":{},\"grab\":{},\"dragged\":{}",
+            self.pointer_buttons,
+            jbool(self.grab_mouse),
+            jbool(self.mousedragged)
+        );
+        let name = |o: &mut String, key: &str, v: Option<String>| {
+            let _ = write!(o, ",\"{key}\":");
+            match v {
+                Some(s) => jstr(o, &s),
+                None => o.push_str("null"),
+            }
+        };
+        let user = |u: Option<usize>| u.map(|u| self.user(u).name.clone());
+        let file = |f: Option<usize>| f.map(|f| self.file(f).fullpath.clone());
+        name(o, "hover_user", user(self.hover_user));
+        name(o, "hover_file", file(self.hover_file));
+        name(o, "selected_user", user(self.selected_user));
+        name(o, "selected_file", file(self.selected_file));
+        o.push('}');
     }
 
     fn dump_dir(&self, o: &mut String, d: usize) {
@@ -452,6 +483,8 @@ pub struct DumpOptions {
     pub max_frames: u32,
     pub prng: String,
     pub prng_seed: Option<u64>,
+    /// The scripted pointer events (`--debug-pointer-script`); `None` = no `g.pointer` object.
+    pub pointer: Option<Vec<PointerEvent>>,
 }
 
 /// The dump header, once per run (the fork writes it at the first section boundary).
@@ -467,19 +500,36 @@ fn write_err(e: std::io::Error) -> SimError {
 impl Sim {
     /// Run one section to its end, writing its section record and every selected frame
     /// (`Gource::update` with the fork's hook after `logic`). The frame counter is the Sim's
-    /// own, so it restarts with each section's Sim.
+    /// own, so it restarts with each section's Sim. `next_event` is the script cursor
+    /// (`gDump.pointer_pos`): it survives from one section to the next.
     pub fn run_section(
         &mut self,
         out: &mut dyn std::io::Write,
         o: &DumpOptions,
+        next_event: &mut usize,
     ) -> Result<(), SimError> {
         out.write_all(self.section_record().as_bytes())
             .map_err(write_err)?;
+        self.pointer_dump = o.pointer.is_some();
         while !self.app_finished {
             self.update()?;
             if self.should_dump(o.every, o.max_frames) {
                 out.write_all(self.frame_record().as_bytes())
                     .map_err(write_err)?;
+            }
+            // scripted events land after the dump and before the draw: a click on frame N is
+            // first seen in the dump of frame N+1
+            if let Some(events) = &o.pointer {
+                while let Some(e) = events
+                    .get(*next_event)
+                    .filter(|e| e.frame <= self.framecount)
+                {
+                    self.apply_pointer(e);
+                    *next_event += 1;
+                }
+                // the draw: `mousetrace`, then `cursor.logic` with the fixed tick
+                self.draw_pointer();
+                self.tick_cursor(self.max_tick_rate);
             }
             // the cap (or the natural end) finishes the run after its last frame is written
             if self.is_last_frame(o.max_frames) {
@@ -497,7 +547,7 @@ impl Sim {
         o: &DumpOptions,
     ) -> Result<(), SimError> {
         write_header(out, o)?;
-        self.run_section(out, o)
+        self.run_section(out, o, &mut 0)
     }
 }
 

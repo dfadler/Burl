@@ -278,6 +278,9 @@ void Gource::update(float t, float dt) {
 
     if(gDump.out) dumpState();
 
+    // scripted events land after the dump and before draw(): a click on frame N shows in dump N+1
+    if(gDump.out && gDump.pointer_active) dumpPointer();
+
     draw(runtime, scaled_dt);
 
     //extract frames based on frameskip setting if frameExporter defined
@@ -290,6 +293,7 @@ void Gource::update(float t, float dt) {
     if(!gGourceSettings.hide_mouse) {
         //note: cursor uses real dt
         cursor.logic(dt);
+        gDump.pointer_idle += max_tick_rate;
         cursor.draw();
     }
 
@@ -344,6 +348,7 @@ void Gource::grabMouse(bool grab_mouse) {
     }
 #endif
 
+    if(!grab_mouse && cursor.isHidden()) gDump.pointer_idle = 0.0f;   // showCursor(true) resets the idle time
     cursor.showCursor(!grab_mouse);
 }
 
@@ -366,7 +371,7 @@ void Gource::mouseMove(SDL_MouseMotionEvent *e) {
 #endif
     }
 
-    bool rightmouse = cursor.rightButtonPressed();
+    bool rightmouse = buttonRight();
 
     //move camera in direction the user dragged the mouse
     if(mousedragged || rightmouse) {
@@ -399,6 +404,7 @@ void Gource::mouseMove(SDL_MouseMotionEvent *e) {
     mousemoved=true;
 
     cursor.updatePos(mousepos);
+    gDump.pointer_idle = 0.0f;
 
     float pos;
 
@@ -452,6 +458,7 @@ void Gource::mouseClick(SDL_MouseButtonEvent *e) {
 
     //mouse click should stop the cursor being idle
     cursor.updatePos(mousepos);
+    gDump.pointer_idle = 0.0f;
 
     if(e->type == SDL_MOUSEBUTTONUP) {
 
@@ -462,7 +469,7 @@ void Gource::mouseClick(SDL_MouseButtonEvent *e) {
         }
 
         if(e->button == SDL_BUTTON_LEFT || e->button == SDL_BUTTON_RIGHT) {
-            if(!cursor.buttonPressed()) {
+            if(!buttonAny()) {
                 grabMouse(false);
             }
         }
@@ -557,7 +564,7 @@ void Gource::toggleCameraMode() {
 void Gource::selectBackground() {
     //is the left mouse button down?
 
-    if(!cursor.leftButtonPressed()) return;
+    if(!buttonLeft()) return;
 
     selectUser(0);
 
@@ -718,7 +725,7 @@ void Gource::keyPress(SDL_KeyboardEvent *e) {
         if (e->keysym.sym == SDLK_m) {
 
             //toggle mouse visibility unless mouse clicked/pressed/dragged
-            if(!(mousedragged || mouseclicked || cursor.leftButtonPressed() )) {
+            if(!(mousedragged || mouseclicked || buttonLeft() )) {
 
                 if(!cursor.isHidden()) {
                     cursor.showCursor(false);
@@ -898,6 +905,9 @@ void Gource::reset() {
     if(userTree!=0) delete userTree;
     if(dirNodeTree!=0) delete dirNodeTree;
 
+    for(std::vector<RUser*>::iterator it = deletedUsers.begin(); it != deletedUsers.end(); it++) delete *it;
+    deletedUsers.clear();
+
     recolour = false;
 
     userTree = 0;
@@ -1067,7 +1077,9 @@ void Gource::deleteUser(RUser* user) {
 
     //debugLog("deleted user %s, tagid = %d\n", user->getName().c_str(), user->getTagID());
 
-    delete user;
+    // userTree still holds this pointer and the draw after update() runs mousetrace on it:
+    // free it when the tree is rebuilt (interactUsers)
+    deletedUsers.push_back(user);
 }
 
 bool Gource::canSeek() {
@@ -1314,6 +1326,9 @@ void Gource::interactUsers() {
 
     if(userTree != 0) delete userTree;
 
+    for(std::vector<RUser*>::iterator it = deletedUsers.begin(); it != deletedUsers.end(); it++) delete *it;
+    deletedUsers.clear();
+
     int max_depth = 1;
 
     //dont use deep quad tree initially when all the nodes are in one place
@@ -1546,7 +1561,7 @@ void Gource::updateCamera(float dt) {
 
             rotate_angle *= DEGREES_TO_RADIANS;
 
-        } else if(!cursor.rightButtonPressed() && dir_bounds.area() > 10000.0f) {
+        } else if(!buttonRight() && dir_bounds.area() > 10000.0f) {
 
             float aspect_ratio = display.width / (float) display.height;
 
@@ -2425,7 +2440,7 @@ void Gource::draw(float t, float dt) {
 
     trace_time = SDL_GetTicks();
 
-    if(!gGourceSettings.hide_mouse && cursor.isVisible()) {
+    if(!gGourceSettings.hide_mouse && dumpCursorVisible()) {
         mousetrace(dt);
     } else {
         if(hoverUser) {

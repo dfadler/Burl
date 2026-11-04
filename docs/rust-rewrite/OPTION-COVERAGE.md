@@ -120,7 +120,7 @@ Two generic tests cover every option's parse path and are not repeated per row: 
 | `--key` | Bool | `show_key` | Y | Y | Wired | burl-render/src/overlays.rs:149 | UR | Export only: the windowed frame draws no text (see Gap 1). |
 | `--logo` | Str | `logo` | Y* | Y | Wired | burl/src/export.rs:141 | R* | PNG only; export only. #51. |
 | `--logo-offset` | Str | `logo_offset` | Y | Y | Wired | burl/src/export.rs:197 | UR* |  |
-| `--selection-colour` | Str | `selection_colour` | N | N | Stored-unused | none (labels.rs:5: selection not ported) | **none** | file.cpp:58,141; user.cpp:330; needs pointer selection, so windowed-relevant |
+| `--selection-colour` | Str | `selection_colour` | Y | Y | Wired | burl-render/src/labels.rs (selected label), sim colours | `small-repo-pick`, `small-repo-select`, `names.rs` | file.cpp:58,141; user.cpp:330; needs pointer selection, so windowed-relevant |
 | `--title` | Str | `title` | Y | Y | Wired | burl-render/src/overlays.rs:96 | UE | Export only: the windowed frame draws no text (see Gap 1). |
 | `--user-font-size` | Int | `user_font_size`, `scaled_user_font_size` | Y | Y | Wired | burl/src/export.rs:163 | U | Export only: the windowed frame draws no text (see Gap 1). |
 | `--user-image-dir` | Str | `user_image_dir`, `user_image_map` | Y | N (#107) | Wired (export); windowed open (G9, #91) | burl-render/src/avatars.rs; export.rs:101-110 | RE | user.cpp:183 |
@@ -217,7 +217,7 @@ The original eleven-row list is kept as history in `git log` for this file; what
 | 6 | `--font-file` | **Landed** (`export.rs:75`, `load_font_file`) |
 | 7 | Avatars | Export **landed** (G9). Windowed: PR #107; NFC keys: PR #110; G8 mip check: evidence in a comment on [#91](https://github.com/dfadler/Burl/issues/91) |
 | 8 | `--transparent` | Closed, no visible effect in `-o` (unchanged) |
-| 9 | `--selection-colour`, pointer selection | **Open** ([#92](https://github.com/dfadler/Burl/issues/92); scope paper in PR #105) |
+| 9 | `--selection-colour`, pointer selection | **PRs open** ([#92](https://github.com/dfadler/Burl/issues/92)): #119, #121, #122, hover box #124 |
 | 10 | `--multi-sampling`, `--screen` | **Landed** (`6f160b5`) |
 | 11 | `--log-level` | **Landed** (`6e4f4fb`) |
 | 12 | Position slider | Windowed only; **PR #113** (never drawn in `-o`) |

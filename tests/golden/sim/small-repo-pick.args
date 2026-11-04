@@ -1,0 +1,1 @@
+@mouse --debug-pointer-script small-repo-pick.pointer --debug-dump-every 2

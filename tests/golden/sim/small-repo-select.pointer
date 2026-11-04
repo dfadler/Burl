@@ -1,0 +1,8 @@
+# Tab (selectNextUser) in track mode: first eligible user, next in tag order, wrap, none eligible
+200 key tab
+260 key tab
+320 key tab
+380 key tab
+440 key tab
+500 key tab
+560 key tab

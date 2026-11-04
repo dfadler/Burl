@@ -413,6 +413,12 @@ impl Sim {
         };
         // reset(): root = new RDirNode(0, "/")
         sim.root = sim.dir_new("/");
+        // GourceSettings::importGourceSettings: `start_position = (rand() % 1000) / 1000.0f`. The
+        // C++ reseeds with `srand(time(0))` first; the default generator is already clock-seeded
+        // and the fork's `gource_srand_time` is a no-op for every other mode, so only the draw remains.
+        if sim.s.start_position_random {
+            sim.s.start_position = (sim.rand() % 1000) as f32 / 1000.0;
+        }
         // Gource::update, once the log is ready: `if(start_position>0.0) seekTo(start_position)`
         if sim.s.start_position > 0.0 {
             sim.seek_to(sim.s.start_position);
@@ -474,7 +480,10 @@ impl Sim {
 
     /// Resume the carried `first_rand_frame` (set once, by the first `rand()` of the whole run).
     pub fn carry_first_rand_frame(&mut self, f: i64) {
-        self.first_rand_frame = f;
+        // a draw made by `Sim::new` (`--start-position random`) stays if no earlier section drew
+        if f >= 0 {
+            self.first_rand_frame = f;
+        }
     }
 
     pub fn is_finished(&self) -> bool {
@@ -2361,6 +2370,22 @@ mod tests {
 
     const THREE: &str =
         "1277787455|bob|A|a/b.txt\n1277787456|bob|A|c/d.txt\n1277787457|bob|A|c/e/f.txt\n";
+
+    /// `--start-position random`: `rand() % 1000 / 1000.0f` is drawn at import (the script's first
+    /// value is 1), counts as a `rand()` call and sets `first_rand_frame` to 0.
+    #[test]
+    fn start_position_random_draws_from_the_prng() {
+        let s = sim_with(
+            THREE,
+            SimSettings {
+                start_position_random: true,
+                ..ok_settings()
+            },
+        )
+        .unwrap();
+        assert_eq!(s.s.start_position, 0.001);
+        assert_eq!((s.rand_calls(), s.first_rand_frame), (1, 0));
+    }
 
     /// `Gource::setFrameExporter`: at 25 fps the tick rate is 75/s and every third tick is dumped.
     #[test]

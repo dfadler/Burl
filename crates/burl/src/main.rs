@@ -215,6 +215,7 @@ fn sim_settings(
         stop_position: g.stop_position,
         stop_timestamp: g.stop_timestamp,
         start_position: g.start_position,
+        start_position_random: g.start_position_random,
         days_per_second: g.days_per_second,
         auto_skip_seconds: g.auto_skip_seconds,
         no_time_travel: g.no_time_travel,

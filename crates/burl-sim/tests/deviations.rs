@@ -93,3 +93,58 @@ fn deviation_d13_overlapping_users_pick_in_name_order() {
     assert_eq!(sim.user_name(user.expect("a user is picked")), "amy");
     assert!(file.is_none());
 }
+
+/// The hover text box content: a hovered user shows its name, a hovered file its name and then
+/// its directory without the leading slash; a selected pawn shows nothing.
+#[test]
+fn hover_text_names_the_pawn_under_the_mouse() {
+    let path = std::env::temp_dir().join(format!("burl-hover-{}.log", std::process::id()));
+    std::fs::write(&path, "1277787455|amy|A|dir/a.txt\n").unwrap();
+    let log = fetch_log(
+        path.to_str().unwrap(),
+        Arc::new(LogSettings {
+            log_format: "custom".into(),
+            ..LogSettings::default()
+        }),
+    )
+    .unwrap();
+    let _ = std::fs::remove_file(&path);
+    let settings = SimSettings {
+        disable_auto_rotate: true,
+        ..SimSettings::default()
+    };
+    let (w, h) = (
+        settings.display_width as f32,
+        settings.display_height as f32,
+    );
+    let mut sim = Sim::new(settings, log, SimRng::from_script(vec![1, 2, 3]).unwrap()).unwrap();
+    for _ in 0..90 {
+        sim.update().unwrap();
+        sim.end_frame();
+    }
+    let view = sim.scene_view();
+    let cam = view.camera.pos;
+    // the inverse of the mouse projection (`mousetrace`)
+    let screen = |p: glam::Vec2| {
+        (
+            ((w - (p.x - cam.x) * h / cam.z) / 2.0) as i32,
+            ((1.0 - (p.y - cam.y) / cam.z) * h / 2.0) as i32,
+        )
+    };
+    let hover_at = |sim: &mut Sim, p: glam::Vec2| {
+        let (x, y) = screen(p);
+        sim.mouse_move(x, y, 0, 0);
+        sim.draw_pointer();
+        sim.hover_text()
+    };
+    let t = hover_at(&mut sim, view.users[0].pos).expect("a user is hovered");
+    assert_eq!(t.lines, ["amy"]);
+    assert_eq!(t.colour, view.users[0].colour);
+    // with the users hidden the file shows up: name, then its directory
+    sim.set_hide(true, false);
+    let file = &view.dirs.iter().flat_map(|d| &d.files).next().unwrap();
+    let t = hover_at(&mut sim, file.pos).expect("a file is hovered");
+    assert_eq!(t.lines, ["a.txt", "dir/"]);
+    // nothing under the mouse, nothing shown
+    assert_eq!(hover_at(&mut sim, glam::vec2(9000.0, 9000.0)), None);
+}

@@ -7,7 +7,14 @@
 use crate::command::Command;
 use crate::sim::{DirId, FileId, Sim, UserId};
 use burl_util::bounds::Bounds2D;
-use glam::{vec2, Vec2};
+use glam::{vec2, Vec2, Vec3};
+
+/// What the hover text box shows: its lines and the pawn's `getColour()`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct HoverText {
+    pub lines: Vec<String>,
+    pub colour: Vec3,
+}
 
 /// `MouseCursor::timeout`: the cursor hides after this long without a move or click.
 pub const CURSOR_TIMEOUT: f32 = 3.0;
@@ -309,6 +316,36 @@ impl Sim {
             }
         }
         (user, file)
+    }
+
+    /// `mousepos`, where the hover box is anchored.
+    pub fn mouse_position(&self) -> Vec2 {
+        self.mousepos
+    }
+
+    /// The hover text box content (`Gource::draw`): a hovered file that is not selected gives its
+    /// name and then its directory (without the leading `/`, none for the root), else a hovered
+    /// user that is not selected gives its name.
+    pub fn hover_text(&self) -> Option<HoverText> {
+        if let Some(f) = self.hover_file.filter(|&f| Some(f) != self.selected_file) {
+            let file = self.file(f);
+            let name = file.fullpath.rsplit('/').next().unwrap_or_default();
+            let mut lines = vec![name.to_string()];
+            let dir = file.path.strip_prefix('/').unwrap_or(&file.path);
+            if !dir.is_empty() {
+                lines.push(dir.to_string());
+            }
+            return Some(HoverText {
+                lines,
+                colour: self.file_colour(f),
+            });
+        }
+        let u = self.hover_user.filter(|&u| Some(u) != self.selected_user)?;
+        let user = self.user(u);
+        Some(HoverText {
+            lines: vec![user.name.clone()],
+            colour: user.usercol,
+        })
     }
 
     /// A user's name, for a result of [`Sim::pick_at`].

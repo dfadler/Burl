@@ -19,7 +19,7 @@ use burl_gl::winit::platform::modifier_supplement::KeyEventExtModifierSupplement
 use burl_gl::winit::window::{CursorGrabMode, Fullscreen, WindowAttributes, WindowId};
 use burl_gl::{monitor_index, GlContext, Renderer, WindowedGl};
 use burl_render::glam::Vec2;
-use burl_render::{world_matrix, FontManager, SceneSettings, SceneTextures};
+use burl_render::{world_matrix, FontManager, SceneSettings, SceneTextures, TextBox, PAGE_SIZE};
 use burl_sim::{Command, Sim};
 use burl_util::prng::SimRng;
 use input::{button_command, key_action, wheel_command, Action, Arrows};
@@ -98,6 +98,7 @@ struct Live {
     ss: SceneSettings,
     fonts: FontManager,
     kit: FrameKit,
+    textbox: TextBox,
     slider: SliderHook,
     avatars: Option<SharedAvatars>,
     clear: [f32; 4],
@@ -120,6 +121,7 @@ struct Loaded {
     ss: SceneSettings,
     fonts: FontManager,
     kit: FrameKit,
+    textbox: TextBox,
     slider: SliderHook,
     avatars: Option<SharedAvatars>,
     clear: [f32; 4],
@@ -236,6 +238,7 @@ impl App {
             ss: l.ss,
             fonts: l.fonts,
             kit: l.kit,
+            textbox: l.textbox,
             slider: l.slider,
             avatars: l.avatars,
             clear: l.clear,
@@ -267,6 +270,7 @@ impl App {
         live.ss = l.ss;
         live.fonts = l.fonts;
         live.kit = l.kit;
+        live.textbox = l.textbox;
         live.slider = l.slider;
         live.avatars = l.avatars;
         live.clear = l.clear;
@@ -323,6 +327,7 @@ impl App {
         ss.user_scale = g.user_scale;
         let mut fonts = new_fonts(&g.font_file)?;
         let kit = FrameKit::new(r, &mut fonts, g, w, h)?;
+        let textbox = TextBox::new(&mut fonts, (18.0 * g.font_scale) as u32);
         let slider = SliderHook::new(&mut fonts, g, w, h, repo_count);
         let bg = g.background_colour;
         Ok(Loaded {
@@ -332,6 +337,7 @@ impl App {
             kit,
             slider,
             avatars,
+            textbox,
             clear: [bg[0], bg[1], bg[2], 1.0],
             disable_input: g.disable_input,
             hide_mouse: g.hide_mouse,
@@ -372,6 +378,21 @@ impl App {
             scene.seekable,
             dt.as_secs_f32(),
         )?;
+        // the hover text box comes last in `Gource::draw`, after the overlays
+        if let Some(h) = live.sim.hover_text() {
+            live.textbox.draw(
+                &mut live.fonts,
+                &mut frame.overlay,
+                &h.lines,
+                h.colour,
+                live.sim.mouse_position(),
+                Vec2::new(live.ss.width, live.ss.height),
+            );
+            for u in live.fonts.take_updates() {
+                live.r
+                    .upload_texture(u.id, PAGE_SIZE as u32, PAGE_SIZE as u32, &u.rgba, false)?;
+            }
+        }
         let world = world_matrix(&scene, &live.ss);
         live.r.render(live.clear, &frame.batches(), world)?;
         live.r.blit_to_screen()?;

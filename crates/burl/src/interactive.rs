@@ -1,19 +1,24 @@
 //! The windowed path (phase 6, ticket #20): the winit `ApplicationHandler` that owns the window,
 //! the 16 ms accumulate loop (`SDLApp::run`, `min_delta_msec` 16 from `GourceShell`) and the
-//! frame, drawn through the same `Renderer` the exporter uses. Input is not wired yet.
+//! frame, drawn through the same `Renderer` the exporter uses. Window events become `Command`s
+//! in [`input`]; they queue up and are applied before the next step.
+
+mod input;
 
 use super::export::upload_scene_textures;
 use super::{fetch_log, log_settings, sim_settings};
 use burl_conf::settings::{DisplaySettings, GourceSettings};
 use burl_gl::winit::application::ApplicationHandler;
 use burl_gl::winit::dpi::{LogicalSize, PhysicalPosition, PhysicalSize, Size};
-use burl_gl::winit::event::WindowEvent;
+use burl_gl::winit::event::{DeviceEvent, DeviceId, ElementState, WindowEvent};
 use burl_gl::winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use burl_gl::winit::window::{Fullscreen, WindowAttributes, WindowId};
+use burl_gl::winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
+use burl_gl::winit::window::{CursorGrabMode, Fullscreen, WindowAttributes, WindowId};
 use burl_gl::{GlContext, Renderer, WindowedGl};
 use burl_render::{build_frame, world_matrix, SceneSettings, SceneTextures};
-use burl_sim::Sim;
+use burl_sim::{Command, Sim};
 use burl_util::prng::SimRng;
+use input::{key_action, wheel_command, Action, Arrows, Pointer, PointerOut};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -48,6 +53,26 @@ pub fn window_attributes(d: &DisplaySettings) -> WindowAttributes {
     a
 }
 
+/// `viewport_dpi_ratio.x`: a viewport given without `--high-dpi` is an exact-pixel window (ratio
+/// 1, see [`window_attributes`]); any other window is logical, so its ratio is the scale factor.
+fn dpi_ratio(d: &DisplaySettings, scale_factor: f64) -> f32 {
+    if d.viewport_specified && !d.high_dpi {
+        1.0
+    } else {
+        scale_factor as f32
+    }
+}
+
+/// The default `font_scale` (`Gource::init`): the DPI ratio when above 1, else one more per full
+/// 1600 pixels of drawable height (integer division).
+fn font_scale(ratio: f32, height: u32) -> f32 {
+    if ratio > 1.0 {
+        ratio
+    } else {
+        (1 + height as i32 / 1600) as f32
+    }
+}
+
 struct Live {
     r: Renderer<WindowedGl>,
     sim: Sim,
@@ -55,6 +80,62 @@ struct Live {
     ss: SceneSettings,
     clear: [f32; 4],
     last: Instant,
+    /// Commands since the last frame, applied in order before the step.
+    pending: Vec<Command>,
+    arrows: Arrows,
+    pointer: Pointer,
+    alt: bool,
+    disable_input: bool,
+    /// `hide_mouse`: all mouse input is ignored and the cursor is hidden.
+    hide_mouse: bool,
+    grabbed: bool,
+}
+
+impl Live {
+    fn window(&self) -> &burl_gl::winit::window::Window {
+        self.r.context().window()
+    }
+
+    /// `Gource::grabMouse`: confine the cursor while a button drags, and hide it.
+    fn set_grab(&mut self, on: bool) {
+        let w = self.window();
+        if on {
+            // Locked is not available everywhere (X11 has only Confined)
+            if w.set_cursor_grab(CursorGrabMode::Locked).is_err() {
+                let _ = w.set_cursor_grab(CursorGrabMode::Confined);
+            }
+            w.set_cursor_visible(false);
+        } else {
+            let _ = w.set_cursor_grab(CursorGrabMode::None);
+            w.set_cursor_visible(!self.hide_mouse);
+        }
+        self.grabbed = on;
+    }
+
+    fn act(&mut self, a: Action) {
+        match a {
+            Action::Sim(c) => self.pending.push(c),
+            Action::Quit => {}
+            Action::ToggleTree => self.ss.hide_tree = !self.ss.hide_tree,
+            Action::ToggleUsers => self.ss.hide_users = !self.ss.hide_users,
+            // ignored while a button is down or dragging
+            Action::ToggleMouse if !self.pointer.busy() => {
+                self.hide_mouse = !self.hide_mouse;
+                self.window()
+                    .set_cursor_visible(!self.hide_mouse && !self.grabbed);
+            }
+            Action::ToggleMouse => {}
+            Action::ToggleFrame => {
+                let w = self.window();
+                w.set_decorations(!w.is_decorated());
+            }
+            Action::ToggleFullscreen => {
+                let w = self.window();
+                let on = w.fullscreen().is_none();
+                w.set_fullscreen(on.then_some(Fullscreen::Borderless(None)));
+            }
+        }
+    }
 }
 
 struct App {
@@ -69,11 +150,16 @@ impl App {
     fn start(&mut self, el: &ActiveEventLoop) -> Result<Live, String> {
         let ctx = WindowedGl::new(el, window_attributes(&self.display), self.display.vsync)?;
         let (w, h) = ctx.size();
+        let ctx_scale = ctx.scale_factor();
         let mut r = Renderer::new(ctx)?;
         let tex = upload_scene_textures(&mut r)?;
 
         let g = &mut self.repo;
         g.apply_shell_fixups(1, false);
+        if g.default_font_scale {
+            g.font_scale = font_scale(dpi_ratio(&self.display, ctx_scale), h);
+            g.set_scaled_font_sizes();
+        }
         // The camera aspect follows the real drawable, which HiDPI makes differ from `-WxH`.
         let mut d = self.display.clone();
         d.width = w as i32;
@@ -93,6 +179,10 @@ impl App {
         ss.hide_users = g.hide_users;
         ss.user_scale = g.user_scale;
         let bg = g.background_colour;
+        // `Cursor` starts hidden under --hide-mouse
+        if g.hide_mouse {
+            r.context().window().set_cursor_visible(false);
+        }
         Ok(Live {
             r,
             sim,
@@ -100,6 +190,13 @@ impl App {
             ss,
             clear: [bg[0], bg[1], bg[2], 1.0],
             last: Instant::now(),
+            pending: Vec::new(),
+            arrows: Arrows::default(),
+            pointer: Pointer::default(),
+            alt: false,
+            disable_input: g.disable_input,
+            hide_mouse: g.hide_mouse,
+            grabbed: false,
         })
     }
 
@@ -111,6 +208,10 @@ impl App {
             return Ok(true);
         }
         live.last = now;
+        live.pending.extend(live.arrows.command());
+        for c in live.pending.drain(..) {
+            live.sim.apply(c);
+        }
         live.sim
             .update_realtime(dt.as_secs_f32())
             .map_err(|e| e.0)?;
@@ -146,6 +247,50 @@ impl ApplicationHandler for App {
         };
         match event {
             WindowEvent::CloseRequested => el.exit(),
+            WindowEvent::ModifiersChanged(m) => live.alt = m.state().alt_key(),
+            // like SDL's keyboard state, a focus loss releases every held key
+            WindowEvent::Focused(false) => live.arrows = Arrows::default(),
+            WindowEvent::KeyboardInput {
+                event,
+                is_synthetic: false,
+                ..
+            } => {
+                let key = event.key_without_modifiers();
+                let down = event.state == ElementState::Pressed;
+                // `Gource::logic` polls the arrows every frame, `disable_input` or not
+                live.arrows.set(&key, down);
+                if !down {
+                    return;
+                }
+                let action = key_action(
+                    &key,
+                    event.physical_key,
+                    event.location,
+                    event.repeat,
+                    live.alt,
+                    live.disable_input,
+                );
+                match action {
+                    Some(Action::Quit) => el.exit(),
+                    Some(a) => live.act(a),
+                    None => {}
+                }
+            }
+            WindowEvent::MouseWheel { delta, .. } if !live.disable_input => {
+                live.pending.extend(wheel_command(&delta));
+            }
+            // releases always pass: `M` can hide the mouse mid-drag, and a dropped release would
+            // leave the button (and the grab) stuck
+            WindowEvent::MouseInput { state, button, .. }
+                if !live.disable_input && (!live.hide_mouse || state == ElementState::Released) =>
+            {
+                for o in live.pointer.button(button, state == ElementState::Pressed) {
+                    match o {
+                        PointerOut::Cmd(c) => live.pending.push(c),
+                        PointerOut::Grab(on) => live.set_grab(on),
+                    }
+                }
+            }
             WindowEvent::Resized(s) if s.width > 0 && s.height > 0 => {
                 live.r.context().resize(s.width, s.height);
                 if let Err(e) = live.r.resize(s.width, s.height) {
@@ -156,6 +301,19 @@ impl ApplicationHandler for App {
                 live.ss.height = s.height as f32;
             }
             _ => {}
+        }
+    }
+
+    fn device_event(&mut self, _: &ActiveEventLoop, _: DeviceId, event: DeviceEvent) {
+        // Relative motion (`xrel`, `yrel`): `CursorMoved` stops while the cursor is grabbed.
+        let (Some(live), DeviceEvent::MouseMotion { delta: (dx, dy) }) =
+            (self.live.as_mut(), event)
+        else {
+            return;
+        };
+        if !live.disable_input && !live.hide_mouse {
+            live.pending
+                .extend(live.pointer.motion(dx as f32, dy as f32));
         }
     }
 
@@ -212,6 +370,31 @@ mod tests {
             size(&window_attributes(&d)),
             PhysicalSize::new(640, 480).into()
         );
+    }
+
+    #[test]
+    fn font_scale_follows_the_dpi_ratio_then_the_height() {
+        let exact = DisplaySettings {
+            viewport_specified: true,
+            ..DisplaySettings::default()
+        };
+        // exact pixels never use the scale factor, even on a 2x screen
+        assert_eq!(dpi_ratio(&exact, 2.0), 1.0);
+        assert_eq!(dpi_ratio(&DisplaySettings::default(), 2.0), 2.0);
+        assert_eq!(
+            dpi_ratio(
+                &DisplaySettings {
+                    high_dpi: true,
+                    ..exact
+                },
+                2.0
+            ),
+            2.0
+        );
+        assert_eq!(font_scale(2.0, 720), 2.0);
+        assert_eq!(font_scale(1.0, 1599), 1.0);
+        assert_eq!(font_scale(1.0, 1600), 2.0);
+        assert_eq!(font_scale(1.0, 3200), 3.0);
     }
 
     #[test]

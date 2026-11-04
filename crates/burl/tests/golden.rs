@@ -491,6 +491,8 @@ fn deviation_d5b_help_dir_name_position_range() {
     assert!(out.contains("(between 0.1 and 1.0, default is 0.5)."));
     let r = run(&["--dir-name-position", "0.05", "tests/logs/utf8.log"]);
     assert_eq!(r.code, 1);
+    assert!(String::from_utf8_lossy(&r.stderr)
+        .contains("dir-name-position outside of range 0.1 - 1.0 (inclusive)"));
 }
 
 #[test]

@@ -9,9 +9,9 @@ use burl_conf::settings::{DebugOptions, DisplaySettings, GourceSettings};
 use burl_formats::fetch_log;
 use burl_gl::{GlContext, HeadlessEgl, Renderer};
 use burl_render::{
-    background_batch, build_frame, draw_names, logo_batch, world_matrix, FontManager, NameFonts,
-    NameSettings, OverlaySettings, Overlays, SceneSettings, SceneTextures, TextureId, FREE_SANS,
-    PAGE_SIZE,
+    background_batch, build_frame, draw_names, load_font_file, logo_batch, world_matrix,
+    FontManager, NameFonts, NameSettings, OverlaySettings, Overlays, SceneSettings, SceneTextures,
+    TextureId, DEFAULT_FONT_FILE, PAGE_SIZE,
 };
 use burl_sim::Sim;
 use burl_util::prng::SimRng;
@@ -87,8 +87,11 @@ pub fn run(
     let mut r = Renderer::new(HeadlessEgl::new(w, h)?)?;
     let tex = upload_scene_textures(&mut r)?;
 
-    // --font-file is not honoured yet: the bundled FreeSans (the default) is always used.
-    let mut fonts = FontManager::new(FREE_SANS, FIRST_GLYPH_TEXTURE)?;
+    // Gource grabs every font from the one global --font-file; with several sections the first wins.
+    let font_file = repos
+        .first()
+        .map_or(DEFAULT_FONT_FILE, |g| g.font_file.as_str());
+    let mut fonts = FontManager::new(&load_font_file(font_file)?, FIRST_GLYPH_TEXTURE)?;
 
     let name = &display.output_ppm_filename;
     let mut out: Box<dyn Write> = if name == "-" {

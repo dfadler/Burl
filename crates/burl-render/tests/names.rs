@@ -34,6 +34,7 @@ fn file(name: &str, interval: f32) -> FileView {
         name: name.into(),
         nametime: 4.0,
         name_interval: interval,
+        selected: false,
     }
 }
 
@@ -50,6 +51,7 @@ fn user(name: &str, interval: f32, highlighted: bool) -> UserView {
         nametime: 5.0,
         name_interval: interval,
         highlighted,
+        selected: false,
     }
 }
 
@@ -246,4 +248,28 @@ fn dir_label_sits_on_the_edge() {
     let got = label_pos(p1, p2, sp, 0.5);
     assert!((got - (p1 * 0.25 + p2 * 0.25 + sp * 0.5)).length() < 1e-6);
     assert_eq!(label_pos(p1, p2, sp, 1.0), p2 * 1.0);
+}
+
+#[test]
+fn selected_names_are_drawn_last_in_the_selection_colour_whatever_the_fade_or_hide() {
+    let sel = Vec3::new(0.0, 1.0, 0.0);
+    let mut u = user("ann", 2.5, false); // the normal pass would draw this one too
+    u.selected = true;
+    let mut f = file("a.rs", 4.0); // alpha <= 0.01 and past its fade
+    f.selected = true;
+    let s = scene(
+        vec![dir(None, "", 0, 9.0, vec![f])],
+        vec![u, user("bo", 2.5, false)],
+    );
+    let draw = names(&s, |n, _| n.selection_colour = sel);
+    // file (4 glyphs = 4 quads) + the unselected user "bo" first, then the selected user and file
+    let v = draw.names.vertices();
+    assert_eq!(quads(&draw), 4 + 2 + 3);
+    let last_user = &v[(2) * 4..(2 + 3) * 4];
+    assert!(last_user.iter().all(|x| x.colour == [0.0, 1.0, 0.0, 0.75]));
+    let file_quads = &v[(2 + 3) * 4..];
+    assert!(file_quads.iter().all(|x| x.colour == [0.0, 1.0, 0.0, 1.0]));
+    // hide_usernames hides "bo" but not the selected user
+    let hidden = names(&s, |n, _| n.hide_usernames = true);
+    assert_eq!(quads(&hidden), 3 + 4);
 }

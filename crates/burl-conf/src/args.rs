@@ -74,6 +74,7 @@ pub const CONF_SECTIONS: &[(&str, Section)] = &[
     ("prng", Section::CommandLine),
     ("prng-seed", Section::CommandLine),
     ("rand-script", Section::CommandLine),
+    ("debug-pointer-script", Section::CommandLine),
     // display section (core/settings.cpp SDLAppSettings ctor)
     ("viewport", Section::Display),
     ("windowed", Section::Display),
@@ -213,6 +214,7 @@ pub const ARG_TYPES: &[(&str, ArgType)] = &[
     ("prng", ArgType::Str),
     ("prng-seed", ArgType::Str),
     ("rand-script", ArgType::Str),
+    ("debug-pointer-script", ArgType::Str),
 ];
 
 pub fn alias(name: &str) -> &str {

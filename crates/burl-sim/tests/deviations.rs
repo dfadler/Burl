@@ -35,6 +35,7 @@ fn deviation_d2_log_is_loaded_before_the_first_frame() {
         max_frames: 30,
         prng: "script".into(),
         prng_seed: None,
+        pointer: None,
     };
     let mut out = Vec::new();
     sim.run_dump(&mut out, &o).unwrap();

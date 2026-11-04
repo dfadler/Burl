@@ -51,7 +51,9 @@ fn burl_dump(root: &Path, name: &str, out: &Path) -> String {
             root.join("tests").join(c)
         });
     let auto_rotate = extra.contains(&"@auto-rotate");
-    extra.retain(|a| *a != "@auto-rotate");
+    // `@mouse` shows the mouse (only the slider is hidden), for the pointer-script fixtures
+    let mouse = extra.contains(&"@mouse");
+    extra.retain(|a| *a != "@auto-rotate" && *a != "@mouse");
     let extra_line = extra.join(" ");
 
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_burl"));
@@ -69,7 +71,7 @@ fn burl_dump(root: &Path, name: &str, out: &Path) -> String {
                 .args(["--seconds-per-day", "1", "--stop-at-time", "10"])
                 .args(["--hash-seed", "31", "--disable-auto-skip"])
                 .args(["--file-idle-time", "0", "--time-scale", "1"])
-                .args(["--hide", "mouse"]);
+                .args(["--hide", if mouse { "progress" } else { "mouse" }]);
             if !auto_rotate {
                 cmd.arg("--disable-auto-rotate");
             }
@@ -156,6 +158,12 @@ fn sim_gate_small_repo_track() {
 #[test]
 fn sim_gate_small_repo_follow() {
     gate("small-repo-follow");
+}
+
+/// Tab (`selectNextUser`) in track mode, driven by the fork's scripted pointer (#92).
+#[test]
+fn sim_gate_small_repo_select() {
+    gate("small-repo-select");
 }
 
 #[test]

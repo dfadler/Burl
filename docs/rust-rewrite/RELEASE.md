@@ -13,7 +13,7 @@ and the release design ([#21](https://github.com/dfadler/Burl/issues/21)). The f
 | macOS native build, sim goldens within tolerance | the `macos` leg of `ci.yml`; `cargo xtask ci` on macOS | `ci.yml`, and `build-macos-arm64` in `release.yml` |
 | `--features pcre2` leg | `cargo xtask ci --pcre2` | `ci.yml` (`linux-pcre2`) |
 | Docker headless export gives a valid PPM stream for a fixture | `docker build --platform linux/amd64 -f docker/release.Dockerfile -t burl:release . && scripts/check-image.sh burl:release` | `image` job in `release.yml` |
-| Interactive checklist signed off by the user | `scripts/check-release.sh vX.Y.Z` (every box ticked, a sign-off per platform, version matches) | `gate` job in `release.yml` |
+| Interactive checklist: automated items proved, manual items signed off by the user | `scripts/check-release.sh vX.Y.Z` (every proof the checklist names still exists, every manual box ticked, a sign-off per platform, version matches); the proofs themselves are the unit tests and the `window-xvfb` and `visual-ssim` jobs | `gate` job in `release.yml`; `heavy.yml` |
 | Deviation register complete and reviewed | the same script: the sign-off records `git hash-object docs/rust-rewrite/DEVIATIONS.md`; any later edit to the register makes the gate fail | `gate` job |
 | Licences | `cargo deny check` (every PR); `cargo deny list` is shipped as `THIRD-PARTY-LICENSES.txt` | `ci.yml` `deny`; `build` jobs |
 | Reproducible dependencies | all builds use `--locked` | everywhere |
@@ -25,7 +25,7 @@ required reviewer. Nothing is public until the user also publishes the draft.
 ## Human steps, in order
 
 1. All feature and gate PRs merged; `master` green (fast, heavy, visual).
-2. Run the interactive checklist ([INTERACTIVE-CHECKLIST.md](INTERACTIVE-CHECKLIST.md)) on macOS Retina, macOS non-Retina and Linux X11.
+2. Run the **manual** items of the interactive checklist ([INTERACTIVE-CHECKLIST.md](INTERACTIVE-CHECKLIST.md), "Still manual") on macOS Retina, macOS non-Retina and Linux X11. Everything else in it is proved by CI. Decide the "Known gap" list there (implement, or record each as a deviation) before step 3.
 3. Review every row of `DEVIATIONS.md`. Every Change/Gap has the user's OK; no unpinned or "not yet written" test names; decide G4 (does `pcre2` ship by default).
 4. Release PR (merged by the user; it touches no workflow): bump the workspace version to 0.58.0, change `VERSION` in `crates/burl-conf/src/help.rs` and the `help-*` expected-diff row, fill the sign-off block (`version`, `deviation-register` = the hash command above, one line per platform), tick the boxes.
 5. Optional dry run: tag `v0.58.0-rc.1`. It skips the sign-off check, builds everything, pushes the image without `latest` and drafts a prerelease. Delete the draft and image tag afterwards.

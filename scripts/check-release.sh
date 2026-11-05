@@ -2,12 +2,13 @@
 # Release sign-off gate (#21, #14): a human step the release workflow cannot skip.
 #   scripts/check-release.sh vX.Y.Z
 # Checks, on the tagged commit: the tag equals the workspace version; the interactive checklist
-# has every box ticked and a sign-off per platform; the version and the DEVIATIONS.md blob hash
-# recorded in the sign-off match (so any later register edit invalidates the review).
+# has every box ticked and a sign-off per platform; every automated proof it names still exists;
+# the version and the DEVIATIONS.md blob hash recorded in the sign-off match (so any later register
+# edit invalidates the review).
 set -euo pipefail
 
 case "${1:-}" in -h | --help | "")
-	sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'
 	exit 0
 	;;
 esac
@@ -32,6 +33,22 @@ signed() { local v; v=$(field "$1"); [ -n "$v" ] && [ "$v" != TODO ]; }
 if grep -q '^- \[ \]' "$SIGNOFF"; then
 	bad "unticked checklist items: $(grep -c '^- \[ \]' "$SIGNOFF")"
 fi
+# Every automated item names its proof as `path::name` in a table row. A Rust name must still be a
+# `fn`; anything else (a window-check message, a CI job name) must still appear literally.
+bt='`' # a variable, so shellcheck does not read the backticks as command substitution
+proofs=$(grep '^|' "$SIGNOFF" | grep -o "${bt}[^${bt}]*::[^${bt}]*${bt}" | tr -d "$bt" | sort -u || true)
+[ -n "$proofs" ] || bad "no automated-check proofs in $SIGNOFF"
+while IFS= read -r p; do
+	[ -n "$p" ] || continue
+	file=${p%%::*} needle=${p#*::}
+	if [ ! -f "$ROOT/$file" ]; then
+		bad "proof file missing: $p"
+	elif [[ $needle =~ ^[a-z0-9_]+$ ]]; then
+		grep -qE "fn ${needle}[(<]" "$ROOT/$file" || bad "proof test gone: $p"
+	else
+		grep -qF -- "$needle" "$ROOT/$file" || bad "proof text gone: $p"
+	fi
+done <<<"$proofs"
 for k in macos-retina macos-non-retina linux-x11; do
 	signed "$k" || bad "no sign-off for $k"
 done

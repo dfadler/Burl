@@ -205,6 +205,24 @@ impl Live {
     }
 }
 
+/// Whether a mouse button event reaches the sim: nothing under `--disable-input`, and nothing
+/// while `M` hides the mouse, except releases (a dropped release would leave the button and the
+/// grab stuck).
+fn button_passes(disable_input: bool, hide_mouse: bool, state: ElementState) -> bool {
+    !disable_input && (!hide_mouse || state == ElementState::Released)
+}
+
+/// Whether the timeline slider follows the pointer: not while the mouse is hidden or grabbed.
+fn slider_follows(hide_mouse: bool, grabbed: bool) -> bool {
+    !hide_mouse && !grabbed
+}
+
+/// The sim's pointer pixel. winit reports physical pixels and the drawable is physical too,
+/// so there is no scale to apply: Gource mixes points and pixels under `--high-dpi`, Burl doesn't.
+fn pointer_px(p: PhysicalPosition<f64>) -> (i32, i32) {
+    (p.x as i32, p.y as i32)
+}
+
 struct App {
     display: DisplaySettings,
     sections: Sections,
@@ -458,10 +476,8 @@ impl ApplicationHandler for App {
             WindowEvent::MouseWheel { delta, .. } if !live.disable_input => {
                 live.pending.extend(wheel_command(&delta));
             }
-            // releases always pass: `M` can hide the mouse mid-drag, and a dropped release would
-            // leave the button (and the grab) stuck
             WindowEvent::MouseInput { state, button, .. }
-                if !live.disable_input && (!live.hide_mouse || state == ElementState::Released) =>
+                if button_passes(live.disable_input, live.hide_mouse, state) =>
             {
                 // `Gource::mouseClick`: a left press on the slider seeks (then also starts the
                 // background drag, as in the C++)
@@ -472,14 +488,12 @@ impl ApplicationHandler for App {
                     .extend(button_command(button, state == ElementState::Pressed));
             }
             WindowEvent::CursorMoved { position, .. } if !live.disable_input => {
-                if !live.hide_mouse && !live.grabbed {
+                if slider_follows(live.hide_mouse, live.grabbed) {
                     let pos = Vec2::new(position.x as f32, position.y as f32);
                     live.slider.moved(pos, &mut live.sim, &mut live.fonts);
                 }
-                live.pending.push(Command::PointerAt {
-                    x: position.x as i32,
-                    y: position.y as i32,
-                });
+                let (x, y) = pointer_px(position);
+                live.pending.push(Command::PointerAt { x, y });
             }
             WindowEvent::CursorEntered { .. } => live.sim.set_cursor_focus(true),
             WindowEvent::CursorLeft { .. } => live.sim.set_cursor_focus(false),
@@ -648,5 +662,33 @@ mod tests {
         d.viewport_specified = true;
         d.high_dpi = true;
         assert_eq!(size(&window_attributes(&d)), logical.into());
+    }
+
+    #[test]
+    fn button_events_are_gated_by_disable_input_and_hidden_mouse_but_releases_pass() {
+        use ElementState::{Pressed, Released};
+        assert!(button_passes(false, false, Pressed));
+        assert!(!button_passes(true, false, Pressed));
+        assert!(!button_passes(true, false, Released));
+        assert!(!button_passes(false, true, Pressed));
+        assert!(button_passes(false, true, Released));
+        assert!(!button_passes(true, true, Released));
+    }
+
+    #[test]
+    fn the_slider_ignores_a_hidden_or_grabbed_pointer() {
+        assert!(slider_follows(false, false));
+        assert!(!slider_follows(true, false));
+        assert!(!slider_follows(false, true));
+    }
+
+    #[test]
+    fn the_pointer_is_physical_pixels_whatever_the_scale_factor() {
+        // a Retina pointer at (1001.9, 599.2) physical is pixel (1001, 599): no halving
+        assert_eq!(
+            pointer_px(PhysicalPosition::new(1001.9, 599.2)),
+            (1001, 599)
+        );
+        assert_eq!(pointer_px(PhysicalPosition::new(0.0, 0.0)), (0, 0));
     }
 }

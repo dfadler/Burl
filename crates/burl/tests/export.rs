@@ -65,6 +65,17 @@ fn stream(extra: &[&str], frames: usize) -> Option<Vec<u8>> {
     if cfg!(target_os = "macos") {
         panic!("burl -o - failed on macOS: {err}");
     }
+    // only a failure to get a GL context is a skip (the `burl-gl` headless error prefixes)
+    const GL_ERRORS: [&str; 5] = [
+        "find_configs",
+        "create_context",
+        "make_current_surfaceless",
+        "EGL",
+        "CGL",
+    ];
+    if !GL_ERRORS.iter().any(|k| err.contains(k)) {
+        panic!("burl -o - failed: {err}");
+    }
     eprintln!("SKIPPED: no headless GL context: {err}");
     None
 }
@@ -135,6 +146,27 @@ fn file_font_size_changes_the_render() {
 #[test]
 fn dir_font_size_changes_the_render() {
     differs(&["--dir-font-size", "14"], &["--dir-font-size", "30"], 120);
+}
+
+/// `--user-image-dir DIR` through `burl <repo>`: a `<user name>.png` in DIR replaces that user's
+/// sprite, so the render differs from a run with an empty DIR.
+#[test]
+fn user_image_dir_changes_the_render() {
+    let base = std::env::temp_dir().join(format!("burl-uid-{}", std::process::id()));
+    let (empty, full) = (base.join("empty"), base.join("full"));
+    std::fs::create_dir_all(&empty).unwrap();
+    std::fs::create_dir_all(&full).unwrap();
+    let png = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden/visual/bloom-small-repo-30.png");
+    std::fs::copy(png, full.join("alice.png")).unwrap();
+    let dir = |d: &Path| ["--user-image-dir".to_string(), d.display().to_string()];
+    let (a, b) = (dir(&empty), dir(&full));
+    differs(
+        &[a[0].as_str(), a[1].as_str()],
+        &[b[0].as_str(), b[1].as_str()],
+        120,
+    );
+    let _ = std::fs::remove_dir_all(base);
 }
 
 #[test]

@@ -65,6 +65,17 @@ fn stream(extra: &[&str], frames: usize) -> Option<Vec<u8>> {
     if cfg!(target_os = "macos") {
         panic!("burl -o - failed on macOS: {err}");
     }
+    // only a failure to get a GL context is a skip (the `burl-gl` headless error prefixes)
+    const GL_ERRORS: [&str; 5] = [
+        "find_configs",
+        "create_context",
+        "make_current_surfaceless",
+        "EGL",
+        "CGL",
+    ];
+    if !GL_ERRORS.iter().any(|k| err.contains(k)) {
+        panic!("burl -o - failed: {err}");
+    }
     eprintln!("SKIPPED: no headless GL context: {err}");
     None
 }

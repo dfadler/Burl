@@ -331,8 +331,10 @@ impl<C: GlContext> Renderer<C> {
         Ok(())
     }
 
-    /// Copy the last rendered frame to the context's default framebuffer, flipped to window
-    /// orientation (the windowed path; call `GlContext::present` after).
+    /// Copy the last rendered frame to the context's default framebuffer (the windowed path;
+    /// call `GlContext::present` after). A straight copy: the offscreen frame is already in GL's
+    /// own orientation (`read_frame` flips it for top-first readback), as is the default
+    /// framebuffer, so mirroring here showed the window upside-down (scripts/window-xvfb.sh).
     pub fn blit_to_screen(&self) -> Result<()> {
         self.ctx.make_current()?;
         let gl = self.ctx.gl();
@@ -347,9 +349,9 @@ impl<C: GlContext> Renderer<C> {
                 w,
                 h,
                 0,
-                h,
-                w,
                 0,
+                w,
+                h,
                 glow::COLOR_BUFFER_BIT,
                 glow::NEAREST,
             );

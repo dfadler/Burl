@@ -4,11 +4,11 @@
 name: heavy
 on:
   pull_request:
-    paths: [".github/workflows/heavy.yml", "tests/golden/**", "docs/rust-rewrite/discovery/golden/**", "docker/**", "reference/**", "src/**", "crates/burl-gl/**", "crates/burl-render/**", "scripts/render-smoke.sh", "scripts/visual-burl.sh", "docker/release.Dockerfile", "xtask/**", "crates/**", "data/**"]
+    paths: [".github/workflows/heavy.yml", "tests/golden/**", "docs/rust-rewrite/discovery/golden/**", "docker/**", "reference/**", "src/**", "crates/burl-gl/**", "crates/burl-render/**", "scripts/render-smoke.sh", "scripts/visual-burl.sh", "scripts/window-xvfb.sh", "scripts/window-in-container.sh", "docker/release.Dockerfile", "xtask/**", "crates/**", "data/**"]
   # Tests the merged result: two PRs can each pass and still break master together (#104-era).
   push:
     branches: [master]
-    paths: [".github/workflows/heavy.yml", "tests/golden/**", "docs/rust-rewrite/discovery/golden/**", "docker/**", "reference/**", "src/**", "crates/burl-gl/**", "crates/burl-render/**", "scripts/render-smoke.sh", "scripts/visual-burl.sh", "docker/release.Dockerfile", "xtask/**", "crates/**", "data/**"]
+    paths: [".github/workflows/heavy.yml", "tests/golden/**", "docs/rust-rewrite/discovery/golden/**", "docker/**", "reference/**", "src/**", "crates/burl-gl/**", "crates/burl-render/**", "scripts/render-smoke.sh", "scripts/visual-burl.sh", "scripts/window-xvfb.sh", "scripts/window-in-container.sh", "docker/release.Dockerfile", "xtask/**", "crates/**", "data/**"]
   # Lets a GitHub merge queue (repo setting, #95) run this tier on the queued merge. merge_group
   # does not support `paths`, so every queued merge runs it.
   merge_group:
@@ -93,3 +93,21 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           { echo '```'; cat "$RUNNER_TEMP/ssim.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+  window-xvfb:
+    # Linux X11 half of the interactive checklist: the real window under Xvfb + openbox, driven
+    # with xdotool (docker/window.Dockerfile). macOS Retina/non-Retina stay manual.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Window checks (Docker, Xvfb, llvmpipe)
+        run: bash scripts/window-xvfb.sh target/window-xvfb
+      - name: Keep the screenshots and the session recording
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: window-xvfb
+          path: target/window-xvfb

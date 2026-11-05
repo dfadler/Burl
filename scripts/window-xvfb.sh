@@ -21,7 +21,8 @@ mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
 docker build --platform "$PLATFORM" -t "$IMG" -f "$ROOT/docker/window.Dockerfile" "$ROOT"
 # The checks poll with timeouts; the 180 s cap here stops any other hang from running for hours.
-docker run --rm --platform "$PLATFORM" -v "$ROOT":/repo:ro -v "$OUT":/out "$IMG" &
+name="burl-window-$$" # the watchdog kills this run only, not another run of the same image
+docker run --rm --name "$name" --platform "$PLATFORM" -v "$ROOT":/repo:ro -v "$OUT":/out "$IMG" &
 pid=$!
-(sleep 180 && docker kill "$(docker ps -q --filter ancestor="$IMG")" >/dev/null 2>&1) &
+(sleep 180 && docker kill "$name" >/dev/null 2>&1) &
 wait "$pid"

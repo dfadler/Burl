@@ -27,6 +27,13 @@ for _ in $(seq 100); do xprop -root _NET_SUPPORTING_WM_CHECK 2>/dev/null | grep 
 ffmpeg -loglevel error -y -f x11grab -draw_mouse 0 -framerate 10 -video_size "$SCREEN" \
 	-i "$DISPLAY" "$OUT/session.mp4" &
 REC=$!
+# Stop the recorder so ffmpeg writes the MP4 trailer. As an EXIT trap this also covers the early
+# `exit 1`s: this script is PID 1, so exiting would otherwise kill ffmpeg mid-file.
+finish() {
+	kill -INT "$REC" 2>/dev/null
+	wait "$REC" 2>/dev/null
+}
+trap finish EXIT
 
 shot() { ffmpeg -loglevel error -y -f x11grab -draw_mouse 0 -video_size "$SCREEN" -i "$DISPLAY" -frames:v 1 "$OUT/$1.png"; }
 luma() { # IMAGE CROP -> mean luma 0-255
@@ -99,7 +106,6 @@ fi
 
 key() { xdotool windowfocus --sync "$WID" key "$@"; }
 size() { xdotool getwindowgeometry --shell "$WID" | awk -F= '/^(WIDTH|HEIGHT)=/ {printf "%s%s", sep, $2; sep="x"}'; }
-same() { cmp -s "$OUT/$1.png" "$OUT/$2.png"; }
 
 [ "$(size)" = 640x360 ] && ok "window opens at the requested pixel size (G3)" || bad "window size $(size), want 640x360"
 
@@ -113,7 +119,16 @@ xdotool windowsize --sync "$WID" 800 450
 sleep 1
 shot resized
 [ "$(size)" = 800x450 ] && ok "resize reaches the window" || bad "size after resize $(size), want 800x450"
-if ! same before-resize resized && [ "$(stat -c %s "$OUT/resized.png")" -gt 5000 ]; then ok "resized scene is redrawn, not blank"; else bad "resized capture blank or unchanged"; fi
+# The far corner of the 800x450 client area only exists if the window redrew at the new size: it
+# must show the scene background (about 28 luma), not the black desktop (0) left by a stale frame.
+rx=$(xwininfo -id "$WID" | awk '/Absolute upper-left X/ {print $4}')
+ry=$(xwininfo -id "$WID" | awk '/Absolute upper-left Y/ {print $4}')
+corner=$(luma resized "60:40:$((rx + 800 - 70)):$((ry + 450 - 50))")
+if awk -v c="$corner" 'BEGIN { exit !(c > 15) }'; then
+	ok "resized scene is redrawn to the new size (corner luma $corner)"
+else
+	bad "the resized window's far corner is not drawn (luma $corner)"
+fi
 
 key alt+Return
 sleep 1
@@ -132,6 +147,7 @@ else
 	wait "$BURL" && ok "Esc quits cleanly" || bad "Esc quit with a non-zero status"
 fi
 
-kill -INT "$REC" 2>/dev/null
-wait "$REC" 2>/dev/null
+finish
+# ffmpeg exits non-zero after SIGINT, so judge the file, not the wait status.
+ffprobe -v error "$OUT/session.mp4" >/dev/null 2>&1 && ok "session.mp4 is a valid recording" || bad "session.mp4 is missing or invalid"
 exit $fail

@@ -86,7 +86,8 @@ The old checklist asked for the following, but the windowed path has no code for
 (`key_action` in `crates/burl/src/interactive/input.rs` maps no such key; no `Command` exists;
 `crates/burl-sim/src/pointer.rs` has `Button::Middle => {}` under "the camera modes are not here
 yet"). They are not boxes: a box for a missing feature cannot honestly be ticked. Either
-implement them, or record each as a deviation in `DEVIATIONS.md` before the register is reviewed.
+implement them, or record each as a deviation in `DEVIATIONS.md` before the register is reviewed,
+then delete its bullet here. `scripts/check-release.sh` fails while any bullet remains.
 
 - **F12 writes a screenshot** (no screenshot code exists)
 - **U, D, F, K** toggle user names, dir names, file names and the key legend (only T, G, R, M bind)

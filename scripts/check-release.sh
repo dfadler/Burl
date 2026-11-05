@@ -43,12 +43,16 @@ while IFS= read -r p; do
 	file=${p%%::*} needle=${p#*::}
 	if [ ! -f "$ROOT/$file" ]; then
 		bad "proof file missing: $p"
-	elif [[ $needle =~ ^[a-z0-9_]+$ ]]; then
+	elif [[ $file == *.rs && $needle =~ ^[a-z0-9_]+$ ]]; then
 		grep -qE "fn ${needle}[(<]" "$ROOT/$file" || bad "proof test gone: $p"
 	else
 		grep -qF -- "$needle" "$ROOT/$file" || bad "proof text gone: $p"
 	fi
 done <<<"$proofs"
+# The Known gap section lists what the old checklist asked for but the code lacks. It must be
+# empty before a release: each item implemented, or recorded in DEVIATIONS.md and then removed.
+gaps=$(awk '/^## Known gap/ {s=1; next} /^## / {s=0} s && /^- /' "$SIGNOFF" | wc -l | tr -d ' ')
+[ "$gaps" = 0 ] || bad "known gaps unresolved: $gaps (implement each or record it in DEVIATIONS.md, then remove it from the Known gap section)"
 for k in macos-retina macos-non-retina linux-x11; do
 	signed "$k" || bad "no sign-off for $k"
 done

@@ -117,6 +117,35 @@ fn the_existing_signoff_checks_still_apply() {
     assert!(!gate("hash", SIGNED, Some("deadbeef")).status.success());
 }
 
+#[test]
+fn unresolved_known_gaps_fail_the_gate() {
+    let c = format!(
+        "{SIGNED}\n## Known gap, needs user decision\n\n- **F12 writes a screenshot**\n\n## Next\n"
+    );
+    let o = gate("gaps", &c, None);
+    assert!(!o.status.success());
+    assert!(
+        stderr(&o).contains("known gaps unresolved: 1"),
+        "{}",
+        stderr(&o)
+    );
+    // an empty section, or bullets after the next heading, do not count
+    let empty =
+        format!("{SIGNED}\n## Known gap, needs user decision\n\nnone\n\n## Next\n\n- later\n");
+    assert!(gate("nogaps", &empty, None).status.success());
+}
+
+#[test]
+fn a_lowercase_word_proof_in_a_script_is_matched_literally() {
+    // not as a Rust `fn`: a plain word that appears in the script is a valid proof
+    let c = SIGNED.replace(
+        "| a window check |",
+        "| a word | `scripts/window-in-container.sh::fullscreen` |\n| a window check |",
+    );
+    let o = gate("word", &c, None);
+    assert!(o.status.success(), "{}", stderr(&o));
+}
+
 /// The real checklist: every proof it names must still exist (the unsigned sign-off is expected
 /// to fail, for other reasons).
 #[test]

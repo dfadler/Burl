@@ -1,7 +1,7 @@
 //! Scripted-pointer behaviour that the oracle goldens do not pin.
 
 use burl_formats::{fetch_log, LogSettings};
-use burl_sim::{DumpOptions, PointerEvent, PointerKind, Sim, SimSettings};
+use burl_sim::{Command, DumpOptions, PointerEvent, PointerKind, Sim, SimSettings};
 use burl_util::prng::SimRng;
 use std::sync::Arc;
 
@@ -81,4 +81,19 @@ fn the_script_cursor_carries_across_sections() {
     }
     assert!(dumps[0].contains("\"selected_user\":\""), "{}", dumps[0]);
     assert!(!dumps[1].contains("\"selected_user\":\""), "{}", dumps[1]);
+}
+
+/// The live window's clock path (`tick_cursor` with the frame's wall-clock `dt`): the cursor
+/// hides after 3 s without moving and a move brings it back.
+#[test]
+fn the_cursor_hides_after_three_idle_seconds_and_a_move_brings_it_back() {
+    let mut s = sim("idle", SimSettings::default());
+    s.set_cursor_focus(true);
+    s.apply(Command::PointerAt { x: 10, y: 10 });
+    s.tick_cursor(2.9);
+    assert!(s.cursor_visible());
+    s.tick_cursor(0.2);
+    assert!(!s.cursor_visible());
+    s.apply(Command::PointerAt { x: 11, y: 10 });
+    assert!(s.cursor_visible());
 }

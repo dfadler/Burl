@@ -73,6 +73,60 @@ fi
 kill "$OBURL" 2>/dev/null
 wait "$OBURL" 2>/dev/null
 
+# Cursor confinement (winit X11 `Confined` = core GrabPointer with confine_to the window): holding
+# the right button grabs the mouse (`Live::set_grab`); `Locked` is unsupported on X11 so Burl falls
+# back to `Confined`. A pointer pushed far outside the window must stay clamped inside it while the
+# button is down and go free once it is up. No `--hide mouse`: that flag ignores buttons.
+burl "$LOG" --log-format custom -640x360 --seconds-per-day 10 --hash-seed 31 --prng glibc \
+	--disable-auto-skip --disable-auto-rotate --file-idle-time 0 &
+CBURL=$!
+CWID=
+for _ in $(seq 200); do
+	CWID=$(xdotool search --onlyvisible --pid "$CBURL" 2>/dev/null | head -1)
+	[ -n "$CWID" ] && break
+	sleep 0.1
+done
+if [ -n "$CWID" ]; then
+	sleep 2
+	CX=$(xwininfo -id "$CWID" | awk '/Absolute upper-left X/ {print $4}')
+	CY=$(xwininfo -id "$CWID" | awk '/Absolute upper-left Y/ {print $4}')
+	CW=$(xwininfo -id "$CWID" | awk '/Width:/ {print $2}')
+	CH=$(xwininfo -id "$CWID" | awk '/Height:/ {print $2}')
+	# sets PX, PY; succeeds if the pointer is inside the window's client rectangle
+	pointer_inside() {
+		PX=$(xdotool getmouselocation --shell | awk -F= '/^X=/ {print $2}')
+		PY=$(xdotool getmouselocation --shell | awk -F= '/^Y=/ {print $2}')
+		[ "$PX" -ge "$CX" ] && [ "$PX" -lt $((CX + CW)) ] && [ "$PY" -ge "$CY" ] && [ "$PY" -lt $((CY + CH)) ]
+	}
+	# Push the pointer to the screen's far corner until it is `inside` or `outside` the window
+	# (polled for 5 s: the grab is requested a frame after the button goes down).
+	push_until() {
+		for _ in $(seq 50); do
+			xdotool mousemove 1270 710
+			if pointer_inside; then
+				[ "$1" = inside ] && return 0
+			else
+				[ "$1" = outside ] && return 0
+			fi
+			sleep 0.1
+		done
+		return 1
+	}
+	xdotool mousemove $((CX + CW / 2)) $((CY + CH / 2))
+	push_until outside && ok "control: an ungrabbed pointer can leave the window" ||
+		bad "control: the pointer cannot leave the window even without a grab"
+	xdotool mousemove $((CX + CW / 2)) $((CY + CH / 2)) mousedown 3
+	push_until inside && ok "holding a button confines the pointer to the window (Linux X11 Confined grab)" ||
+		bad "pointer left the window while the right button is held (at $PX,$PY)"
+	xdotool mouseup 3
+	push_until outside && ok "releasing the button releases the confinement" ||
+		bad "pointer is still confined after the button went up (at $PX,$PY)"
+else
+	bad "cursor-confine launch: window never appeared"
+fi
+kill "$CBURL" 2>/dev/null
+wait "$CBURL" 2>/dev/null
+
 # Same flags as the visual gate: fixed seeds, no auto-rotate, glibc PRNG.
 # 10 s per day: the fixture spans a few days, so the clock is still running for the first ~30 s.
 burl "$LOG" --log-format custom -640x360 --seconds-per-day 10 --hash-seed 31 \

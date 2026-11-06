@@ -26,6 +26,7 @@ which `release.yml` re-runs on the tag).
 | The window opens, is shown without help, at 640x360 (Linux X11) | `scripts/window-in-container.sh::window is shown (mapped) without help`, `scripts/window-in-container.sh::window opens at the requested pixel size (G3)` |
 | The scene is the right way up (the windowed blit once mirrored it) | `scripts/window-in-container.sh::the scene is upright` |
 | Resize reaches the window and the scene redraws at the new size (far corner drawn); proportions are not measured | `scripts/window-in-container.sh::resize reaches the window`, `scripts/window-in-container.sh::resized scene is redrawn to the new size` |
+| Holding the right button confines the pointer to the window and releasing it frees the pointer (Linux X11 `Confined` grab; `Locked` is unsupported on X11 and not probed; hiding the cursor is not asserted) | `scripts/window-in-container.sh::holding a button confines the pointer to the window`, `scripts/window-in-container.sh::releasing the button releases the confinement` |
 | Alt+Return enters and leaves fullscreen (Linux X11) | `scripts/window-in-container.sh::Alt+Return goes fullscreen`, `scripts/window-in-container.sh::Alt+Return leaves fullscreen` |
 
 ### Keyboard

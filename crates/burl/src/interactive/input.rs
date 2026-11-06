@@ -3,6 +3,7 @@
 //! `mouseClick`, `mouseWheel`) as pure functions, so they test without a display. The winit
 //! handler only feeds these and applies what they return.
 
+use crate::frame::Label;
 use burl_gl::winit::event::{MouseButton, MouseScrollDelta};
 use burl_gl::winit::keyboard::{Key, KeyCode, KeyLocation, NamedKey, PhysicalKey};
 use burl_sim::{Button, Command};
@@ -21,6 +22,8 @@ pub enum Action {
     ToggleRoot,
     /// `M`: hide the cursor and `hide_mouse`.
     ToggleMouse,
+    /// `U`, `D`, `F`, `K`: user names, directory names, file names, the key legend.
+    ToggleLabel(Label),
     /// F11: `toggleWindowFrame`.
     ToggleFrame,
     /// Alt+Return: `toggleFullscreen`.
@@ -89,6 +92,10 @@ pub fn key_action(
         "g" | "G" => Action::ToggleUsers,
         "r" | "R" => Action::ToggleRoot,
         "m" | "M" => Action::ToggleMouse,
+        "u" | "U" => Action::ToggleLabel(Label::UserNames),
+        "d" | "D" => Action::ToggleLabel(Label::DirNames),
+        "f" | "F" => Action::ToggleLabel(Label::FileNames),
+        "k" | "K" => Action::ToggleLabel(Label::Key),
         _ => return None,
     })
 }
@@ -199,11 +206,28 @@ mod tests {
         assert_eq!(act(&ch("g")), Some(Action::ToggleUsers));
         assert_eq!(act(&ch("r")), Some(Action::ToggleRoot));
         assert_eq!(act(&ch("m")), Some(Action::ToggleMouse));
+        for (k, l) in [
+            ("u", Label::UserNames),
+            ("d", Label::DirNames),
+            ("f", Label::FileNames),
+            ("k", Label::Key),
+        ] {
+            assert_eq!(act(&ch(k)), Some(Action::ToggleLabel(l)), "{k}");
+        }
         assert_eq!(
             act(&Key::Named(NamedKey::Space)),
             Some(Action::Sim(TogglePause))
         );
         assert_eq!(act(&ch("x")), None);
+    }
+
+    /// G10: Gource keys Burl has not ported do nothing (and Z, which Gource itself ignores).
+    #[test]
+    fn deviation_g10_unported_keys_do_nothing() {
+        for k in ["s", "c", "v", "p", "q", "w", "y", "z"] {
+            assert_eq!(act(&ch(k)), None, "{k}");
+        }
+        assert_eq!(act(&Key::Named(NamedKey::F12)), None);
     }
 
     #[test]

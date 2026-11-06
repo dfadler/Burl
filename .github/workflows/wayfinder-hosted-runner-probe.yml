@@ -1,28 +1,22 @@
 name: wayfinder hosted-runner probe
-# Throwaway: answers whether hosted macOS runners have a window server, screen capture and virtual displays.
+# Throwaway: answers whether hosted macOS runners have a window server, screen capture and virtual displays,
+# and whether the real burl builds and renders there.
 on:
   push:
     branches: [wayfinder/hosted-runner-probe]
 permissions:
   contents: read
 jobs:
-  probe:
+  burl:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, macos-15, macos-26]
+        os: [macos-15, macos-26]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
-      - name: Fetch the probe files
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir probe && cd probe
-          for f in vd.m pf.m run.sh; do
-            curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github.raw" \
-              "https://api.github.com/repos/${{ github.repository }}/contents/probe/$f?ref=${{ github.sha }}" -o "$f"
-          done
-          chmod +x run.sh
-      - name: Probe
-        run: ./probe/run.sh
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Burl on virtual displays
+        run: ./probe/burl.sh

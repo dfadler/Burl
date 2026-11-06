@@ -517,7 +517,9 @@ impl ApplicationHandler for App {
             WindowEvent::CursorLeft { .. } => live.sim.set_cursor_focus(false),
             // report only: winit keeps its own suggested size, and layout follows `Resized`
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                log_display("scale-changed", scale_factor, live.r.context().size());
+                // the window's own size: the context's cached size is still the pre-change one here
+                let s = live.window().inner_size();
+                log_display("scale-changed", scale_factor, (s.width, s.height));
             }
             WindowEvent::Resized(s) if s.width > 0 && s.height > 0 => {
                 log_display(

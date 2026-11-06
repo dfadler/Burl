@@ -1,0 +1,8 @@
+--- help-short.txt
++++ help-short.txt
+@@ -1,4 +1,4 @@
+-Gource v0.57
++Gource v0.58
+ Usage: gource [options] [path]
+ 
+ Options:

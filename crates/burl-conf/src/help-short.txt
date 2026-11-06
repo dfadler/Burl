@@ -1,4 +1,4 @@
-Burl v0.57
+Burl v0.58
 Usage: burl [options] [path]
 
 Options:

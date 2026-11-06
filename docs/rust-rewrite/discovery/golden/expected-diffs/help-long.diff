@@ -1,5 +1,11 @@
 --- help-long.txt
 +++ help-long.txt
+@@ -1,4 +1,4 @@
+-Gource v0.57
++Gource v0.58
+ Usage: gource [options] [path]
+ 
+ Options:
 @@ -110,7 +110,7 @@
    --file-filter REGEX      Ignore file paths matching this regex
    --file-show-filter REGEX Show only file paths matching this regex

@@ -27,6 +27,8 @@ which `release.yml` re-runs on the tag).
 | The scene is the right way up (the windowed blit once mirrored it) | `scripts/window-in-container.sh::the scene is upright` |
 | Resize reaches the window and the scene redraws at the new size (far corner drawn); proportions are not measured | `scripts/window-in-container.sh::resize reaches the window`, `scripts/window-in-container.sh::resized scene is redrawn to the new size` |
 | Alt+Return enters and leaves fullscreen (Linux X11) | `scripts/window-in-container.sh::Alt+Return goes fullscreen`, `scripts/window-in-container.sh::Alt+Return leaves fullscreen` |
+| Burl logs the scale and size it sees (`display:` lines at start, on a scale change and on resize; logical is physical over scale) | `crates/burl/src/interactive.rs::display_line_pins_the_log_format`, `crates/burl/src/interactive.rs::logical_size_divides_by_the_scale_and_rounds` |
+| macOS, virtual 2x and 1x displays: moving the window between them logs `scale-changed` then `resized` with the right scale and logical size, and the window capture is 2x its point size on the 2x display and 1x on the 1x display and is not blank. Layout and crispness are not judged. Runs in `display-harness.yml`, a non-required workflow `release.yml` does not re-run, so these rows pin that the checks exist, not that they passed on the tag | `.github/workflows/display-harness.yml::cargo xtask display-harness`, `xtask/src/display_harness.rs::a_scale_change_needs_scale_changed_then_resized`, `xtask/src/display_harness.rs::rejects_wrong_scale_and_inconsistent_logical_size`, `xtask/src/display_harness.rs::capture_must_be_scaled_and_not_blank` |
 
 ### Keyboard
 
@@ -70,8 +72,8 @@ The key-to-action mapping is unit-tested; the thin glue that applies an action t
 Only what needs a real display, real hardware or a person's eye. Tick on all three platforms
 unless a line says otherwise.
 
-- [ ] `--high-dpi` on Retina: line widths and text are crisp, not blurry or doubled (macOS Retina)
-- [ ] Moving the window between displays of different scale does not break layout (macOS)
+- [ ] `--high-dpi` on Retina: line widths and text are crisp, not blurry or doubled (macOS Retina, real panel; no automated crispness check yet)
+- [ ] Moving the window between displays of different scale does not break layout (macOS; on real displays; the harness only proves the scale events and capture sizes on virtual ones)
 - [ ] Fullscreen toggle and resize keep the scene proportioned: no black bars or stretching (the Linux job checks only that it redraws)
 - [ ] Smoke the key glue once in a real window: Space, T, G, R, U, D, F, K, M, `=`/`-`, arrows, Tab, keypad zoom, wheel
 - [ ] Smoke the pointer glue once: click selects a user and a file, hover box follows the cursor and flips at the edges, background drag pans, right-drag rotates

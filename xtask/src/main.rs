@@ -1,6 +1,7 @@
 //! `cargo xtask ci [--pcre2]`: the fast-tier checks, run exactly as `.github/workflows/ci.yml`
 //! runs them (the workflow calls this command, so the two cannot drift).
 //! `cargo xtask sim-compare GOLDEN ACTUAL [--floats exact|report]`: the simulation-gate comparator.
+//! `cargo xtask display-harness`: the macOS virtual-display harness (ticket #152, macOS only).
 //! `cargo xtask ssim A B [--min X]`, `ssim-frames STREAM.ppm PREFIX I,J,..`, `ssim-threshold V..`:
 //! the visual-equivalence gate's comparator and helpers (ticket #12).
 
@@ -111,6 +112,24 @@ fn ssim_cmd(cmd: &str, args: &[String]) -> Result<ExitCode, String> {
     }
 }
 
+/// `display-harness`: macOS only (private CGVirtualDisplay API); exit 1 on a failed step or assertion.
+fn display_harness_cmd() -> ExitCode {
+    if !cfg!(target_os = "macos") {
+        eprintln!("display-harness: needs macOS (virtual displays, System Events, screencapture)");
+        return ExitCode::FAILURE;
+    }
+    match xtask::display_harness::run_harness(&workspace_root()) {
+        Ok(()) => {
+            eprintln!("display-harness: all assertions passed");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("display-harness: FAIL: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if let Some(cmd) = args.first().filter(|c| c.starts_with("ssim")) {
@@ -119,11 +138,14 @@ fn main() -> ExitCode {
             ExitCode::from(2)
         });
     }
+    if args.first().map(String::as_str) == Some("display-harness") {
+        return display_harness_cmd();
+    }
     if args.first().map(String::as_str) == Some("sim-compare") {
         return sim_compare(&args[1..]);
     }
     if args.first().map(String::as_str) != Some("ci") || args[1..].iter().any(|a| a != "--pcre2") {
-        eprintln!("usage: cargo xtask ci [--pcre2]");
+        eprintln!("usage: cargo xtask ci [--pcre2] | sim-compare .. | ssim* .. | display-harness");
         return ExitCode::from(2);
     }
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());

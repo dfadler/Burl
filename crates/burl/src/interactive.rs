@@ -83,6 +83,26 @@ fn dpi_ratio(d: &DisplaySettings, scale_factor: f64) -> f32 {
 
 /// The default `font_scale` (`Gource::init`): the DPI ratio when above 1, else one more per full
 /// 1600 pixels of drawable height (integer division).
+/// The `display:` debug line (`--log-level debug`): report-only, so a platform's scale factor and
+/// size behaviour can be read off a real run.
+fn display_line(event: &str, scale: f64, physical: (u32, u32), logical: (u32, u32)) -> String {
+    format!(
+        "display: event={event} scale={scale} physical={}x{} logical={}x{}",
+        physical.0, physical.1, logical.0, logical.1
+    )
+}
+
+/// Logical size = physical / scale, rounded to the nearest pixel.
+fn logical_size(physical: (u32, u32), scale: f64) -> (u32, u32) {
+    let l = |p: u32| (f64::from(p) / scale).round() as u32;
+    (l(physical.0), l(physical.1))
+}
+
+/// Logs `display_line`, deriving logical = physical / scale.
+fn log_display(event: &str, scale: f64, physical: (u32, u32)) {
+    burl_util::log::debug(|| display_line(event, scale, physical, logical_size(physical, scale)));
+}
+
 fn font_scale(ratio: f32, height: u32) -> f32 {
     if ratio > 1.0 {
         ratio
@@ -243,6 +263,7 @@ impl App {
         let ctx = WindowedGl::new(el, attrs, self.display.vsync, self.display.multisample)?;
         let (w, h) = ctx.size();
         let ctx_scale = ctx.scale_factor();
+        log_display("start", ctx_scale, (w, h));
         let mut r = Renderer::new(ctx)?;
         let tex = upload_scene_textures(&mut r)?;
         let l = self.load_section(&mut r, w, h, ctx_scale)?;
@@ -498,7 +519,21 @@ impl ApplicationHandler for App {
             }
             WindowEvent::CursorEntered { .. } => live.sim.set_cursor_focus(true),
             WindowEvent::CursorLeft { .. } => live.sim.set_cursor_focus(false),
+            // report only: winit keeps its own suggested size, and layout follows `Resized`
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                // `scale_factor` is the event's; the size is a sample of the window right now (the
+                // context's cached size is still the pre-change one here), so on a platform that
+                // queues events the two can describe different moments. The `resized` line that
+                // follows is the settled state.
+                let s = live.window().inner_size();
+                log_display("scale-changed", scale_factor, (s.width, s.height));
+            }
             WindowEvent::Resized(s) if s.width > 0 && s.height > 0 => {
+                log_display(
+                    "resized",
+                    live.r.context().scale_factor(),
+                    (s.width, s.height),
+                );
                 live.r.context().resize(s.width, s.height);
                 if let Err(e) = live.r.resize(s.width, s.height) {
                     self.error = Some(e);
@@ -691,5 +726,22 @@ mod tests {
             (1001, 599)
         );
         assert_eq!(pointer_px(PhysicalPosition::new(0.0, 0.0)), (0, 0));
+    }
+
+    #[test]
+    fn logical_size_divides_by_the_scale_and_rounds() {
+        assert_eq!(logical_size((1600, 1200), 2.0), (800, 600));
+        assert_eq!(logical_size((640, 360), 1.0), (640, 360));
+        // fractional scale, and a rounding boundary: 1000 / 1.5 = 666.67, 3 / 2 = 1.5
+        assert_eq!(logical_size((1500, 1000), 1.5), (1000, 667));
+        assert_eq!(logical_size((3, 3), 2.0), (2, 2));
+    }
+
+    #[test]
+    fn display_line_pins_the_log_format() {
+        assert_eq!(
+            display_line("scale-changed", 2.0, (1600, 1200), (800, 600)),
+            "display: event=scale-changed scale=2 physical=1600x1200 logical=800x600"
+        );
     }
 }

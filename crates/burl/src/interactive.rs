@@ -199,6 +199,7 @@ impl Live {
             Action::Quit => {}
             Action::ToggleTree => self.ss.hide_tree = !self.ss.hide_tree,
             Action::ToggleRoot => self.ss.hide_root = !self.ss.hide_root,
+            Action::ToggleLabel(l) => self.kit.toggle(l),
             Action::ToggleUsers => {
                 self.ss.hide_users = !self.ss.hide_users;
                 self.sim.set_hide(self.ss.hide_users, self.ss.hide_files);

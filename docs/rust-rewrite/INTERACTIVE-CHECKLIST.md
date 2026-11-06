@@ -1,51 +1,92 @@
 # Interactive checklist (parity release sign-off)
 
-Manual checks for the windowed path that no gate automates (#20, #14 item 5). The user runs
-them on each platform below and fills the sign-off block at the end **in the tagged commit**.
-`scripts/check-release.sh` (run by `release.yml`) fails while any box is unticked, any
-platform line is `TODO`, or `DEVIATIONS.md` changed after the recorded review.
+The windowed path (#20, #14 item 5), split into what CI proves and what still needs a person.
+The user fills the sign-off block at the end **in the tagged commit**. `scripts/check-release.sh`
+(run by `release.yml`) fails while any box below is unticked, any platform line is `TODO`,
+`DEVIATIONS.md` changed after the recorded review, or **a proof named in the tables is gone**
+(a renamed or deleted test, a reworded window check): every `` `path::name` `` in a table row must
+still exist, so a covered item cannot silently lose its coverage.
 
-Run each section on: **macOS Retina**, **macOS non-Retina** (external display), **Linux X11**.
-Wayland is best-effort, not a gate. Bindings are the app-core table
-(`discovery/app-core.md` T2.2); compare against `gource` 0.57 side by side where unsure.
-
+Platforms: **macOS Retina**, **macOS non-Retina** (external display), **Linux X11**. Wayland is
+best-effort, not a gate. Bindings are the app-core table (`discovery/app-core.md` T2.2).
 Use any real log, e.g. `burl --seconds-per-day 0.5 <repo>`.
 
-## Window and HiDPI
+## Proved by CI (no action)
 
-- [ ] Default window opens; a viewport given without `--high-dpi` opens a window whose drawable matches (G3 gap: small on Retina is expected)
-- [ ] `--high-dpi` on Retina: line widths and text are crisp, not blurry or doubled
-- [ ] Fullscreen toggle and resize keep the scene proportioned; no black bars or stretching
-- [ ] Moving the window between displays of different scale does not break layout
+Proof format: `file::name`. A Rust name is a `fn`; any other text is matched literally in that file
+(the `window-xvfb` job's check messages, the `heavy.yml` job names). The `window-xvfb` job runs
+the real window under Xvfb + openbox and drives it with xdotool, Linux X11 only (`heavy.yml`,
+which `release.yml` re-runs on the tag).
 
-## Keyboard (each toggles/behaves as in Gource)
+### Window and HiDPI
 
-- [ ] Esc quits; F12 writes a screenshot
-- [ ] Space pauses; `=`/`+` and `-` change days per second; `.` `,` `/` change time scale
-- [ ] T, G, U, D, F, R, K toggle tree, users, user names, dir names, file names, root, key legend
-- [ ] V toggles camera mode; Tab selects the next user; arrows pan (also while paused)
-- [ ] Z gravity toggle, `[` `]` force gravity, S recolour, N skips idle time, C shows the splash, M hides the cursor
-- [ ] Keypad `+`/`-` zoom
+| Item | Proof |
+|---|---|
+| A viewport without `--high-dpi` opens a window of exactly that pixel size (G3); a default or `--high-dpi` window is logical; font scale follows the ratio | `crates/burl/src/interactive.rs::deviation_g3_viewport_without_high_dpi_is_exact_pixels`, `crates/burl/src/interactive.rs::default_and_high_dpi_windows_are_logical`, `crates/burl/src/interactive.rs::font_scale_follows_the_dpi_ratio_then_the_height` |
+| The window opens, is shown without help, at 640x360 (Linux X11) | `scripts/window-in-container.sh::window is shown (mapped) without help`, `scripts/window-in-container.sh::window opens at the requested pixel size (G3)` |
+| The scene is the right way up (the windowed blit once mirrored it) | `scripts/window-in-container.sh::the scene is upright` |
+| Resize reaches the window and the scene redraws at the new size (far corner drawn); proportions are not measured | `scripts/window-in-container.sh::resize reaches the window`, `scripts/window-in-container.sh::resized scene is redrawn to the new size` |
+| Alt+Return enters and leaves fullscreen (Linux X11) | `scripts/window-in-container.sh::Alt+Return goes fullscreen`, `scripts/window-in-container.sh::Alt+Return leaves fullscreen` |
 
-## Mouse
+### Keyboard
 
-- [ ] Wheel zooms in/out and respects the zoom clamp
-- [ ] Left-drag on the background pans; clicking empty background deselects the user
-- [ ] Right-drag rotates the camera; middle click toggles camera mode
-- [ ] Clicking a user selects it: white sprite, larger name in `--selection-colour` drawn over everything; Tab moves to the next user and wraps
-- [ ] Clicking a file selects it the same way (its name sits a little lower); clicking empty background deselects
-- [ ] The click lands on what is under the cursor, also on Retina (pointer and drawable are both physical pixels in Burl: Gource mixes points and pixels with `--high-dpi`); a user that is fading out cannot be picked
-- [ ] Hovering a user shows a box with its name above-left of the cursor; hovering a file shows its name and directory; the box flips to stay inside the window near the right and top edges; a selected user or file shows no box
-- [ ] The cursor stays hidden until it moves; after 3 s without moving, hover ends (a click then does nothing until the mouse moves)
-- [ ] Hover shows names; clicking a user selects it; the timeline slider (bottom strip, fades in on hover, out after 1 s) seeks on click, shows its date caption over the cursor clamped to the window, and is absent with `--hide-progress` or a stdin log
-- [ ] Cursor grab starts on drag and releases when the last button is up
+The key-to-action mapping is unit-tested; the thin glue that applies an action to the window
+(`Live::act` in `interactive.rs`) is not, hence the smoke box below.
 
-## Render
+| Item | Proof |
+|---|---|
+| Esc quits, also under `--disable-input`; repeats ignored | `crates/burl/src/interactive/input.rs::shell_keys_ignore_repeat_and_escape_ignores_disable_input`, `scripts/window-in-container.sh::Esc quits cleanly` |
+| Space pauses: maps to pause; a paused sim freezes the clock but not the camera | `crates/burl/src/interactive/input.rs::character_rows`, `crates/burl-sim/src/sim.rs::paused_freezes_the_clock_but_not_the_camera` |
+| `=`/`+`, `-`, `.`, `,`, `/`, `[`, `]`, `N` map to their commands; gravity and skip-idle take effect | `crates/burl/src/interactive/input.rs::character_rows`, `crates/burl-sim/src/command.rs::arrows_and_gravity_rows`, `crates/burl-sim/src/sim.rs::force_gravity_scales_the_pull_toward_the_parent`, `crates/burl-sim/src/sim.rs::skip_idle_sets_the_idle_clock` |
+| T, G, R map to the tree, users and root toggles; the hide flags empty their buffers | `crates/burl/src/interactive/input.rs::character_rows`, `crates/burl-render/tests/scene.rs::hide_flags_empty_their_buffers`, `crates/burl-render/tests/scene.rs::hide_root_skips_edges_to_the_roots_children` |
+| U, D, F map to the oracle's three-state name cycles (hidden, highlighted, shown; files also extensions only), K to the key legend | `crates/burl/src/interactive/input.rs::character_rows`, `crates/burl/src/frame.rs::label_toggles_flip_their_own_flag` |
+| M maps to hide-mouse; a hidden mouse drops presses but lets releases through, and `--disable-input` drops all | `crates/burl/src/interactive/input.rs::character_rows`, `crates/burl/src/interactive.rs::button_events_are_gated_by_disable_input_and_hidden_mouse_but_releases_pass` |
+| Tab selects the next user (ignored under `--disable-input`; also in track mode) | `crates/burl/src/interactive/input.rs::buttons_map_to_the_sims_and_tab_selects_the_next_user`, `crates/burl-sim/tests/pointer_script.rs::scripted_tab_is_ignored_under_disable_input`, `crates/burl/tests/sim_gate.rs::sim_gate_small_repo_follow` |
+| Arrows pan, held-key state, also while paused | `crates/burl/src/interactive/input.rs::arrows_are_held_state`, `crates/burl-sim/src/sim.rs::arrows_assign_in_cursor_order_and_make_the_camera_manual`, `crates/burl-sim/src/sim.rs::manual_camera_pans_by_cam_rate_and_stays_put` |
+| Keypad `+`/`-` zoom (reverse of the character keys) | `crates/burl/src/interactive/input.rs::keypad_zoom_is_not_the_character_row` |
 
-- [ ] Bloom, shadows, file and user textures, beams and the key legend look like Gource's at the same settings
+### Mouse
+
+| Item | Proof |
+|---|---|
+| Wheel zooms in and out and respects the zoom clamp | `crates/burl/src/interactive/input.rs::wheel_sign_only`, `crates/burl-sim/src/command.rs::zoom_clamps` |
+| Left-drag on the background pans; clicking empty background deselects (`selectBackground`, grab, drag), diffed against the oracle | `crates/burl/tests/sim_gate.rs::sim_gate_small_repo_select` |
+| Right-drag rotates the tree about the camera (the right button's own event mapping is not asserted) | `crates/burl-sim/src/sim.rs::manual_rotation_turns_the_tree_about_the_camera` |
+| Clicking a user or a file selects it; the selected sprite is white; its name is drawn last in `--selection-colour` (default yellow) | `crates/burl/tests/sim_gate.rs::sim_gate_small_repo_select`, `crates/burl-render/tests/scene.rs::selected_sprites_are_white`, `crates/burl-render/tests/names.rs::selected_names_are_drawn_last_in_the_selection_colour_whatever_the_fade_or_hide`, `crates/burl-render/tests/names.rs::the_default_selection_colour_is_yellow` |
+| The click lands on what is under the cursor: pick and hover diffed against the oracle, overlapping users pick in name order, and the pointer is physical pixels at any scale factor. A fading-out user is skipped in code (`user_is_fading`) but no test pins it | `crates/burl/tests/sim_gate.rs::sim_gate_small_repo_pick`, `crates/burl-sim/tests/deviations.rs::deviation_d13_overlapping_users_pick_in_name_order`, `crates/burl/src/interactive.rs::the_pointer_is_physical_pixels_whatever_the_scale_factor` |
+| Hover shows a user's name, a file's name then its directory, nothing for a selected pawn; the box sits above-left and flips inside the window | `crates/burl-sim/tests/deviations.rs::hover_text_names_the_pawn_under_the_mouse`, `crates/burl-render/src/textbox.rs::the_box_sits_above_left_of_the_cursor_and_flips_inside_the_window` |
+| The cursor hides after 3 s without moving and a move brings it back; "a click then does nothing" is not asserted | `crates/burl-sim/tests/pointer_script.rs::the_cursor_hides_after_three_idle_seconds_and_a_move_brings_it_back` |
+| The timeline slider: hit-test, click-to-percent seek, fade in on hover and out after 1 s, layout snapshot; the slider ignores a hidden or grabbed pointer | `crates/burl-render/tests/slider.rs::hit_test_and_percent`, `crates/burl-render/tests/slider.rs::click_seeks_only_on_the_slider`, `crates/burl-render/tests/slider.rs::fade`, `crates/burl-render/tests/slider.rs::slider_matches_snapshot`, `crates/burl-sim/src/sim.rs::slider_peek_and_seek`, `crates/burl/src/interactive.rs::the_slider_ignores_a_hidden_or_grabbed_pointer` |
+
+### Render
+
+| Item | Proof |
+|---|---|
+| Scene structure matches Gource (per-frame SSIM against the oracle). Its run hides text, date and bloom, so those are not covered | `.github/workflows/heavy.yml::visual-ssim:` |
+| `--user-image-dir` and `--default-user-image`: the directory scan, own image then default then stock, `--colour-images` keeps the hash colour, a bad file is reported by name, and the render changes through the real binary | `crates/burl/tests/export.rs::user_image_dir_changes_the_render`, `crates/burl-render/tests/avatars.rs::scan_keeps_jpg_jpeg_png_keyed_by_stem_case_insensitively`, `crates/burl-render/tests/avatars.rs::own_image_then_default_then_stock`, `crates/burl-render/tests/avatars.rs::colour_images_keeps_the_hash_colour`, `crates/burl/src/frame.rs::avatar_hook_and_fatal_bad_file` |
+
+## Still manual (per platform, tick each)
+
+Only what needs a real display, real hardware or a person's eye. Tick on all three platforms
+unless a line says otherwise.
+
+- [ ] `--high-dpi` on Retina: line widths and text are crisp, not blurry or doubled (macOS Retina)
+- [ ] Moving the window between displays of different scale does not break layout (macOS)
+- [ ] Fullscreen toggle and resize keep the scene proportioned: no black bars or stretching (the Linux job checks only that it redraws)
+- [ ] Smoke the key glue once in a real window: Space, T, G, R, U, D, F, K, M, `=`/`-`, arrows, Tab, keypad zoom, wheel
+- [ ] Smoke the pointer glue once: click selects a user and a file, hover box follows the cursor and flips at the edges, background drag pans, right-drag rotates
+- [ ] Cursor grab hides and confines the cursor during a drag and releases it when the last button goes up
+- [ ] The slider's date caption is clamped to the window and the slider is absent with `--hide-progress` and with a stdin log
+- [ ] Bloom, shadows, file and user textures, beams and the key legend look like Gource's at the same settings (SSIM hides bloom and text)
 - [ ] Text (user, file, directory names, captions, title, date) is readable and positioned like Gource's
 - [ ] Pause/resume and seeking leave no stale frame or flicker
-- [ ] `burl --user-image-dir DIR <repo>` (DIR holds `<user name>.png/.jpg`) shows each user as their own image, white unless `--colour-images`; `--default-user-image F` gives the rest F; a corrupt file in DIR exits with an error naming it (#91)
+
+## Not ported
+
+F12, V and middle click, S, C, P and the debug keys Q, W, Y are not in the windowed path; that is
+deviation G10 in `DEVIATIONS.md`, reviewed with the register rather than ticked here. Z is a
+no-op in Gource too. `scripts/check-release.sh` fails if a `## Known gap` section with bullets
+is ever added back.
 
 ## Sign-off
 

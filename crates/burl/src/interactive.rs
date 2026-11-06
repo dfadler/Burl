@@ -92,12 +92,15 @@ fn display_line(event: &str, scale: f64, physical: (u32, u32), logical: (u32, u3
     )
 }
 
+/// Logical size = physical / scale, rounded to the nearest pixel.
+fn logical_size(physical: (u32, u32), scale: f64) -> (u32, u32) {
+    let l = |p: u32| (f64::from(p) / scale).round() as u32;
+    (l(physical.0), l(physical.1))
+}
+
 /// Logs `display_line`, deriving logical = physical / scale.
 fn log_display(event: &str, scale: f64, physical: (u32, u32)) {
-    burl_util::log::debug(|| {
-        let l = |p: u32| (f64::from(p) / scale).round() as u32;
-        display_line(event, scale, physical, (l(physical.0), l(physical.1)))
-    });
+    burl_util::log::debug(|| display_line(event, scale, physical, logical_size(physical, scale)));
 }
 
 fn font_scale(ratio: f32, height: u32) -> f32 {
@@ -517,7 +520,10 @@ impl ApplicationHandler for App {
             WindowEvent::CursorLeft { .. } => live.sim.set_cursor_focus(false),
             // report only: winit keeps its own suggested size, and layout follows `Resized`
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                // the window's own size: the context's cached size is still the pre-change one here
+                // `scale_factor` is the event's; the size is a sample of the window right now (the
+                // context's cached size is still the pre-change one here), so on a platform that
+                // queues events the two can describe different moments. The `resized` line that
+                // follows is the settled state.
                 let s = live.window().inner_size();
                 log_display("scale-changed", scale_factor, (s.width, s.height));
             }
@@ -719,6 +725,15 @@ mod tests {
             (1001, 599)
         );
         assert_eq!(pointer_px(PhysicalPosition::new(0.0, 0.0)), (0, 0));
+    }
+
+    #[test]
+    fn logical_size_divides_by_the_scale_and_rounds() {
+        assert_eq!(logical_size((1600, 1200), 2.0), (800, 600));
+        assert_eq!(logical_size((640, 360), 1.0), (640, 360));
+        // fractional scale, and a rounding boundary: 1000 / 1.5 = 666.67, 3 / 2 = 1.5
+        assert_eq!(logical_size((1500, 1000), 1.5), (1000, 667));
+        assert_eq!(logical_size((3, 3), 2.0), (2, 2));
     }
 
     #[test]

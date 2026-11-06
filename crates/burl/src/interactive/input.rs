@@ -226,6 +226,7 @@ mod tests {
     fn deviation_g10_unported_keys_do_nothing() {
         for k in ["s", "c", "v", "p", "q", "w", "y", "z"] {
             assert_eq!(act(&ch(k)), None, "{k}");
+            assert_eq!(act(&ch(&k.to_ascii_uppercase())), None, "{k} upper");
         }
         assert_eq!(act(&Key::Named(NamedKey::F12)), None);
     }

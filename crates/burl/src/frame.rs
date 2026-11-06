@@ -349,6 +349,32 @@ mod tests {
         assert!(!kit.ns.hide_filenames && !kit.ns.file_extensions);
     }
 
+    /// Configuration can set both flags; the oracle's cycle falls through to its last branch.
+    #[test]
+    fn label_toggles_from_both_flags_set() {
+        let g = GourceSettings::default();
+        let mut fonts = new_fonts(burl_render::DEFAULT_FONT_FILE).unwrap();
+        let mut kit = FrameKit::with_images(&mut fonts, &g, 100, 100, None, None);
+        kit.ns.hide_usernames = true;
+        kit.ns.highlight_all_users = true;
+        kit.ns.hide_dirnames = true;
+        kit.ns.highlight_dirs = true;
+        kit.ns.hide_filenames = true;
+        kit.ns.file_extensions = true;
+        kit.toggle(Label::UserNames);
+        kit.toggle(Label::DirNames);
+        kit.toggle(Label::FileNames);
+        assert_eq!(
+            (kit.ns.hide_usernames, kit.ns.highlight_all_users),
+            (true, false)
+        );
+        assert_eq!((kit.ns.hide_dirnames, kit.ns.highlight_dirs), (true, false));
+        assert_eq!(
+            (kit.ns.hide_filenames, kit.ns.file_extensions),
+            (false, true)
+        );
+    }
+
     /// A resize moves the logo and the background; before the fix both kept the initial size.
     #[test]
     fn resize_relays_out_logo_and_background() {

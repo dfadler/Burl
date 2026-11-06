@@ -39,6 +39,7 @@ The key-to-action mapping is unit-tested; the thin glue that applies an action t
 | Space pauses: maps to pause; a paused sim freezes the clock but not the camera | `crates/burl/src/interactive/input.rs::character_rows`, `crates/burl-sim/src/sim.rs::paused_freezes_the_clock_but_not_the_camera` |
 | `=`/`+`, `-`, `.`, `,`, `/`, `[`, `]`, `N` map to their commands; gravity and skip-idle take effect | `crates/burl/src/interactive/input.rs::character_rows`, `crates/burl-sim/src/command.rs::arrows_and_gravity_rows`, `crates/burl-sim/src/sim.rs::force_gravity_scales_the_pull_toward_the_parent`, `crates/burl-sim/src/sim.rs::skip_idle_sets_the_idle_clock` |
 | T, G, R map to the tree, users and root toggles; the hide flags empty their buffers | `crates/burl/src/interactive/input.rs::character_rows`, `crates/burl-render/tests/scene.rs::hide_flags_empty_their_buffers`, `crates/burl-render/tests/scene.rs::hide_root_skips_edges_to_the_roots_children` |
+| U, D, F map to the oracle's three-state name cycles (hidden, highlighted, shown; files also extensions only), K to the key legend | `crates/burl/src/interactive/input.rs::character_rows`, `crates/burl/src/frame.rs::label_toggles_flip_their_own_flag` |
 | M maps to hide-mouse; a hidden mouse drops presses but lets releases through, and `--disable-input` drops all | `crates/burl/src/interactive/input.rs::character_rows`, `crates/burl/src/interactive.rs::button_events_are_gated_by_disable_input_and_hidden_mouse_but_releases_pass` |
 | Tab selects the next user (ignored under `--disable-input`; also in track mode) | `crates/burl/src/interactive/input.rs::buttons_map_to_the_sims_and_tab_selects_the_next_user`, `crates/burl-sim/tests/pointer_script.rs::scripted_tab_is_ignored_under_disable_input`, `crates/burl/tests/sim_gate.rs::sim_gate_small_repo_follow` |
 | Arrows pan, held-key state, also while paused | `crates/burl/src/interactive/input.rs::arrows_are_held_state`, `crates/burl-sim/src/sim.rs::arrows_assign_in_cursor_order_and_make_the_camera_manual`, `crates/burl-sim/src/sim.rs::manual_camera_pans_by_cam_rate_and_stays_put` |
@@ -72,7 +73,7 @@ unless a line says otherwise.
 - [ ] `--high-dpi` on Retina: line widths and text are crisp, not blurry or doubled (macOS Retina)
 - [ ] Moving the window between displays of different scale does not break layout (macOS)
 - [ ] Fullscreen toggle and resize keep the scene proportioned: no black bars or stretching (the Linux job checks only that it redraws)
-- [ ] Smoke the key glue once in a real window: Space, T, G, R, M, `=`/`-`, arrows, Tab, keypad zoom, wheel
+- [ ] Smoke the key glue once in a real window: Space, T, G, R, U, D, F, K, M, `=`/`-`, arrows, Tab, keypad zoom, wheel
 - [ ] Smoke the pointer glue once: click selects a user and a file, hover box follows the cursor and flips at the edges, background drag pans, right-drag rotates
 - [ ] Cursor grab hides and confines the cursor during a drag and releases it when the last button goes up
 - [ ] The slider's date caption is clamped to the window and the slider is absent with `--hide-progress` and with a stdin log
@@ -80,19 +81,12 @@ unless a line says otherwise.
 - [ ] Text (user, file, directory names, captions, title, date) is readable and positioned like Gource's
 - [ ] Pause/resume and seeking leave no stale frame or flicker
 
-## Known gap, needs user decision
+## Not ported
 
-The old checklist asked for the following, but the windowed path has no code for any of it
-(`key_action` in `crates/burl/src/interactive/input.rs` maps no such key; no `Command` exists;
-`crates/burl-sim/src/pointer.rs` has `Button::Middle => {}` under "the camera modes are not here
-yet"). They are not boxes: a box for a missing feature cannot honestly be ticked. Either
-implement them, or record each as a deviation in `DEVIATIONS.md` before the register is reviewed,
-then delete its bullet here. `scripts/check-release.sh` fails while any bullet remains.
-
-- **F12 writes a screenshot** (no screenshot code exists)
-- **U, D, F, K** toggle user names, dir names, file names and the key legend (only T, G, R, M bind)
-- **V** toggles camera mode, and **middle click** toggles camera mode
-- **Z** gravity toggle, **S** recolour, **C** shows the splash (only `[` `]` and N bind)
+F12, V and middle click, S, C, P and the debug keys Q, W, Y are not in the windowed path; that is
+deviation G10 in `DEVIATIONS.md`, reviewed with the register rather than ticked here. Z is a
+no-op in Gource too. `scripts/check-release.sh` fails if a `## Known gap` section with bullets
+is ever added back.
 
 ## Sign-off
 

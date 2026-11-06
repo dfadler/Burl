@@ -17,6 +17,24 @@ use std::sync::{Arc, Mutex};
 
 type Image = Option<(TextureId, Vec2)>;
 
+/// One `U` / `D` press on `(hide, highlight)`: hidden -> highlighted -> shown -> hidden.
+fn cycle(hide: bool, highlight: bool) -> (bool, bool) {
+    match (hide, highlight) {
+        (true, false) => (false, true),
+        (false, true) => (false, false),
+        _ => (true, false),
+    }
+}
+
+/// What `U`, `D`, `F` and `K` toggle.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Label {
+    UserNames,
+    DirNames,
+    FileNames,
+    Key,
+}
+
 pub struct FrameKit {
     name_fonts: NameFonts,
     overlays: Overlays,
@@ -119,6 +137,31 @@ impl FrameKit {
             logo,
             logo_offset: g.logo_offset.into(),
             screen: Vec2::new(w as f32, h as f32),
+        }
+    }
+
+    /// `U`, `D`, `F`, `K` as `Gource::keyPress`. `U` and `D` cycle hidden -> highlighted -> shown ->
+    /// hidden (the first press when shown hides); `F` cycles shown -> extensions only -> hidden ->
+    /// shown. `K` flips the legend.
+    pub fn toggle(&mut self, what: Label) {
+        let n = &mut self.ns;
+        match what {
+            Label::UserNames => {
+                (n.hide_usernames, n.highlight_all_users) =
+                    cycle(n.hide_usernames, n.highlight_all_users)
+            }
+            Label::DirNames => {
+                (n.hide_dirnames, n.highlight_dirs) = cycle(n.hide_dirnames, n.highlight_dirs)
+            }
+            Label::FileNames => {
+                (n.hide_filenames, n.file_extensions) = match (n.hide_filenames, n.file_extensions)
+                {
+                    (true, false) => (false, false),
+                    (false, true) => (true, false),
+                    _ => (false, true),
+                }
+            }
+            Label::Key => self.os.show_key = !self.os.show_key,
         }
     }
 
@@ -274,6 +317,62 @@ mod tests {
             FrameKit::with_images(&mut fonts, g, d.width as u32, d.height as u32, bg, logo);
         kit.batches(&mut fonts, &sim.scene_view(), &tex, &ss)
             .batches()
+    }
+
+    /// `U`/`D`/`F`/`K` flip exactly their own flag, and a second press flips it back.
+    #[test]
+    fn label_toggles_flip_their_own_flag() {
+        let g = GourceSettings::default();
+        let mut fonts = new_fonts(burl_render::DEFAULT_FONT_FILE).unwrap();
+        let mut kit = FrameKit::with_images(&mut fonts, &g, 100, 100, None, None);
+        // defaults: names shown, no highlight, no extensions-only
+        kit.toggle(Label::UserNames);
+        kit.toggle(Label::DirNames);
+        kit.toggle(Label::FileNames);
+        kit.toggle(Label::Key);
+        assert!(kit.ns.hide_usernames && kit.ns.hide_dirnames);
+        assert!(kit.ns.file_extensions && !kit.ns.hide_filenames);
+        assert!(kit.os.show_key);
+        // second press: user and dir names go hidden -> highlighted, files extensions -> hidden
+        kit.toggle(Label::UserNames);
+        kit.toggle(Label::DirNames);
+        kit.toggle(Label::FileNames);
+        assert!(!kit.ns.hide_usernames && kit.ns.highlight_all_users);
+        assert!(!kit.ns.hide_dirnames && kit.ns.highlight_dirs);
+        assert!(kit.ns.hide_filenames && !kit.ns.file_extensions);
+        // third press: highlighted -> shown, hidden files -> shown
+        kit.toggle(Label::UserNames);
+        kit.toggle(Label::DirNames);
+        kit.toggle(Label::FileNames);
+        assert!(!kit.ns.hide_usernames && !kit.ns.highlight_all_users);
+        assert!(!kit.ns.hide_dirnames && !kit.ns.highlight_dirs);
+        assert!(!kit.ns.hide_filenames && !kit.ns.file_extensions);
+    }
+
+    /// Configuration can set both flags; the oracle's cycle falls through to its last branch.
+    #[test]
+    fn label_toggles_from_both_flags_set() {
+        let g = GourceSettings::default();
+        let mut fonts = new_fonts(burl_render::DEFAULT_FONT_FILE).unwrap();
+        let mut kit = FrameKit::with_images(&mut fonts, &g, 100, 100, None, None);
+        kit.ns.hide_usernames = true;
+        kit.ns.highlight_all_users = true;
+        kit.ns.hide_dirnames = true;
+        kit.ns.highlight_dirs = true;
+        kit.ns.hide_filenames = true;
+        kit.ns.file_extensions = true;
+        kit.toggle(Label::UserNames);
+        kit.toggle(Label::DirNames);
+        kit.toggle(Label::FileNames);
+        assert_eq!(
+            (kit.ns.hide_usernames, kit.ns.highlight_all_users),
+            (true, false)
+        );
+        assert_eq!((kit.ns.hide_dirnames, kit.ns.highlight_dirs), (true, false));
+        assert_eq!(
+            (kit.ns.hide_filenames, kit.ns.file_extensions),
+            (false, true)
+        );
     }
 
     /// A resize moves the logo and the background; before the fix both kept the initial size.

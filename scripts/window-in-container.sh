@@ -41,6 +41,22 @@ luma() { # IMAGE CROP -> mean luma 0-255
 		sed -n 's/.*YAVG=//p' | head -1
 }
 
+# diag NAME PID: say why a check could not run (is burl alive, which windows it owns and in what
+# map state, what X has, what the screen shows). Saved as OUT/NAME-fail.png.
+diag() {
+	if kill -0 "$2" 2>/dev/null; then echo "  diag: burl is still running"; else echo "  diag: burl has exited"; fi
+	local w
+	for w in $(xdotool search --pid "$2" 2>/dev/null); do
+		echo "  diag: window $w: $(xwininfo -id "$w" 2>/dev/null | grep 'Map State')"
+	done
+	# PID-independent too: a window that exists but has not set _NET_WM_PID yet is missed above.
+	for w in $(xwininfo -root -children 2>/dev/null | awk '/^ +0x/ {print $1}'); do
+		echo "  diag: top-level $w: $(xwininfo -id "$w" 2>/dev/null | grep 'Map State')"
+	done
+	xwininfo -root -tree
+	shot "$1-fail"
+}
+
 # Orientation, in a launch of its own with only the date caption drawn: the caption sits near the
 # top of the window, so a strip there must be brighter than the mirror strip near the bottom. A
 # vertically flipped window (the windowed blit once mirrored it) swaps them.
@@ -69,6 +85,7 @@ if [ -n "$OWID" ]; then
 	fi
 else
 	bad "orientation launch: window never appeared"
+	diag orientation "$OBURL"
 fi
 kill "$OBURL" 2>/dev/null
 wait "$OBURL" 2>/dev/null
@@ -123,6 +140,7 @@ if [ -n "$CWID" ]; then
 		bad "pointer is still confined after the button went up (at $PX,$PY)"
 else
 	bad "cursor-confine launch: window never appeared"
+	diag cursor "$CBURL"
 fi
 kill "$CBURL" 2>/dev/null
 wait "$CBURL" 2>/dev/null
@@ -187,7 +205,12 @@ fi
 key alt+Return
 sleep 1
 shot fullscreen
-[ "$(size)" = 1280x720 ] && ok "Alt+Return goes fullscreen" || bad "fullscreen size $(size), want 1280x720"
+if [ "$(size)" = 1280x720 ]; then
+	ok "Alt+Return goes fullscreen"
+else
+	bad "fullscreen size $(size), want 1280x720"
+	diag fullscreen "$BURL"
+fi
 key alt+Return
 sleep 1
 [ "$(size)" != 1280x720 ] && ok "Alt+Return leaves fullscreen" || bad "still fullscreen"

@@ -459,6 +459,20 @@ pub fn run_harness(root: &Path) -> Result<(), String> {
     let pair = pixels::measure_pair(c1, c2)?;
     eprintln!("pixels: 2x display vs 1x display, same paused frame at 640x360 px: {pair:?}");
     pixels::check_native_2x(&pair).map_err(|e| format!("Retina render: {e}"))?;
+
+    // Secondary: regression baselines taken from Burl itself on the hosted runner. Opt-in, because
+    // they only mean something on the image that produced them; never a claim of parity.
+    if let Some(name) = std::env::var_os("DISPLAY_HARNESS_BASELINE") {
+        let base = root.join("tools/display-harness/baselines").join(name);
+        for (d, got) in [("1x", c1), ("2x", c2)] {
+            let path = base.join(format!("{d}.png"));
+            let bytes = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            let want = crate::ssim::decode(&bytes)?;
+            let s = pixels::check_baseline(got, &want, pixels::MIN_BASELINE_SSIM)
+                .map_err(|e| format!("{d} display, regression baseline {}: {e}", path.display()))?;
+            eprintln!("ok   {d} display: SSIM {s:.4} against the regression baseline (not parity)");
+        }
+    }
     Ok(())
 }
 

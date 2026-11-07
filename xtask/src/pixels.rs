@@ -180,6 +180,9 @@ pub fn check_native_2x(p: &Pair) -> Result<(), String> {
     Ok(())
 }
 
+/// Lowest SSIM against a regression baseline that still passes (see tools/display-harness/baselines/README.md).
+pub const MIN_BASELINE_SSIM: f64 = 0.85;
+
 /// Regression baseline, not parity: SSIM of `got` against a stored capture of Burl itself.
 pub fn check_baseline(got: &Image, baseline: &Image, min_ssim: f64) -> Result<f64, String> {
     let s = ssim(got, baseline)?;
@@ -292,12 +295,15 @@ mod tests {
     #[test]
     fn baseline_passes_itself_and_fails_a_different_image() {
         let a = scene(2);
-        assert_eq!(check_baseline(&a, &a, 0.9).map(|s| s > 0.999), Ok(true));
+        assert_eq!(
+            check_baseline(&a, &a, MIN_BASELINE_SSIM).map(|s| s > 0.999),
+            Ok(true)
+        );
         let b = Image {
             w: a.w,
             h: a.h,
             rgb: vec![20; a.rgb.len()],
         };
-        assert!(check_baseline(&b, &a, 0.9).is_err());
+        assert!(check_baseline(&b, &a, MIN_BASELINE_SSIM).is_err());
     }
 }

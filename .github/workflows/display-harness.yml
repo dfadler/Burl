@@ -9,6 +9,8 @@ on:
       - ".github/workflows/display-harness.yml"
       - "tools/display-harness/**"
       - "xtask/src/display_harness.rs"
+      - "xtask/src/pixels.rs"
+      - "xtask/src/ssim.rs"
       - "crates/burl/src/interactive.rs"
       - "crates/burl-gl/**"
   schedule:
@@ -41,6 +43,9 @@ jobs:
         with:
           persist-credentials: false
       - run: cargo xtask display-harness
+        env:
+          # Compares against tools/display-harness/baselines/<image> (regression baseline, not parity).
+          DISPLAY_HARNESS_BASELINE: ${{ matrix.os }}
       # Always kept: a passing run's captures are what the regression baselines are taken from.
       - name: Keep the captures
         if: ${{ !cancelled() }}

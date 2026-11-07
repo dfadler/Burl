@@ -300,7 +300,7 @@ pub fn run_harness(root: &Path) -> Result<(), String> {
     // clock (it keeps drawing, so every resize still redraws). Let some scene build up first.
     std::thread::sleep(Duration::from_secs(6));
     let probe = dir.join("pause-probe.png");
-    let grab = || -> Option<Vec<u8>> {
+    let grab = || -> Option<crate::ssim::Image> {
         let w = window()?;
         let ok = Command::new("screencapture")
             .args(["-x", "-o", "-l", &w.id.to_string()])
@@ -309,35 +309,40 @@ pub fn run_harness(root: &Path) -> Result<(), String> {
             .ok()?
             .success();
         let img = crate::ssim::decode(&std::fs::read(&probe).ok()?).ok()?;
-        ok.then_some(img.rgb)
+        ok.then_some(img)
     };
-    // Space only toggles, so the state is read back from the pixels: a running sim never shows
-    // the same frame twice; a paused one stops changing once the camera has settled. Press again
-    // whenever the frame is still moving after a generous wait.
-    let mut paused = false;
-    for _ in 0..5 {
-        run(Command::new("osascript").args([
-            "-e",
-            "tell application \"System Events\" to set frontmost of (first process whose name is \"burl\") to true",
-            "-e",
-            "delay 0.5",
-            "-e",
-            "tell application \"System Events\" to key code 49",
-        ]))?;
-        let mut prev = None;
-        let end = Instant::now() + Duration::from_secs(10);
-        while Instant::now() < end && !paused {
-            std::thread::sleep(Duration::from_millis(700));
-            let now = grab();
-            paused = now.is_some() && now == prev;
-            prev = now;
+    // Space only toggles, so press it once and read the state back from the pixels: a paused sim
+    // still moves the camera for a while, then the frame stops changing. The per-second change
+    // (MAE between frames) is logged: a decay means "settling", a plateau means "still running".
+    run(Command::new("osascript").args([
+        "-e",
+        "tell application \"System Events\" to set frontmost of (first process whose name is \"burl\") to true",
+        "-e",
+        "delay 0.5",
+        "-e",
+        "tell application \"System Events\" to key code 49",
+    ]))?;
+    let mut series = Vec::new();
+    let mut prev: Option<crate::ssim::Image> = None;
+    let mut still = 0;
+    for _ in 0..90 {
+        std::thread::sleep(Duration::from_secs(1));
+        let Some(now) = grab() else { continue };
+        if let Some(p) = &prev {
+            let m = pixels::mae(p, &now).unwrap_or(f64::NAN);
+            series.push(m);
+            still = if m == 0.0 { still + 1 } else { 0 };
         }
-        if paused {
+        prev = Some(now);
+        if still >= 2 {
             break;
         }
     }
-    if !paused {
-        return Err("burl never held still after pressing Space (pause failed?)".into());
+    eprintln!("pause: frame-to-frame MAE per second after Space: {series:.3?}");
+    if still < 2 {
+        return Err(
+            "burl never held still after pressing Space (still running, or still settling)".into(),
+        );
     }
 
     // 1x first: a window that starts on a 2x display (a Retina panel) then sees a real change on

@@ -21,9 +21,25 @@ bad() {
 
 Xvfb "$DISPLAY" -screen 0 "${SCREEN}x24" -nolisten tcp &
 for _ in $(seq 50); do xdpyinfo >/dev/null 2>&1 && break || sleep 0.1; done
-openbox >/dev/null 2>&1 &
-# A window mapped before the WM is ready is never managed: wait until it has announced itself.
-for _ in $(seq 100); do xprop -root _NET_SUPPORTING_WM_CHECK 2>/dev/null | grep -q 'window id' && break || sleep 0.1; done
+openbox >"$OUT/openbox.log" 2>&1 &
+OPENBOX=$!
+# A window mapped before the WM is ready is never managed. _NET_SUPPORTING_WM_CHECK is set early
+# in openbox's startup, well before it handles map requests (about 1 s later on a starved CPU), so
+# a window opened in between stays unmapped for good (#163). _NET_CLIENT_LIST is set once startup
+# is done. Fail loudly if that never happens rather than carry on with an unmanaged display.
+wm_ready=
+for _ in $(seq 100); do
+	xprop -root _NET_CLIENT_LIST 2>/dev/null | grep -q 'window id' && {
+		wm_ready=1
+		break
+	}
+	sleep 0.1
+done
+if [ -z "$wm_ready" ]; then
+	echo "FAIL openbox not ready within 10 s (still running: $(kill -0 "$OPENBOX" 2>/dev/null && echo yes || echo no))"
+	cat "$OUT/openbox.log"
+	exit 1
+fi
 ffmpeg -loglevel error -y -f x11grab -draw_mouse 0 -framerate 10 -video_size "$SCREEN" \
 	-i "$DISPLAY" "$OUT/session.mp4" &
 REC=$!
@@ -193,7 +209,10 @@ sleep 1
 [ "$(size)" != 1280x720 ] && ok "Alt+Return leaves fullscreen" || bad "still fullscreen"
 
 key Escape
-for _ in $(seq 50); do kill -0 "$BURL" 2>/dev/null || break; sleep 0.1; done
+for _ in $(seq 50); do
+	kill -0 "$BURL" 2>/dev/null || break
+	sleep 0.1
+done
 if kill -0 "$BURL" 2>/dev/null; then
 	bad "Esc did not quit"
 	kill "$BURL"

@@ -8,6 +8,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
+use crate::pixels;
+
 // ---- pure parsing and checks (unit-tested below) ----
 
 /// One `display:` debug line from burl (`interactive::display_line`).
@@ -294,8 +296,21 @@ pub fn run_harness(root: &Path) -> Result<(), String> {
             .map(|e| e.scale)
     })?;
 
+    // Freeze the sim so the captures on both displays show the same frame: Space pauses burl's
+    // clock (it keeps drawing, so every resize still redraws). Let some scene build up first.
+    std::thread::sleep(Duration::from_secs(6));
+    run(Command::new("osascript").args([
+        "-e",
+        "tell application \"System Events\" to set frontmost of (first process whose name is \"burl\") to true",
+        "-e",
+        "delay 0.5",
+        "-e",
+        "tell application \"System Events\" to key code 49",
+    ]))?;
+
     // 1x first: a window that starts on a 2x display (a Retina panel) then sees a real change on
     // each move; the check only requires `scale-changed` when the scale actually differs.
+    let mut contents = Vec::new();
     for d in [&d1, &d2] {
         let seen = parse_display_events(&read(&burl_out)).len();
         let (px, py) = (d.x + 100, d.y + 100);
@@ -326,10 +341,28 @@ pub fn run_harness(root: &Path) -> Result<(), String> {
         .map_err(|e| format!("{} display: {e}: {why}", d.name))?;
         scale = d.scale;
 
-        // Capture, retrying until burl has redrawn at the new size.
+        // Resize so both displays show a 640x360 px frame: 640x360 pt at 1x, 320x180 pt at 2x.
+        // `set size` is the frame, so add the title bar (window height minus content height).
+        let content_pt = (640 / d.scale as u32, 360 / d.scale as u32);
+        let bar = parse_display_events(&read(&burl_out))
+            .last()
+            .map_or(0, |e| w.h.saturating_sub(e.logical.1));
+        let script = format!(
+            "tell application \"System Events\" to tell (first process whose name is \"burl\") to set size of window 1 to {{{}, {}}}",
+            content_pt.0,
+            content_pt.1 + bar
+        );
+        run(Command::new("osascript").args(["-e", &script]))?;
+        let w = poll(&format!("the window to be {content_pt:?} pt"), 20, || {
+            window().filter(|w| w.w == content_pt.0 && w.h == content_pt.1 + bar)
+        })?;
+
+        // Capture, retrying until burl has redrawn at the new size and the paused frame is still.
         let png = dir.join(format!("{}.png", d.name));
         let mut last = String::new();
-        let ok = poll("a capture of the right size", 20, || {
+        let mut prev: Option<crate::ssim::Image> = None;
+        let mut still = None;
+        let ok = poll("a settled capture of the right size", 30, || {
             let w = window().unwrap_or(w);
             let shot = Command::new("screencapture")
                 .args(["-x", "-o", "-l", &w.id.to_string()])
@@ -339,15 +372,27 @@ pub fn run_harness(root: &Path) -> Result<(), String> {
                 last = "screencapture failed (Screen Recording permission?)".into();
                 return None;
             }
-            match distinct_colours(&png)
+            let img = match distinct_colours(&png)
                 .and_then(|(px, c)| check_capture(px, (w.w, w.h), d.scale, c))
+                .and_then(|()| std::fs::read(&png).map_err(|e| e.to_string()))
+                .and_then(|b| crate::ssim::decode(&b))
             {
-                Ok(()) => Some(()),
+                Ok(i) => i,
                 Err(e) => {
                     last = e;
-                    None
+                    prev = None;
+                    return None;
                 }
+            };
+            // Same pixels twice in a row: the paused frame has stopped moving.
+            let same = prev.as_ref().is_some_and(|p| p.rgb == img.rgb);
+            prev = Some(img);
+            if !same {
+                last = "the paused frame is still changing".into();
+                return None;
             }
+            still = prev.take();
+            Some(())
         });
         ok.map_err(|e| {
             format!(
@@ -356,6 +401,14 @@ pub fn run_harness(root: &Path) -> Result<(), String> {
                 png.display()
             )
         })?;
+        let content = pixels::content(&still.ok_or("no settled capture")?, content_pt, d.scale)?;
+        crate::ssim::write_png(
+            &dir.join(format!("{}-content.png", d.name)),
+            content.w,
+            content.h,
+            &content.rgb,
+        )?;
+        contents.push(content);
         eprintln!(
             "ok   {} display: scale {} lines, capture {}",
             d.name,
@@ -363,6 +416,12 @@ pub fn run_harness(root: &Path) -> Result<(), String> {
             png.display()
         );
     }
+    let [c1, c2] = &contents[..] else {
+        return Err("expected one content capture per display".into());
+    };
+    let pair = pixels::measure_pair(c1, c2)?;
+    eprintln!("pixels: 2x display vs 1x display, same paused frame at 640x360 px: {pair:?}");
+    pixels::check_native_2x(&pair).map_err(|e| format!("Retina render: {e}"))?;
     Ok(())
 }
 

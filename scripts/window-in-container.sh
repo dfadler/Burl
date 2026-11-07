@@ -49,6 +49,10 @@ diag() {
 	for w in $(xdotool search --pid "$2" 2>/dev/null); do
 		echo "  diag: window $w: $(xwininfo -id "$w" 2>/dev/null | grep 'Map State')"
 	done
+	# PID-independent too: a window that exists but has not set _NET_WM_PID yet is missed above.
+	for w in $(xwininfo -root -children 2>/dev/null | awk '/^ +0x/ {print $1}'); do
+		echo "  diag: top-level $w: $(xwininfo -id "$w" 2>/dev/null | grep 'Map State')"
+	done
 	xwininfo -root -tree
 	shot "$1-fail"
 }

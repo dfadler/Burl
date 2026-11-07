@@ -299,14 +299,46 @@ pub fn run_harness(root: &Path) -> Result<(), String> {
     // Freeze the sim so the captures on both displays show the same frame: Space pauses burl's
     // clock (it keeps drawing, so every resize still redraws). Let some scene build up first.
     std::thread::sleep(Duration::from_secs(6));
-    run(Command::new("osascript").args([
-        "-e",
-        "tell application \"System Events\" to set frontmost of (first process whose name is \"burl\") to true",
-        "-e",
-        "delay 0.5",
-        "-e",
-        "tell application \"System Events\" to key code 49",
-    ]))?;
+    let probe = dir.join("pause-probe.png");
+    let grab = || -> Option<Vec<u8>> {
+        let w = window()?;
+        let ok = Command::new("screencapture")
+            .args(["-x", "-o", "-l", &w.id.to_string()])
+            .arg(&probe)
+            .status()
+            .ok()?
+            .success();
+        let img = crate::ssim::decode(&std::fs::read(&probe).ok()?).ok()?;
+        ok.then_some(img.rgb)
+    };
+    // Space only toggles, so the state is read back from the pixels: a running sim never shows
+    // the same frame twice; a paused one stops changing once the camera has settled. Press again
+    // whenever the frame is still moving after a generous wait.
+    let mut paused = false;
+    for _ in 0..5 {
+        run(Command::new("osascript").args([
+            "-e",
+            "tell application \"System Events\" to set frontmost of (first process whose name is \"burl\") to true",
+            "-e",
+            "delay 0.5",
+            "-e",
+            "tell application \"System Events\" to key code 49",
+        ]))?;
+        let mut prev = None;
+        let end = Instant::now() + Duration::from_secs(10);
+        while Instant::now() < end && !paused {
+            std::thread::sleep(Duration::from_millis(700));
+            let now = grab();
+            paused = now.is_some() && now == prev;
+            prev = now;
+        }
+        if paused {
+            break;
+        }
+    }
+    if !paused {
+        return Err("burl never held still after pressing Space (pause failed?)".into());
+    }
 
     // 1x first: a window that starts on a 2x display (a Retina panel) then sees a real change on
     // each move; the check only requires `scale-changed` when the scale actually differs.

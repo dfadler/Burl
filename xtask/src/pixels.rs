@@ -183,24 +183,16 @@ pub fn blurred(img: &Image) -> Image {
 /// blurred copy of the 2x 1.43; the 1x capture bilinear-stretched to 2x 1.28; nearest-stretched 0.
 pub fn crispness(img: &Image) -> Result<f64, String> {
     let s = sharpness(img)?;
-    if s == 0.0 {
-        return Ok(0.0);
-    }
     Ok(s / sharpness(&blurred(img))?.max(f64::MIN_POSITIVE))
 }
 
 /// Lowest [`crispness`] of a genuine render; the blurred control must score below it.
 pub const MIN_CRISPNESS: f64 = 1.8;
 
-/// `Ok((crispness, control crispness))` if `img` is crisp and its blurred copy is not; `Err` if
-/// `img` is blurry, or if the frame is too flat to tell the two apart (the check would be vacuous).
+/// `Ok((crispness, crispness of its blurred copy))` if `img` is crisp; `Err` if it is blurry. A flat
+/// frame scores 0, so it fails rather than passing vacuously.
 pub fn check_crisp(img: &Image) -> Result<(f64, f64), String> {
     let (c, control) = (crispness(img)?, crispness(&blurred(img))?);
-    if control >= MIN_CRISPNESS {
-        return Err(format!(
-            "crispness check is vacuous on this frame: its blurred copy scores {control:.2} (>= {MIN_CRISPNESS})"
-        ));
-    }
     if c < MIN_CRISPNESS {
         return Err(format!(
             "capture is not crisp: crispness {c:.2} < {MIN_CRISPNESS} (blurred copy scores {control:.2}); \

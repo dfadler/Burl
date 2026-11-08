@@ -35,6 +35,30 @@ logical = physical / scale, and a scale change shows `scale-changed` then `resiz
   was rendered at 1x and upscaled.
 - **Secondary:** `baselines/` holds regression baselines from the runner, see its README.
 
+## `--high-dpi` scenario (#162)
+
+```
+cargo xtask display-harness --high-dpi
+```
+
+Same flow, but burl gets `--high-dpi`, so `-640x360` is a logical-size window and font scale
+follows the DPI ratio; artifacts go to `target/display-harness-high-dpi/`. Measured on macOS 26
+(Apple Silicon): the window is 640x360 pt on both displays; physical 640x360 on 1x and 1280x720 on
+2x; `display:` lines say logical 640x360 on both; the 2x capture is 1280x784 (title bar included).
+
+- **Asserted:** the `display:` scale and logical = physical / scale (as above), logical size and
+  window points equal 640x360 on both displays, physical = scale x logical, capture = scale x
+  points and not blank.
+- **No 1x/2x pixel comparison:** the 2x frame is 1280x720 px of a camera framed in physical pixels
+  with font scale 2, so it is a different picture from the 1x one.
+- **Crispness, golden-free:** `crispness` = how much finer-than-2px detail the capture has
+  relative to its own box-downscaled-and-restretched copy. Genuine captures score about 2.3
+  (limit 1.8, `MIN_CRISPNESS`); the blurred copy 1.3 to 1.4; the 1x capture bilinear-stretched
+  1.28; nearest-stretched 0. The synthetic blurry control (the blurred copy) is built from the real
+  capture each run and printed beside the score; feeding the blurred copy to the check makes the
+  real harness fail (1.43 < 1.8), as do the unit tests. Not reproduced: a real compositor upscale of a 1x render (its
+  filter may differ from bilinear), and doubled lines.
+
 ## Needs
 
 - macOS with a logged-in GUI session, `clang`, and a Rust toolchain.

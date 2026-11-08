@@ -189,9 +189,21 @@ pub fn crispness(img: &Image) -> Result<f64, String> {
 /// Lowest [`crispness`] of a genuine render; the blurred control must score below it.
 pub const MIN_CRISPNESS: f64 = 1.8;
 
+/// Lowest absolute [`sharpness`] a capture needs before its crispness ratio means anything. Real
+/// captures measured 1.33 to 3.88 (macOS 26, Apple Silicon, four content captures); this is under
+/// a third of the lowest. Without it a near-flat frame whose sparse noise vanishes in the 8-bit
+/// downscale has blurred sharpness 0, a huge ratio, and passes.
+pub const MIN_SHARPNESS: f64 = 0.4;
+
 /// `Ok((crispness, crispness of its blurred copy))` if `img` is crisp; `Err` if it is blurry. A flat
-/// frame scores 0, so it fails rather than passing vacuously.
+/// or near-flat frame fails rather than passing vacuously.
 pub fn check_crisp(img: &Image) -> Result<(f64, f64), String> {
+    let s = sharpness(img)?;
+    if s < MIN_SHARPNESS {
+        return Err(format!(
+            "capture has too little detail to judge: sharpness {s:.3} < {MIN_SHARPNESS} (blank or near-flat frame?)"
+        ));
+    }
     let (c, control) = (crispness(img)?, crispness(&blurred(img))?);
     if c < MIN_CRISPNESS {
         return Err(format!(
@@ -396,5 +408,23 @@ mod tests {
         );
         assert!(check_crisp(&blurred(&real)).is_err());
         assert!(check_crisp(&upscale(&downscale(&real, 2), 2, Upscale::Nearest)).is_err());
+    }
+
+    #[test]
+    fn a_near_flat_frame_with_sparse_noise_is_not_crisp() {
+        // Isolated level-1 pixels on black, one per 2x2 block: each block averages 0.25 and rounds
+        // to 0 on the way down, so the blurred copy is perfectly flat (sharpness 0) while the
+        // frame itself has a tiny nonzero sharpness. The ratio would be huge and pass vacuously.
+        let (w, h) = (64, 64);
+        let mut rgb = vec![0u8; w * h * 3];
+        for y in (0..h).step_by(8) {
+            for x in (0..w).step_by(8) {
+                rgb[(y * w + x) * 3] = 1;
+            }
+        }
+        let img = Image { w, h, rgb };
+        assert!(sharpness(&img).unwrap() > 0.0);
+        assert_eq!(sharpness(&blurred(&img)).unwrap(), 0.0);
+        assert!(check_crisp(&img).is_err());
     }
 }

@@ -152,8 +152,9 @@ pub struct HighDpiShot {
     pub scale: f64,
     pub physical: (u32, u32),
     pub logical: (u32, u32),
-    /// The window's content size in points (frame height minus title bar), from the window list.
-    pub content_pt: (u32, u32),
+    /// The window frame in points, from the window list: the OS's own measurement, independent of
+    /// the `display:` lines (winit's content size). Frame minus logical height is the title bar.
+    pub frame: (u32, u32),
 }
 
 /// `--high-dpi` with a `-WxH` viewport is a logical-size window: `want` is that viewport. Both
@@ -169,11 +170,13 @@ pub fn check_high_dpi(
         if s.scale != scale {
             return Err(format!("{name} display: scale {} is not {scale}", s.scale));
         }
-        if s.logical != want || s.content_pt != want {
+        // Width: the frame is as wide as the content, so the OS and winit must agree. Height is
+        // checked across the two displays below (the title bar is the difference).
+        if s.logical != want || s.frame.0 != want.0 {
             return Err(format!(
-                "{name} display: logical {:?} / window {:?} pt, expected {want:?} on both displays: \
-                 not a logical-size window (exact-pixel, as without --high-dpi?)",
-                s.logical, s.content_pt
+                "{name} display: logical {:?} / window frame {:?} pt, expected {want:?} wide on both \
+                 displays: not a logical-size window (exact-pixel, as without --high-dpi?)",
+                s.logical, s.frame
             ));
         }
         if s.physical != (phys(want.0), phys(want.1)) {
@@ -183,7 +186,17 @@ pub fn check_high_dpi(
             ));
         }
     }
-    Ok(())
+    // The OS frame height minus winit's content height is the title bar. It must be the same on
+    // both displays (and exist): a window mis-sized on one display would show a different bar.
+    let bar = |s: &HighDpiShot| s.frame.1.checked_sub(s.logical.1).filter(|b| *b > 0);
+    match (bar(one), bar(two)) {
+        (Some(a), Some(b)) if a == b => Ok(()),
+        (a, b) => Err(format!(
+            "window frame height minus content height (the title bar) is {a:?} pt on 1x and {b:?} pt on 2x: \
+             frames {:?} / {:?}, content {:?} / {:?}; expected the same non-zero bar on both",
+            one.frame, two.frame, one.logical, two.logical
+        )),
+    }
 }
 
 // ---- process plumbing ----
@@ -505,7 +518,7 @@ pub fn run_harness(root: &Path, high_dpi: bool) -> Result<(), String> {
             scale: last.scale,
             physical: last.physical,
             logical: last.logical,
-            content_pt,
+            frame: (w.w, w.h),
         });
         eprintln!(
             "ok   {} display: scale {} lines, capture {}",
@@ -610,30 +623,49 @@ mod tests {
         assert!(check_capture((1280, 720), (640, 360), 2.0, 1).is_err());
     }
 
-    fn shot(scale: f64, physical: (u32, u32), logical: (u32, u32), pt: (u32, u32)) -> HighDpiShot {
+    fn shot(
+        scale: f64,
+        physical: (u32, u32),
+        logical: (u32, u32),
+        frame: (u32, u32),
+    ) -> HighDpiShot {
         HighDpiShot {
             scale,
             physical,
             logical,
-            content_pt: pt,
+            frame,
         }
     }
     const V: (u32, u32) = (640, 360);
+    /// The window frame for `V`: content plus a 32 pt title bar (as measured on macOS 26).
+    const F: (u32, u32) = (640, 392);
 
     #[test]
     fn high_dpi_window_is_the_same_logical_size_and_doubles_physically() {
-        let one = shot(1.0, V, V, V);
-        let two = shot(2.0, (1280, 720), V, V);
+        let one = shot(1.0, V, V, F);
+        let two = shot(2.0, (1280, 720), V, F);
         assert_eq!(check_high_dpi(&one, &two, V), Ok(()));
         // The exact-pixel window of G3 (no --high-dpi): 2x is 640x360 px = 320x180 pt.
-        let exact = shot(2.0, V, (320, 180), (320, 180));
+        let exact = shot(2.0, V, (320, 180), (320, 212));
         assert!(check_high_dpi(&one, &exact, V).is_err());
         // Logical size right but the window did not double physically (macOS scaled a 1x surface).
-        assert!(check_high_dpi(&one, &shot(2.0, V, V, V), V).is_err());
-        // Window points differ from the logical size the line reports.
-        assert!(check_high_dpi(&one, &shot(2.0, (1280, 720), V, (320, 180)), V).is_err());
+        assert!(check_high_dpi(&one, &shot(2.0, V, V, F), V).is_err());
+        // The OS frame is narrower than the logical width the line reports.
+        assert!(check_high_dpi(&one, &shot(2.0, (1280, 720), V, (320, 212)), V).is_err());
         // Wrong scale on a display.
-        assert!(check_high_dpi(&shot(2.0, V, V, V), &two, V).is_err());
+        assert!(check_high_dpi(&shot(2.0, V, V, F), &two, V).is_err());
+    }
+
+    #[test]
+    fn a_mis_sized_window_height_shows_as_a_different_title_bar() {
+        let one = shot(1.0, V, V, F);
+        // Same logical height reported, but the 2x frame is 28 pt taller: not the same title bar.
+        assert!(check_high_dpi(&one, &shot(2.0, (1280, 720), V, (640, 420)), V).is_err());
+        // No title bar at all (frame height equals the content height): the OS frame and winit's
+        // size cannot both be right.
+        assert!(check_high_dpi(&one, &shot(2.0, (1280, 720), V, V), V).is_err());
+        // Frame shorter than the content.
+        assert!(check_high_dpi(&one, &shot(2.0, (1280, 720), V, (640, 300)), V).is_err());
     }
 
     #[test]

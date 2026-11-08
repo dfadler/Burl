@@ -113,12 +113,17 @@ fn ssim_cmd(cmd: &str, args: &[String]) -> Result<ExitCode, String> {
 }
 
 /// `display-harness`: macOS only (private CGVirtualDisplay API); exit 1 on a failed step or assertion.
-fn display_harness_cmd() -> ExitCode {
+fn display_harness_cmd(args: &[String]) -> ExitCode {
+    let high_dpi = args.iter().any(|a| a == "--high-dpi");
+    if args.iter().any(|a| a != "--high-dpi") {
+        eprintln!("usage: cargo xtask display-harness [--high-dpi]");
+        return ExitCode::from(2);
+    }
     if !cfg!(target_os = "macos") {
         eprintln!("display-harness: needs macOS (virtual displays, System Events, screencapture)");
         return ExitCode::FAILURE;
     }
-    match xtask::display_harness::run_harness(&workspace_root()) {
+    match xtask::display_harness::run_harness(&workspace_root(), high_dpi) {
         Ok(()) => {
             eprintln!("display-harness: all assertions passed");
             ExitCode::SUCCESS
@@ -139,13 +144,13 @@ fn main() -> ExitCode {
         });
     }
     if args.first().map(String::as_str) == Some("display-harness") {
-        return display_harness_cmd();
+        return display_harness_cmd(&args[1..]);
     }
     if args.first().map(String::as_str) == Some("sim-compare") {
         return sim_compare(&args[1..]);
     }
     if args.first().map(String::as_str) != Some("ci") || args[1..].iter().any(|a| a != "--pcre2") {
-        eprintln!("usage: cargo xtask ci [--pcre2] | sim-compare .. | ssim* .. | display-harness");
+        eprintln!("usage: cargo xtask ci [--pcre2] | sim-compare .. | ssim* .. | display-harness [--high-dpi]");
         return ExitCode::from(2);
     }
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());

@@ -156,6 +156,60 @@ pub fn measure_pair(c1: &Image, c2: &Image) -> Result<Pair, String> {
     })
 }
 
+/// High-frequency content: the MAE between an image and a copy of it that was box-downscaled by 2
+/// and upscaled back (the closer of nearest and bilinear). Zero for an image that has no detail
+/// finer than 2 px, which is what a 1x render stretched to 2x looks like.
+pub fn sharpness(img: &Image) -> Result<f64, String> {
+    let small = downscale(img, 2);
+    let full = crop(img, 0, 0, small.w * 2, small.h * 2)?;
+    let mut best = f64::MAX;
+    for how in [Upscale::Nearest, Upscale::Bilinear] {
+        best = best.min(mae(&upscale(&small, 2, how), &full)?);
+    }
+    Ok(best)
+}
+
+/// The synthetic blurry control: `img` box-downscaled by 2 and stretched back (bilinear), i.e.
+/// what the frame looks like if the detail finer than 2 px was never rendered.
+pub fn blurred(img: &Image) -> Image {
+    upscale(&downscale(img, 2), 2, Upscale::Bilinear)
+}
+
+/// How much finer-than-2px detail `img` has relative to its own blurred copy: `sharpness(img) /
+/// sharpness(blurred(img))`. Golden-free and independent of the scene's overall detail level, so
+/// it works where the 2x and 1x frames cannot be compared pixel for pixel (a `--high-dpi` window
+/// is framed in physical pixels, so the 2x capture shows different content than the 1x one).
+/// Measured on real captures (macOS 26, Apple Silicon): genuine 2x 2.27, genuine 1x 2.30; the
+/// blurred copy of the 2x 1.43; the 1x capture bilinear-stretched to 2x 1.28; nearest-stretched 0.
+pub fn crispness(img: &Image) -> Result<f64, String> {
+    let s = sharpness(img)?;
+    if s == 0.0 {
+        return Ok(0.0);
+    }
+    Ok(s / sharpness(&blurred(img))?.max(f64::MIN_POSITIVE))
+}
+
+/// Lowest [`crispness`] of a genuine render; the blurred control must score below it.
+pub const MIN_CRISPNESS: f64 = 1.8;
+
+/// `Ok((crispness, control crispness))` if `img` is crisp and its blurred copy is not; `Err` if
+/// `img` is blurry, or if the frame is too flat to tell the two apart (the check would be vacuous).
+pub fn check_crisp(img: &Image) -> Result<(f64, f64), String> {
+    let (c, control) = (crispness(img)?, crispness(&blurred(img))?);
+    if control >= MIN_CRISPNESS {
+        return Err(format!(
+            "crispness check is vacuous on this frame: its blurred copy scores {control:.2} (>= {MIN_CRISPNESS})"
+        ));
+    }
+    if c < MIN_CRISPNESS {
+        return Err(format!(
+            "capture is not crisp: crispness {c:.2} < {MIN_CRISPNESS} (blurred copy scores {control:.2}); \
+             rendered at 1x and upscaled?"
+        ));
+    }
+    Ok((c, control))
+}
+
 /// A native pair is the same frame to within capture noise (measured 0.04 on a Mac).
 pub const MAX_NATIVE_MAE: f64 = 0.25;
 /// The blurred control must be at least this many times worse than the limit above.
@@ -305,5 +359,50 @@ mod tests {
             rgb: vec![20; a.rgb.len()],
         };
         assert!(check_baseline(&b, &a, MIN_BASELINE_SSIM).is_err());
+    }
+
+    #[test]
+    fn a_native_render_is_crisp_and_its_blurred_copy_is_not() {
+        let (c, control) = check_crisp(&scene(2)).unwrap();
+        assert!(
+            c >= MIN_CRISPNESS && control < MIN_CRISPNESS,
+            "{c} {control}"
+        );
+    }
+
+    #[test]
+    fn a_stretched_1x_render_is_not_crisp() {
+        for how in [Upscale::Nearest, Upscale::Bilinear] {
+            let fake = upscale(&scene(1), 2, how);
+            assert!(check_crisp(&fake).is_err(), "{how:?}");
+        }
+        assert!(check_crisp(&blurred(&scene(2))).is_err());
+    }
+
+    #[test]
+    fn a_flat_frame_is_vacuous_not_crisp() {
+        let flat = Image {
+            w: 64,
+            h: 48,
+            rgb: vec![7; 64 * 48 * 3],
+        };
+        assert!(check_crisp(&flat).is_err());
+    }
+
+    /// Real Burl captures (the regression baselines): the genuine one passes, the same capture
+    /// downscaled and stretched back, and stretched from half size, fail.
+    #[test]
+    fn real_capture_passes_and_its_blurred_copies_fail() {
+        let real = crate::ssim::decode(include_bytes!(
+            "../../tools/display-harness/baselines/macos-26/1x.png"
+        ))
+        .unwrap();
+        let (c, control) = check_crisp(&real).unwrap();
+        assert!(
+            c > MIN_CRISPNESS && control < MIN_CRISPNESS,
+            "{c} {control}"
+        );
+        assert!(check_crisp(&blurred(&real)).is_err());
+        assert!(check_crisp(&upscale(&downscale(&real, 2), 2, Upscale::Nearest)).is_err());
     }
 }

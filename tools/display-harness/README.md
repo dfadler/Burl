@@ -52,9 +52,9 @@ follows the DPI ratio; artifacts go to `target/display-harness-high-dpi/`. Measu
 - **No 1x/2x pixel comparison:** the 2x frame is 1280x720 px of a camera framed in physical pixels
   with font scale 2, so it is a different picture from the 1x one.
 - **Crispness, golden-free:** `crispness` = how much finer-than-2px detail the capture has
-  relative to its own box-downscaled-and-restretched copy. Genuine captures score about 2.3
-  (limit 1.8, `MIN_CRISPNESS`); the blurred copy 1.3 to 1.4; the 1x capture bilinear-stretched
-  1.28; nearest-stretched 0. The synthetic blurry control (the blurred copy) is built from the real
+  relative to its own box-downscaled-and-restretched copy. Genuine captures score 2.3 locally and
+  2.9 to 3.3 on the hosted runners (limit 1.8, `MIN_CRISPNESS`); the blurred copy 1.4 locally and
+  1.5 to 1.6 hosted; the 1x capture bilinear-stretched 1.28 (local); nearest-stretched 0. The synthetic blurry control (the blurred copy) is built from the real
   capture each run and printed beside the score; feeding the blurred copy to the check makes the
   real harness fail (1.43 < 1.8), as do the unit tests. Not reproduced: a real compositor upscale of a 1x render (its
   filter may differ from bilinear), and doubled lines.

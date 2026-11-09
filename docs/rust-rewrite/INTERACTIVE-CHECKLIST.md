@@ -67,7 +67,7 @@ The key-to-action mapping is unit-tested; the thin glue that applies an action t
 | Item | Proof |
 |---|---|
 | Scene structure matches Gource (per-frame SSIM against the oracle). Its run hides text, date and bloom, so those are not covered | `.github/workflows/heavy.yml::visual-ssim:` |
-| `--user-image-dir` and `--default-user-image`: the directory scan, own image then default then stock, `--colour-images` keeps the hash colour, a bad file is reported by name, and the render changes through the real binary | `crates/burl/tests/export.rs::user_image_dir_changes_the_render`, `crates/burl-render/tests/avatars.rs::scan_keeps_jpg_jpeg_png_keyed_by_stem_case_insensitively`, `crates/burl-render/tests/avatars.rs::own_image_then_default_then_stock`, `crates/burl-render/tests/avatars.rs::colour_images_keeps_the_hash_colour`, `crates/burl/src/frame.rs::avatar_hook_and_fatal_bad_file` |
+| `--user-image-dir` and `--default-user-image`: the directory scan, own image then default then stock, `--colour-images` keeps the hash colour, a bad file is reported by name, and the render changes through the real binary | `crates/burl/tests/export.rs::user_image_dir_changes_the_render`, `crates/burl-render/tests/avatars.rs::scan_keeps_jpg_jpeg_png_keyed_by_stem_case_insensitively`, `crates/burl-render/tests/avatars.rs::own_image_then_default_then_stock`, `crates/burl-render/tests/avatars.rs::colour_images_keeps_the_hash_colour`, `crates/burl/src/frame.rs::avatar_hook_and_fatal_bad_file`, `crates/burl-render/tests/avatars.rs::nfc_key_for_a_decomposed_file_name` |
 
 ## Still manual (per platform, tick each)
 
@@ -78,6 +78,7 @@ unless a line says otherwise.
 - [ ] Moving the window between displays of different scale does not break layout (macOS; on real displays; the harness only proves the scale events and capture sizes on virtual ones)
 - [ ] Fullscreen toggle and resize keep the scene proportioned: no black bars or stretching (the Linux job checks only that it redraws)
 - [ ] Smoke the key glue once in a real window: Space, T, G, R, U, D, F, K, M, `=`/`-`, arrows, Tab, keypad zoom, wheel
+- [ ] `burl --user-image-dir DIR <repo>` in a window: each user whose name matches a file in DIR shows that image (white tint, or the hash colour with `--colour-images`), the others the stock or `--default-user-image` avatar; a corrupt file exits naming it
 - [ ] Smoke the pointer glue once: click selects a user and a file, hover box follows the cursor and flips at the edges, background drag pans, right-drag rotates
 - [ ] Cursor grab hides and confines the cursor during a drag and releases it when the last button goes up
 - [ ] The slider's date caption is clamped to the window and the slider is absent with `--hide-progress` and with a stdin log

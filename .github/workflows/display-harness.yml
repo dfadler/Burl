@@ -1,7 +1,8 @@
 # macOS display harness (ticket #153): `cargo xtask display-harness` on GitHub-hosted macOS runners.
 # It creates a 2x and a 1x virtual display, opens the real burl, moves its window between them and
-# checks the scale-change lines and the capture sizes. NOT a required check: it relies on a private
-# macOS display API, so a runner-image update can break it without any Burl change.
+# checks the scale-change lines and the capture sizes, in two scenarios (exact-pixel and
+# --high-dpi). NOT a required check: it relies on a private macOS display API, so a runner-image
+# update can break it without any Burl change.
 name: display-harness
 on:
   pull_request:
@@ -46,6 +47,10 @@ jobs:
         env:
           # Compares against tools/display-harness/baselines/<image> (regression baseline, not parity).
           DISPLAY_HARNESS_BASELINE: ${{ matrix.os }}
+      # The --high-dpi scenario (#162): logical-size window, sizes and a golden-free crispness check.
+      # Runs even if the first scenario failed, so one failure does not hide the other.
+      - run: cargo xtask display-harness --high-dpi
+        if: ${{ !cancelled() }}
       # Always kept: a passing run's captures are what the regression baselines are taken from.
       - name: Keep the captures
         if: ${{ !cancelled() }}
@@ -55,5 +60,7 @@ jobs:
           path: |
             target/display-harness/*.png
             target/display-harness/burl.out
+            target/display-harness-high-dpi/*.png
+            target/display-harness-high-dpi/burl.out
           if-no-files-found: ignore
           retention-days: 7

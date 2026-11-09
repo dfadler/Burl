@@ -78,7 +78,7 @@ unless a line says otherwise.
 - [ ] Moving the window between displays of different scale does not break layout (macOS; on real displays; the harness only proves the scale events and capture sizes on virtual ones)
 - [ ] Fullscreen toggle and resize keep the scene proportioned: no black bars or stretching (the Linux job checks only that it redraws)
 - [ ] Smoke the key glue once in a real window: Space, T, G, R, U, D, F, K, M, `=`/`-`, arrows, Tab, keypad zoom, wheel
-- [ ] `burl --user-image-dir DIR <repo>` in a window: each user whose name matches a file in DIR shows that image (white tint, or the hash colour with `--colour-images`), the others the stock or `--default-user-image` avatar; a corrupt file exits naming it
+- [ ] `burl --user-image-dir DIR <repo>` in a window: each user whose name equals a file name in DIR (extension dropped; on macOS the file name is NFC-normalised first, the author name is not) shows that image (white tint, or the hash colour with `--colour-images`), the others the stock or `--default-user-image` avatar; in a separate run, a corrupt image named for an author who appears during playback exits naming it (an unused corrupt file is never decoded)
 - [ ] Smoke the pointer glue once: click selects a user and a file, hover box follows the cursor and flips at the edges, background drag pans, right-drag rotates
 - [ ] Cursor grab hides and confines the cursor during a drag and releases it when the last button goes up
 - [ ] The slider's date caption is clamped to the window and the slider is absent with `--hide-progress` and with a stdin log

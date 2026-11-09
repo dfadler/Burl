@@ -283,17 +283,26 @@ pub fn run_harness(root: &Path, high_dpi: bool) -> Result<(), String> {
     // The helper first: its `ready` line comes after both displays are listed.
     let vd_out = dir.join("vd.out");
     let vd_file = std::fs::File::create(&vd_out).map_err(|e| e.to_string())?;
-    let _vd = Proc(
+    let mut vd = Proc(
         Command::new(dir.join("vd"))
             .stdout(vd_file)
             .stderr(Stdio::inherit())
             .spawn()
             .map_err(|e| format!("vd: {e}"))?,
     );
+    // Fail fast if the helper exits first (e.g. it printed "could not create the virtual
+    // displays" because a leftover `vd` still holds them), instead of waiting out the timeout.
     let text = poll("the helper's `ready` line", 60, || {
         let t = read(&vd_out);
-        t.lines().any(|l| l == "ready").then_some(t)
-    })?;
+        if t.lines().any(|l| l == "ready") {
+            return Some(Ok(t));
+        }
+        let st = vd.0.try_wait().ok().flatten()?;
+        Some(Err(format!(
+            "the display helper exited ({st}) before printing `ready` (its message is above; \
+             a leftover `vd` process may still hold the virtual displays)"
+        )))
+    })??;
     let displays: Vec<Display> = text.lines().filter_map(parse_display).collect();
     let find = |name: &str| {
         displays

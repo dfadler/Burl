@@ -2,8 +2,8 @@
 //! (core/settings.cpp) and `GourceSettings::importGourceSettings` (gource_settings.cpp:611),
 //! with the C++ validation order and messages. Imports return `ConfError` instead of throwing.
 //!
-//! Not ported (see the PR): macOS NFC normalisation of `user-image-dir` names, hex-float
-//! `atof` input, and the stdin wait (the binary does it). `start-position random` needs the
+//! Not ported (see the PR): hex-float `atof` input, and the stdin wait (the binary does it). macOS NFC
+//! normalisation of `user-image-dir` names lives in `burl-render::avatars`. `start-position random` needs the
 //! PRNG, so it records `start_position_random` and leaves the value 0 for the sim lanes.
 
 use crate::args::{ArgType, ARG_TYPES};

@@ -111,6 +111,14 @@ fn font_scale(ratio: f32, height: u32) -> f32 {
     }
 }
 
+/// The layout state a resize updates (C++ reads the live `display.width`/`height`): the scene
+/// settings' camera size and the overlays, logo and background in `kit`.
+pub(crate) fn apply_resize(ss: &mut SceneSettings, kit: &mut FrameKit, w: u32, h: u32) {
+    ss.width = w as f32;
+    ss.height = h as f32;
+    kit.resize(w, h);
+}
+
 struct Live {
     r: Renderer<WindowedGl>,
     sim: Sim,
@@ -539,11 +547,9 @@ impl ApplicationHandler for App {
                     self.error = Some(e);
                     el.exit();
                 }
-                live.ss.width = s.width as f32;
-                live.ss.height = s.height as f32;
+                apply_resize(&mut live.ss, &mut live.kit, s.width, s.height);
                 live.sim.set_display_size(s.width as i32, s.height as i32);
                 live.slider.resize(s.width, s.height);
-                live.kit.resize(s.width, s.height);
             }
             _ => {}
         }

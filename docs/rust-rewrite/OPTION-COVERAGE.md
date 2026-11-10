@@ -6,7 +6,7 @@ Audit of every option and config key in Gource 0.57's settings against Burl. Wri
 
 - **Parse: complete.** The C++ option table (`arg_types[...]` in `src/gource_settings.cpp` plus the display options in `reference/gource-cpp-dump/src/core/settings.cpp`) has **114** entries. Burl's `ARG_TYPES` (`crates/burl-conf/src/args.rs`) has **120**: the same 114 with identical types, plus the six hidden test controls of ticket #22 (`--debug-dump-state/-every/-max-frames`, `--prng`, `--prng-seed`, `--rand-script`). The only type differences are `--ffp` and `--stop-on-idle`: `bool` in C++, `Ignored` in Burl (D4, D5d, ticket #8). Aliases and command-line-section routing were compared the same way.
 - **Store: complete.** Every gource option has a field in `GourceSettings` (`settings.rs:142`) or `DisplaySettings` (`settings.rs:28`) except the two `Ignored` ones.
-- **Changes behaviour (at `ceb39a8`):** every option is wired except `--selection-colour` (**Stored-unused**: no pointer picking, scope in [#92](https://github.com/dfadler/Burl/issues/92)). Partial: `--hide-progress` (caption rows move, but the position slider is not drawn on `master`; PR #113), `--transparent` (no visible effect in `-o` by design). `--user-image-dir`, `--default-user-image` and `--colour-images` are wired in `-o` only until PR #107 (windowed, [#91](https://github.com/dfadler/Burl/issues/91)) merges. `--stop-on-idle` and `--ffp` are `Ignored` by design (D5d, D4). The earlier "Refused" options (`--start-position N`, `--loop`, `--follow-user`, `--camera-mode track`) and the silent `random` start position are all wired.
+- **Changes behaviour (at `ceb39a8`):** every option is wired, including `--selection-colour` (selected-name pass in `labels.rs`; pointer picking in `burl-sim/src/pointer.rs`; [#92](https://github.com/dfadler/Burl/issues/92)). Partial: `--hide-progress` (caption rows move, but the position slider is not drawn on `master`; PR #113), `--transparent` (no visible effect in `-o` by design). `--user-image-dir`, `--default-user-image` and `--colour-images` are wired in `-o` only until PR #107 (windowed, [#91](https://github.com/dfadler/Burl/issues/91)) merges. `--stop-on-idle` and `--ffp` are `Ignored` by design (D5d, D4). The earlier "Refused" options (`--start-position N`, `--loop`, `--follow-user`, `--camera-mode track`) and the silent `random` start position are all wired.
 - **Windowed vs `-o`:** both paths now draw the same frame (`crates/burl/src/frame.rs`, `FrameKit`: scene, names, date, title, captions, key, logo, background image), so the Windowed column is `Y` for those options. Open on the windowed path: multi-section runs stall on a stdin section ([#99](https://github.com/dfadler/Burl/issues/99)); avatars (PR #107, #91); the position slider (PR #113); the size after a resize (PR #109, #98).
 
 ## Status vocabulary
@@ -202,7 +202,7 @@ Two generic tests cover every option's parse path and are not repeated per row: 
 
 ### Options with no test naming them
 
-The 2026-11 refresh found two options with no test naming them: `--multi-sampling` (wired, window-attribute only; needs a display) and `--selection-colour` (stored, unused). Of the earlier thirteen, the rest are now named by a test or are wired with one (`fixed_user_size_scales_users_with_camera_distance`, `crates/burl/tests/log_level.rs`, the `export.rs` option tests); the per-option check is the script in Method step 6.
+The 2026-11 refresh found two options with no test naming them: `--multi-sampling` (wired, window-attribute only; needs a display) and `--selection-colour`, which is now named by `selected_names_are_drawn_last_in_the_selection_colour_whatever_the_fade_or_hide` and `the_default_selection_colour_is_yellow`. Of the earlier thirteen, the rest are now named by a test or are wired with one (`fixed_user_size_scales_users_with_camera_distance`, `crates/burl/tests/log_level.rs`, the `export.rs` option tests); the per-option check is the script in Method step 6.
 
 ## Real gaps: state on `master` (`ceb39a8`)
 
@@ -217,7 +217,7 @@ The original eleven-row list is kept as history in `git log` for this file; what
 | 6 | `--font-file` | **Landed** (`export.rs:75`, `load_font_file`) |
 | 7 | Avatars | Export **landed** (G9). Windowed: PR #107; NFC keys: PR #110; G8 mip check: evidence in a comment on [#91](https://github.com/dfadler/Burl/issues/91) |
 | 8 | `--transparent` | Closed, no visible effect in `-o` (unchanged) |
-| 9 | `--selection-colour`, pointer selection | **PRs open** ([#92](https://github.com/dfadler/Burl/issues/92)): #119, #121, #122, hover box #124 |
+| 9 | `--selection-colour`, pointer selection | **Landed** ([#92](https://github.com/dfadler/Burl/issues/92)): #119, #121, #122, #123, hover box #124. Gated by `sim_gate_small_repo_pick` and `sim_gate_small_repo_select`; real-display feel stays manual |
 | 10 | `--multi-sampling`, `--screen` | **Landed** (`6f160b5`) |
 | 11 | `--log-level` | **Landed** (`6e4f4fb`) |
 | 12 | Position slider | Windowed only; **PR #113** (never drawn in `-o`) |

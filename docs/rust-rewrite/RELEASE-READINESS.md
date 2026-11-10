@@ -82,7 +82,7 @@ markers; the tree has no `not ported` / `unimplemented!` markers left):
 | 2, 3 start-position (random and N), `--loop`, `--follow-user`, camera mode track | Landed (`7b6e5e4`, `e1cc912`, `23e556b`). |
 | 4 `--hide-root`, 5 `--fixed-user-size`, 6 `--font-file`, 8 `--transparent` | Landed. |
 | 7 avatars | Export landed; windowed, NFC keys and the G8 mip check open ([#91](https://github.com/dfadler/Burl/issues/91)). |
-| 9 `--selection-colour` and pointer selection | **Open**, still `Stored-unused` on `master`. Scope decided in [#105](https://github.com/dfadler/Burl/pull/105) (option B2); implementation is the 5-PR stack #119-#124 ([#92](https://github.com/dfadler/Burl/issues/92)). |
+| 9 `--selection-colour` and pointer selection | **Landed** (option B2 from [#105](https://github.com/dfadler/Burl/pull/105); stack #119-#124, [#92](https://github.com/dfadler/Burl/issues/92)). `--selection-colour` is wired: it reaches the selected-name pass (`crates/burl/src/frame.rs`, `crates/burl-render/src/labels.rs`), and the sim picks, selects and hovers (`crates/burl-sim/src/pointer.rs`). Tests: `sim_gate_small_repo_select`, `selected_names_are_drawn_last_in_the_selection_colour_whatever_the_fade_or_hide`. Not yet checked against a real display or any Gource run on macOS (no oracle there); the checklist rows in `INTERACTIVE-CHECKLIST.md` stay manual. |
 | 10 `--multi-sampling`, `--screen` | Landed (`6f160b5`). |
 | 11 `--log-level` | Landed (`6e4f4fb`). |
 | 12 position slider | **Open** ([#93](https://github.com/dfadler/Burl/issues/93)). |

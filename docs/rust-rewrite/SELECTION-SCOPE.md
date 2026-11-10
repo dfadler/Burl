@@ -2,6 +2,8 @@
 
 Decision paper for [#92](https://github.com/dfadler/Burl/issues/92) (`OPTION-COVERAGE.md` Gap 9). It writes no feature code. The user picks an option; the chosen one becomes a ticket and, unless it is full parity, a row in `DEVIATIONS.md` (policy: #10). All C++ references are to `src/` at 0.57.
 
+**Status: historical.** Option B2 was chosen and has landed (#119-#124). Sections 2 to 7 describe `master` as it was before that stack; in particular `--selection-colour` is no longer unused (see `crates/burl/src/frame.rs` and `crates/burl-render/src/labels.rs`).
+
 ## 1. What Gource does
 
 There are two ways to select, one shared effect, and one hover effect.
@@ -45,7 +47,7 @@ Runs once per frame at the top of `draw` (2415-2427), only when `!hide_mouse && 
 
 Drawn after the slider. A file that is hovered and not selected shows two lines: the name, then the path with the leading `/` removed (if any is left). A hovered, unselected user shows its name. Colour is the pawn's `getColour()`; brightness 0.5. Font is 18 pt times `font_scale` (gource.cpp:142). `setPos(mousepos, true)` puts the corner above-left of the cursor and flips to stay in the window (textbox.cpp:`setPos`). Drawing: a black quad at alpha/3 offset (3,3), the coloured quad, then white text rows spaced `font size + 4` (textbox.cpp:`draw`). It is the only hover feature.
 
-## 2. What Burl has today
+## 2. What Burl had before #119-#124 (historical)
 
 - `selected_user` lives in `burl-sim` (`sim.rs:300`). `select_user` ports only the camera lock-on (`sim.rs:1216`); fade-deselect and follow-select are ported (`1165-1207`, golden `small-repo-follow`). There is no `selected_file` and no `selectedUser` in `SceneView`/`UserView`.
 - `Command::DragStart` ports `selectBackground` (`command.rs:195`). `Pointer::button` (`interactive/input.rs:173`) sends it for **every** left press. Burl therefore deselects and drags even when the press is on a user or file: there is no picking, and the checklist line "clicking a user selects it" cannot pass (`INTERACTIVE-CHECKLIST.md:35`). `Pointer` has no position at all: `CursorMoved` is not handled, only relative `DeviceEvent::MouseMotion` (`interactive.rs:459`).

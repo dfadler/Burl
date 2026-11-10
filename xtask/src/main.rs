@@ -93,7 +93,9 @@ fn ssim_cmd(cmd: &str, args: &[String]) -> Result<ExitCode, String> {
         }
         ("ssim-luma", [a, b]) => {
             let (la, lb) = (ssim::mean_luma(&load(a)?), ssim::mean_luma(&load(b)?));
-            println!("luma={la:.3}/{lb:.3} diff={:.2}%", (lb - la).abs() / la * 100.0);
+            // a black reference has no relative difference: say so instead of printing NaN% / inf%
+            let diff = if la > 0.0 { format!("{:.2}%", (lb - la).abs() / la * 100.0) } else { "n/a (zero-luma ref)".into() };
+            println!("luma={la:.3}/{lb:.3} diff={diff}");
             Ok(ExitCode::SUCCESS)
         }
         ("ssim-frames", [stream, prefix, idx]) => {

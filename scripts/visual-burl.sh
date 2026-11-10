@@ -9,7 +9,7 @@
 set -euo pipefail
 
 case "${1:-}" in -h | --help)
-	sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'
 	exit 0
 	;;
 esac
@@ -45,15 +45,19 @@ for f in $FIXTURES; do
 	real-burl-git-250) log=tests/golden/real/burl-git-250.log stop=30 fmt=git ;;
 	*) log=tests/golden/sim/$name.log stop=10 fmt=custom ;;
 	esac
-	render "$log" "$stop" "$fmt" "$HIDE" >"$OUT/$name.ppm"
-	xtask ssim-frames "$OUT/$name.ppm" "$OUT/$name" "$idx"
+	# structural mode: a render or extract failure aborts (exit 1); bloom mode reports it and moves on
+	if ! { render "$log" "$stop" "$fmt" "$HIDE" >"$OUT/$name.ppm" && xtask ssim-frames "$OUT/$name.ppm" "$OUT/$name" "$idx"; }; then
+		[ "$BLOOM" = 1 ] || exit 1
+		echo "$name BLOOM-ERROR render or frame extraction failed"
+		continue
+	fi
 	for i in ${idx//,/ }; do
 		s=ok
 		v=$(xtask ssim "$REFS/$PFX$name-$i.png" "$OUT/$name-$i.png" --min "$MIN") || {
 			s=BELOW
 			fail=1
 		}
-		[ "$BLOOM" != 1 ] || v="$v $(xtask ssim-luma "$REFS/$PFX$name-$i.png" "$OUT/$name-$i.png")"
+		[ "$BLOOM" != 1 ] || v="$v $(xtask ssim-luma "$REFS/$PFX$name-$i.png" "$OUT/$name-$i.png" 2>&1 || echo 'luma=ERROR')"
 		echo "$name frame=$i $v min=$MIN $s"
 	done
 done

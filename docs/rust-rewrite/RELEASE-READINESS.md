@@ -65,7 +65,7 @@ From [DEVIATIONS.md](DEVIATIONS.md) at the snapshot, with the open PRs that addr
 | G1 | No owning test. **#117 adds `deviation_g1_closed_pipe_ends_the_export_with_an_error`.** |
 | G2 | No owning test (not characterised). **#117 characterises it against compiled tinyxml (four differences) and pins them; it stays a Gap.** |
 | G4 | Pinned by tests, but the decision "does `pcre2` ship by default" is open (RELEASE.md step 3). **[#118](https://github.com/dfadler/Burl/pull/118) adds `G4-PCRE2-DECISION.md` with facts and a recommendation (ship without for 0.58.0); it decides nothing, the user does.** |
-| G7 | No owning test; needs a moving-camera visual fixture. |
+| G7 | No owning test; needs a moving-camera visual fixture (#172). |
 | G8 | No owning test (proposed downgrade to a note). |
 | G9 | No owning test, and the row text is stale: it says `export.rs` never loads avatars, but `fa38c17` ("avatars: ... in export") landed. The windowed half is [#91](https://github.com/dfadler/Burl/issues/91). **#118 rewrites the row and names the owning export tests.** |
 | G6 | Proposed closed; closes when the user merges the row. |

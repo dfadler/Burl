@@ -106,7 +106,7 @@ older Phase 5 tickets, some of which the landed work above covers (not triaged h
 2. Register rows: D3, D9, G1, G2 in #117 and G9, G4 note in #118 (both open, user merges). Still open: tests or closure for G7 and G8.
 3. `OPTION-COVERAGE.md` refresh: in #118.
 4. Decide a trigger for `heavy.yml` on `master` pushes, or accept PR-only plus the tag run.
-5. Windowed follow-ups #91, #93, #98, #99 (each pending its own triage or PR), and selection #92 (stack #119-#124).
+5. Windowed follow-ups #91, #93, #98, #99 (each pending its own triage or PR), and selection #92 (stack #119-#124, since landed; see Gap 9 in `OPTION-COVERAGE.md`).
 
 **User tasks**
 

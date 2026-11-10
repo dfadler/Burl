@@ -247,3 +247,37 @@ fn selected_sprites_are_white() {
         .iter()
         .all(|v| v.colour[..3] == [1.0, 1.0, 1.0]));
 }
+
+/// G7: `RDirNode::checkFrustum`. Gource draws no files or bloom for a dir whose bounds
+/// (`pos +- radius`) miss the frustum, even when its bloom (twice the radius) reaches into view.
+/// At z = -300, fov 90 and 640x480 the view's half width at z = 0 is 400.
+#[test]
+fn deviation_g7_culled_dir_draws_no_files_or_bloom() {
+    let tex = SceneTextures {
+        beam: TextureId(1),
+        file: TextureId(2),
+        file_ratio: 1.0,
+        user: TextureId(3),
+    };
+    let count = |x: f32| {
+        let mut sc = scene();
+        sc.dirs[1].pos = Vec2::new(x, 0.0);
+        sc.dirs[1].files[0].pos = Vec2::new(x, 0.0);
+        let f = build_frame(&sc, &tex, &SceneSettings::new(640, 480));
+        (f.bloom.vertices.len() / 4, f.files.vertices().len() / 4)
+    };
+    assert_eq!(count(300.0), (2, 1), "in view");
+    // Bounds start at x = 404 (off screen) but the bloom quad starts at 398 (on screen).
+    assert_eq!(
+        count(410.0),
+        (1, 0),
+        "culled: bloom reaching in is not drawn"
+    );
+    // The camera moving makes the same dir visible again.
+    let mut sc = scene();
+    sc.dirs[1].pos = Vec2::new(410.0, 0.0);
+    sc.camera.pos.x = 200.0;
+    sc.camera.target.x = 200.0;
+    let f = build_frame(&sc, &tex, &SceneSettings::new(640, 480));
+    assert_eq!(f.bloom.vertices.len() / 4, 2);
+}

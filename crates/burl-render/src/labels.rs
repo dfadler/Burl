@@ -5,9 +5,9 @@
 //! The selected user's and file's labels are drawn again last, over everything, as in
 //! `Gource::draw` (they go through the same text buffer here, not a second immediate-mode pass).
 //!
-//! Not ported: the `in_frustum` test of file names (an off-screen label is clipped anyway).
+//! File names of a dir outside the frustum are skipped (`dirs_in_frustum`).
 
-use crate::scene::{camera, label_pos};
+use crate::scene::{camera, dirs_in_frustum, label_pos};
 use crate::{Font, FontManager, SceneSettings, SceneTextures};
 use burl_sim::view::SceneView;
 use glam::{Vec2, Vec3};
@@ -136,7 +136,8 @@ pub fn draw_names(
     // The labels are only ever drawn through the text shader, so shadows come from the shader.
     fonts.dir.round = false;
     fonts.dir.set_colour(n.dir_colour.extend(1.0));
-    for d in &scene.dirs {
+    let in_frustum = dirs_in_frustum(scene, s);
+    for (d, &seen) in scene.dirs.iter().zip(&in_frustum) {
         let hidden_depth = n.dir_name_depth > 0 && n.dir_name_depth < d.depth - 1;
         let age = d.since_last_node_change;
         let stale = !n.highlight_dirs && age > 5.0;
@@ -159,7 +160,7 @@ pub fn draw_names(
             mgr.draw_buffered(&fonts.dir, at.x, at.y, &d.name);
         }
 
-        if !(n.hide_filenames || s.hide_files) {
+        if seen && !(n.hide_filenames || s.hide_files) {
             fonts.file.set_colour(n.filename_colour.extend(1.0));
             for f in d.files.iter().filter(|f| !f.selected) {
                 let Some(alpha) = name_alpha(f.nametime, f.name_interval) else {

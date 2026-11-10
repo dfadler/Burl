@@ -191,7 +191,11 @@ mod tests {
 
     #[test]
     fn mean_luma_is_rec601() {
-        let i = Image { w: 2, h: 1, rgb: vec![255, 0, 0, 0, 0, 0] };
+        let i = Image {
+            w: 2,
+            h: 1,
+            rgb: vec![255, 0, 0, 0, 0, 0],
+        };
         assert!((mean_luma(&i) - 0.299 * 255.0 / 2.0).abs() < 1e-9);
     }
 

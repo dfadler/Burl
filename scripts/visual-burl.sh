@@ -52,11 +52,20 @@ for f in $FIXTURES; do
 		continue
 	fi
 	for i in ${idx//,/ }; do
-		s=ok
-		v=$(xtask ssim "$REFS/$PFX$name-$i.png" "$OUT/$name-$i.png" --min "$MIN") || {
+		s=ok rc=0
+		v=$(xtask ssim "$REFS/$PFX$name-$i.png" "$OUT/$name-$i.png" --min "$MIN") || rc=$?
+		# xtask ssim: 1 = below MIN; anything else (missing ref, size mismatch) is an input error
+		case $rc in
+		0) ;;
+		1)
 			s=BELOW
 			fail=1
-		}
+			;;
+		*)
+			s=ERROR v=ssim=ERROR
+			fail=1
+			;;
+		esac
 		[ "$BLOOM" != 1 ] || v="$v $(xtask ssim-luma "$REFS/$PFX$name-$i.png" "$OUT/$name-$i.png" 2>&1 || echo 'luma=ERROR')"
 		echo "$name frame=$i $v min=$MIN $s"
 	done

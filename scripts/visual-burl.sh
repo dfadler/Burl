@@ -4,6 +4,8 @@
 # oracle references in tests/golden/visual/. Same flags and frame indices as scripts/visual.sh.
 #   scripts/visual-burl.sh [MIN]    MIN defaults to 0.959 (docs/rust-rewrite/visual-gate.md)
 # Exit 1 if any frame is below MIN. All frames are always reported.
+#   BLOOM=1 scripts/visual-burl.sh   the bloom set (bloom drawn, refs bloom-*.png): report-only, always exit 0,
+#                                    prints SSIM and mean luma per frame (limit 5%, visual-gate.md; #89, #53)
 set -euo pipefail
 
 case "${1:-}" in -h | --help)
@@ -14,6 +16,9 @@ esac
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 MIN=${1:-0.959}
+BLOOM=${BLOOM:-}
+PFX='' HIDE=mouse,date,dirnames,filenames,usernames,progress
+if [ "$BLOOM" = 1 ]; then PFX=bloom-; else HIDE=$HIDE,bloom; fi
 OUT="$ROOT/target/visual-burl"
 REFS="$ROOT/tests/golden/visual"
 IMG=burl:release
@@ -26,10 +31,10 @@ xtask() { (cd "$ROOT" && cargo run -q --locked -p xtask -- "$@"); }
 
 # --prng glibc: the oracle never calls srand, so its rand() is glibc srand(1); Burl's default PRNG is
 # clock-seeded, which made every CI run score differently (visual-gate.md, PR #75).
-render() { # LOG(relative to repo root) STOP FORMAT -> PPM stream on stdout
+render() { # LOG(relative to repo root) STOP FORMAT HIDE -> PPM stream on stdout
 	docker run --rm --platform linux/amd64 -v "$ROOT":/repo:ro "$IMG" "/repo/$1" --log-format "$3" \
 		-640x360 -r 25 --seconds-per-day 1 --hash-seed 31 --disable-auto-skip --disable-auto-rotate \
-		--file-idle-time 0 --time-scale 1 --hide mouse,date,dirnames,filenames,usernames,progress,bloom \
+		--file-idle-time 0 --time-scale 1 --hide "$4" \
 		--stop-at-time "$2" --prng glibc -o -
 }
 
@@ -40,11 +45,16 @@ for f in $FIXTURES; do
 	real-burl-git-250) log=tests/golden/real/burl-git-250.log stop=30 fmt=git ;;
 	*) log=tests/golden/sim/$name.log stop=10 fmt=custom ;;
 	esac
-	render "$log" "$stop" "$fmt" >"$OUT/$name.ppm"
+	render "$log" "$stop" "$fmt" "$HIDE" >"$OUT/$name.ppm"
 	xtask ssim-frames "$OUT/$name.ppm" "$OUT/$name" "$idx"
 	for i in ${idx//,/ }; do
-		if v=$(xtask ssim "$REFS/$name-$i.png" "$OUT/$name-$i.png" --min "$MIN"); then s=ok; else s=BELOW; fail=1; fi
+		s=ok
+		v=$(xtask ssim "$REFS/$PFX$name-$i.png" "$OUT/$name-$i.png" --min "$MIN") || {
+			s=BELOW
+			fail=1
+		}
+		[ "$BLOOM" != 1 ] || v="$v $(xtask ssim-luma "$REFS/$PFX$name-$i.png" "$OUT/$name-$i.png")"
 		echo "$name frame=$i $v min=$MIN $s"
 	done
 done
-exit $fail
+[ "$BLOOM" = 1 ] || exit $fail

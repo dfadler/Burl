@@ -91,6 +91,11 @@ fn ssim_cmd(cmd: &str, args: &[String]) -> Result<ExitCode, String> {
             println!("ssim={s:.6}");
             Ok(ExitCode::from(u8::from(min.is_some_and(|m| s < m))))
         }
+        ("ssim-luma", [a, b]) => {
+            let (la, lb) = (ssim::mean_luma(&load(a)?), ssim::mean_luma(&load(b)?));
+            println!("luma={la:.3}/{lb:.3} diff={:.2}%", (lb - la).abs() / la * 100.0);
+            Ok(ExitCode::SUCCESS)
+        }
         ("ssim-frames", [stream, prefix, idx]) => {
             let bytes = std::fs::read(stream).map_err(|e| format!("{stream}: {e}"))?;
             let frames = ssim::ppm_frames(&bytes)?;
@@ -108,7 +113,7 @@ fn ssim_cmd(cmd: &str, args: &[String]) -> Result<ExitCode, String> {
             println!("runs={} worst={:.6} threshold={t:.6}", v.len(), t + ssim::MARGIN);
             Ok(ExitCode::SUCCESS)
         }
-        _ => Err("usage: cargo xtask ssim A B [--min X] | ssim-frames STREAM.ppm PREFIX I,J,.. | ssim-threshold V..".into()),
+        _ => Err("usage: cargo xtask ssim A B [--min X] | ssim-luma REF NEW | ssim-frames STREAM.ppm PREFIX I,J,.. | ssim-threshold V..".into()),
     }
 }
 

@@ -247,7 +247,8 @@ fn slider_follows(hide_mouse: bool, grabbed: bool) -> bool {
 }
 
 /// The sim's pointer pixel. winit reports physical pixels and the drawable is physical too,
-/// so there is no scale to apply: Gource mixes points and pixels under `--high-dpi`, Burl doesn't.
+/// so there is no scale to apply. Gource ends up in drawable pixels too (`sdlapp.cpp` scales mouse
+/// events by `viewport_dpi_ratio`); only its int-point truncation differs from this float.
 fn pointer_px(p: PhysicalPosition<f64>) -> (i32, i32) {
     (p.x as i32, p.y as i32)
 }

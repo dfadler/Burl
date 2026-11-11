@@ -82,7 +82,7 @@ Two generic tests cover every option's parse path and are not repeated per row: 
 | Option | Type | Stored in | Export `-o` | Windowed | Status | Consumer | Tests | Note / C++ ref |
 |---|---|---|---|---|---|---|---|---|
 | `--background-colour` | Str | `background_colour` | Y | Y | Wired | burl/src/export.rs:185, interactive.rs:181 | U |  |
-| `--background-image` | Str | `background_image` | Y* | Y | Wired | burl/src/export.rs:137 | R* | PNG only (Gource also reads JPEG/GIF); export only. #51. |
+| `--background-image` | Str | `background_image` | Y | Y | Wired | burl/src/frame.rs:77 | RE | PNG, JPEG, GIF (#78); export and windowed via FrameKit. #51. |
 | `--bloom-intensity` | Float | `bloom_intensity` | Y | Y | Wired | burl-render/src/scene.rs:196 | U |  |
 | `--bloom-multiplier` | Float | `bloom_multiplier` | Y | Y | Wired | burl-render/src/scene.rs:194 | **none** |  |
 | `--caption-colour` | Str | `caption_colour` | Y | Y | Wired | burl-render/src/overlays.rs:144 | R | Export only: the windowed frame draws no text (see Gap 1). |
@@ -118,7 +118,7 @@ Two generic tests cover every option's parse path and are not repeated per row: 
 | `--highlight-colour` | Str | `highlight_colour` | Y | Y | Wired | burl-render/src/labels.rs:29 via export.rs:157 | R | Export only: the windowed frame draws no text (see Gap 1). |
 | `--highlight-dirs` | Bool | `highlight_dirs` | Y | Y | Wired | burl-render/src/labels.rs:118 | R | Export only: the windowed frame draws no text (see Gap 1). |
 | `--key` | Bool | `show_key` | Y | Y | Wired | burl-render/src/overlays.rs:149 | UR | Export only: the windowed frame draws no text (see Gap 1). |
-| `--logo` | Str | `logo` | Y* | Y | Wired | burl/src/export.rs:141 | R* | PNG only; export only. #51. |
+| `--logo` | Str | `logo` | Y | Y | Wired | burl/src/frame.rs:78 | RE | PNG, JPEG, GIF (#78); export and windowed via FrameKit. #51. |
 | `--logo-offset` | Str | `logo_offset` | Y | Y | Wired | burl/src/export.rs:197 | UR* |  |
 | `--selection-colour` | Str | `selection_colour` | Y | Y | Wired | burl-render/src/labels.rs (selected label), sim colours | `small-repo-pick`, `small-repo-select`, `names.rs` | file.cpp:58,141; user.cpp:330; needs pointer selection, so windowed-relevant |
 | `--title` | Str | `title` | Y | Y | Wired | burl-render/src/overlays.rs:96 | UE | Export only: the windowed frame draws no text (see Gap 1). |

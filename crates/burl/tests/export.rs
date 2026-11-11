@@ -169,6 +169,37 @@ fn user_image_dir_changes_the_render() {
     let _ = std::fs::remove_dir_all(base);
 }
 
+/// A PNG that exists in the repo; any decodable image shows the overlay is drawn (#51).
+fn image_path() -> String {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/golden/visual/bloom-small-repo-30.png")
+        .display()
+        .to_string()
+}
+
+#[test]
+fn background_image_changes_the_render() {
+    let img = image_path();
+    differs(&[], &["--background-image", &img], 20);
+}
+
+#[test]
+fn logo_changes_the_render_and_logo_offset_moves_it() {
+    let img = image_path();
+    differs(&[], &["--logo", &img], 20);
+    differs(
+        &["--logo", &img, "--logo-offset", "0x0"],
+        &["--logo", &img, "--logo-offset", "40x40"],
+        20,
+    );
+}
+
+#[test]
+fn title_and_key_change_the_render() {
+    differs(&[], &["--title", "Burl"], 20);
+    differs(&[], &["--key"], 120);
+}
+
 #[test]
 fn caption_size_changes_the_render() {
     let with = |size: &'static str| -> Vec<&'static str> {

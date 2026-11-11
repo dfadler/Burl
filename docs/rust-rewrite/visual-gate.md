@@ -58,7 +58,7 @@ reference renders), as in the structural set. **These 16 PNGs are report-only re
 they were rendered under QEMU amd64 emulation on Apple silicon, not native x86. Since #176 the `visual-ssim` job in
 `heavy.yml` renders Burl on the x86 runner and reports SSIM and mean luminance against them in the step summary (report
 only, never fails the job). They become usable as gate inputs once regenerated on native amd64 and the two agree.
-Mean luminance, Burl vs oracle, 16 frames, from `heavy.yml` run 42942335614 (master 714da55, x86 runner): every frame
+Mean luminance, oracle vs Burl (oracle first in each pair), 16 frames, from `heavy.yml` run 42942335614 (master 714da55, x86 runner): every frame
 within 0.01-0.70% (limit 5%). small-repo frames 30/70/110/170 = 30.006 vs 30.025, 32.809 vs 32.832, 32.443 vs 32.463,
 31.278 vs 31.293 (0.05-0.07%); file-removal and file-to-dir 0.01-0.02%; real-burl-git-250 frames 100/300/500/800 =
 36.787 vs 37.045, 35.587 vs 35.678, 44.142 vs 44.337, 39.562 vs 39.716 (0.70/0.26/0.44/0.39%, the largest being the

@@ -247,7 +247,8 @@ fn slider_follows(hide_mouse: bool, grabbed: bool) -> bool {
 }
 
 /// The sim's pointer pixel. winit reports physical pixels and the drawable is physical too,
-/// so there is no scale to apply: Gource mixes points and pixels under `--high-dpi`, Burl doesn't.
+/// so there is no scale to apply. Gource scales SDL window coordinates by `viewport_dpi_ratio` into
+/// drawable pixels (`src/core/sdlapp.cpp` lines 352-355 and 387-388), so both pointers are in drawable pixels.
 fn pointer_px(p: PhysicalPosition<f64>) -> (i32, i32) {
     (p.x as i32, p.y as i32)
 }

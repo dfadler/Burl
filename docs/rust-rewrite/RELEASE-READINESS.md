@@ -111,7 +111,7 @@ older Phase 5 tickets, some of which the landed work above covers (not triaged h
 **User tasks**
 
 1. Run the interactive checklist on macOS Retina, macOS non-Retina and Linux X11 ([#94](https://github.com/dfadler/Burl/issues/94)).
-2. Review every `DEVIATIONS.md` row, decide G4, approve the new D12 version row in the release PR (and the D13/D14 rows from the selection scope paper, #105), and take the register hash last.
+2. Review every `DEVIATIONS.md` row, decide G4, approve the new D12 version row in the release PR (and the D14 row from the selection scope paper, #105; D13 is approved, see its row), and take the register hash last.
 3. Repository setup: required checks and the `release` environment ([#95](https://github.com/dfadler/Burl/issues/95)).
 4. Merge the golden-refresh PRs ([#89](https://github.com/dfadler/Burl/issues/89), [#90](https://github.com/dfadler/Burl/issues/90)) and the workflow edits.
 5. Fill the sign-off block in the release PR, optionally tag `v0.58.0-rc.1` to dry-run `release.yml` (it has never run), merge the release PR, tag `v0.58.0`, approve the `release` environment, publish the draft.

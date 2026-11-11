@@ -393,9 +393,13 @@ pub fn run_harness(root: &Path, high_dpi: bool) -> Result<(), String> {
     let mut series = Vec::new();
     let mut prev: Option<crate::ssim::Image> = None;
     let mut still = 0;
+    let mut missed = 0; // seconds the window was absent from the on-screen list (#169)
     for _ in 0..90 {
         std::thread::sleep(Duration::from_secs(1));
-        let Some(now) = grab() else { continue };
+        let Some(now) = grab() else {
+            missed += 1;
+            continue;
+        };
         if let Some(p) = &prev {
             let m = pixels::mae(p, &now).unwrap_or(f64::NAN);
             series.push(m);
@@ -408,9 +412,14 @@ pub fn run_harness(root: &Path, high_dpi: bool) -> Result<(), String> {
     }
     eprintln!("pause: frame-to-frame MAE per second after Space: {series:.3?}");
     if still < 2 {
-        return Err(
-            "burl never held still after pressing Space (still running, or still settling)".into(),
-        );
+        let why = if missed > 0 {
+            format!("; burl's window was missing from the on-screen list for {missed} of the polled seconds (minimized, hidden, other Space, locked or asleep display?)")
+        } else {
+            String::new()
+        };
+        return Err(format!(
+            "burl never held still after pressing Space (still running, or still settling){why}"
+        ));
     }
 
     // 1x first: a window that starts on a 2x display (a Retina panel) then sees a real change on

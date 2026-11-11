@@ -222,6 +222,69 @@ white() {
 		awk '{ for (i = 1; i + 2 <= NF; i += 3) if ($i > 200 && $(i + 1) > 200 && $(i + 2) > 200) n++ } END { print n + 0 }'
 }
 
+# inner_edge IMG X Y W H left|right: "X Y" (screen pixels) of the non-background pixel nearest
+# the left or right side of the rectangle whose 3x3 neighbourhood is all non-background, i.e. a
+# point inside a file, not on its rim; "0 0" if there is none. The rim of a disc cut by the
+# window edge is too thin to aim at, so the point is taken from the inside.
+inner_edge() {
+	local bg
+	bg=$(ffmpeg -loglevel error -i "$OUT/$1.png" -vf "crop=1:1:$((WX + 3)):$((WY + 3))" -f rawvideo -pix_fmt rgb24 - | od -An -v -tu1)
+	ffmpeg -loglevel error -i "$OUT/$1.png" -vf "crop=$4:$5:$2:$3" -f rawvideo -pix_fmt rgb24 - |
+		od -An -v -tu1 -w"$(($4 * 3))" |
+		awk -v bg="$bg" -v ox="$2" -v oy="$3" -v w="$4" -v side="$6" '
+			BEGIN { split(bg, c, " ") }
+			{
+				for (i = 1; i + 2 <= NF; i += 3) {
+					d1 = $i - c[1]; d2 = $(i + 1) - c[2]; d3 = $(i + 2) - c[3]
+					nb[NR - 1, (i - 1) / 3] = ((d1 < 0 ? -d1 : d1) + (d2 < 0 ? -d2 : d2) + (d3 < 0 ? -d3 : d3) >= 60)
+				}
+				h = NR
+			}
+			END {
+				for (k = 1; k < w - 1; k++) {
+					x = (side == "left") ? k : w - 1 - k
+					for (y = 1; y < h - 1; y++) {
+						ok = 1
+						for (dx = -1; dx <= 1 && ok; dx++) for (dy = -1; dy <= 1 && ok; dy++) if (!nb[y + dy, x + dx]) ok = 0
+						if (ok) { print ox + x, oy + y; exit }
+					}
+				}
+				print "0 0"
+			}'
+}
+
+# hover_at X Y NAME: put the pointer on X,Y and shoot NAME.png once a box shows (more than 150
+# px differ from p-narrow). Only the delivery is retried: up to 4 times the pointer leaves for the
+# corner and comes back. The shot of the last try stays for the caller to judge.
+hover_at() {
+	local n
+	for _ in 1 2 3 4; do
+		xdotool mousemove $((WX + 12)) $((WY + WH - 14))
+		sleep 0.3
+		xdotool mousemove "$1" "$2"
+		sleep 1
+		shot "$3"
+		read -r n _ < <(blob p-narrow "$3" 20 "$WX" "$WY" "$WW" "$WH")
+		[ "$n" -gt 150 ] && return 0
+	done
+	return 1
+}
+
+# click_until NAME X Y REF: click at X,Y and shoot NAME.png once it differs from REF.png (more than
+# 20 px anywhere in the window). Only the delivery is retried, up to 3 times; the assertion about
+# what changed is the caller's, on the last shot.
+click_until() {
+	local n
+	for _ in 1 2 3; do
+		click_at "$2" "$3"
+		sleep 1
+		shot "$1"
+		read -r n _ < <(blob "$4" "$1" 20 "$WX" "$WY" "$WW" "$WH")
+		[ "$n" -gt 20 ] && return 0
+	done
+	return 1
+}
+
 # scene_ready: wait until the window shows a filled-in scene (users and files drawn). The sim clock
 # advances by at most one frame's worth per frame, so on a starved CPU it is far behind the wall
 # clock and a fixed sleep can pause an empty scene. Fails after 40 s.
@@ -302,15 +365,13 @@ elif win_rect "$PWID" && scene_ready && xdotool windowfocus --sync "$PWID" key s
 		[ "$n" -gt 50 ] && break
 	done
 	if [ "$n" -lt 200 ] || [ $((x1 - x0)) -gt 80 ] || [ $((y1 - y0)) -gt 80 ]; then
-		bad "Tab did not select one pawn to find (changed pixels: $n, box $x0-$x1 x $y0-$y1)"
+		bad "window did not react to Tab within 8 tries, so no pawn to aim at: input not delivered or no selectable user (environment, not a pointer check; changed pixels: $n, box $x0-$x1 x $y0-$y1)"
 		diag pointer-tab "$PBURL"
 	else
 		rx=$((x0 - 4)) ry=$((y0 - 4)) rw=$((x1 - x0 + 9)) rh=$((y1 - y0 + 9))
 		bgx=$((WX + 12)) bgy=$((WY + WH - 14))
 
-		click_at "$bgx" "$bgy"
-		sleep 1
-		shot p-desel
+		click_until p-desel "$bgx" "$bgy" p-tab
 		read -r back _ < <(blob p-base p-desel 20 "$rx" "$ry" "$rw" "$rh")
 		read -r gone _ < <(blob p-tab p-desel 20 "$rx" "$ry" "$rw" "$rh")
 		if [ "$gone" -gt 200 ] && [ "$back" -lt 10 ]; then
@@ -330,9 +391,7 @@ elif win_rect "$PWID" && scene_ready && xdotool windowfocus --sync "$PWID" key s
 			bad "no hover box over an unselected user ($box px)"
 		fi
 
-		click_at "$cx" "$cy"
-		sleep 1
-		shot p-sel
+		click_until p-sel "$cx" "$cy" p-desel
 		read -r moved _ < <(blob p-desel p-sel 20 "$rx" "$ry" "$rw" "$rh")
 		read -r same _ < <(blob p-tab p-sel 20 "$rx" "$ry" "$rw" "$rh")
 		w0=$(white p-desel "$rx" "$ry" "$rw" "$rh")
@@ -363,27 +422,21 @@ elif win_rect "$PWID" && scene_ready && xdotool windowfocus --sync "$PWID" key s
 		xdotool mousemove $((WX + 12)) $((WY + WH - 14))
 		if settle p-narrow; then
 			read -r n x0 x1 _ < <(nonbg p-narrow "$WX" "$WY" "$WW" "$WH")
-			# the top of the file that reaches furthest out on each side, then 6 px down and 2 px in (a file cut by the window edge shows only a sliver)
-			read -r _ _ _ ry1 _ < <(nonbg p-narrow $((x1 - 7)) "$WY" 8 "$WH")
-			read -r _ _ _ ry0 _ < <(nonbg p-narrow "$x0" "$WY" 8 "$WH")
-			ry1=$((ry1 + 6)) ry0=$((ry0 + 6))
-			if [ "$n" -lt 100 ] || [ $((x1 - x0)) -lt $((WW - 60)) ]; then
-				bad "narrow window: files do not reach both side edges ($n px, x $x0-$x1 of $WX-$((WX + WW)))"
+			# a point inside the file nearest each side edge
+			read -r lx ly < <(inner_edge p-narrow "$WX" "$WY" "$WW" "$WH" left)
+			read -r hx ry1 < <(inner_edge p-narrow "$WX" "$WY" "$WW" "$WH" right)
+			if [ "$n" -lt 100 ] || [ $((x1 - x0)) -lt $((WW - 60)) ] || [ "$lx" = 0 ] || [ "$hx" = 0 ]; then
+				bad "narrow window: no file to aim at on both side edges ($n px, x $x0-$x1 of $WX-$((WX + WW)), left $lx,$ly right $hx,$ry1)"
 				diag pointer-narrow "$PBURL"
 			else
-				xdotool mousemove $((x0 + 2)) "$ry0"
-				sleep 1
-				shot p-hov-l
+				hover_at "$lx" "$ly" p-hov-l
 				read -r n _ _ _ _ bcx _ < <(blob p-narrow p-hov-l 20 "$WX" "$WY" "$WW" "$WH")
-				if [ "$n" -gt 150 ] && [ "$bcx" -gt $((x0 + 2 + 20)) ]; then
-					ok "hovering a file near the left edge shows a box to the right of the pointer (box centre x $bcx, pointer $((x0 + 2)))"
+				if [ "$n" -gt 150 ] && [ "$bcx" -gt $((lx + 20)) ]; then
+					ok "hovering a file near the left edge shows a box to the right of the pointer (box centre x $bcx, pointer $lx)"
 				else
-					bad "left hover: $n px changed, box centre x $bcx, pointer $((x0 + 2))"
+					bad "left hover: $n px changed, box centre x $bcx, pointer $lx,$ly"
 				fi
-				hx=$((x1 - 2))
-				xdotool mousemove "$hx" "$ry1"
-				sleep 1
-				shot p-hov-r
+				hover_at "$hx" "$ry1" p-hov-r
 				read -r n _ _ _ _ bcx _ < <(blob p-narrow p-hov-r 20 "$WX" "$WY" "$WW" "$WH")
 				shown=$n
 				if [ "$n" -gt 150 ] && [ "$bcx" -lt $((hx - 20)) ]; then
@@ -403,9 +456,7 @@ elif win_rect "$PWID" && scene_ready && xdotool windowfocus --sync "$PWID" key s
 
 				# a file is selected the same way and turns white too; hovered while selected it
 				# gets no box. The click is the first input after the idle, so it also wakes the cursor.
-				click_at "$hx" "$ry1"
-				sleep 1
-				shot p-fsel
+				click_until p-fsel "$hx" "$ry1" p-narrow
 				# the file may be cut by the window edge: take the part of the 28 px square inside it
 				fx=$((hx - 14)) fy=$((ry1 - 14)) fw=$((WX + WW - hx + 14))
 				[ "$fw" -gt 28 ] && fw=28

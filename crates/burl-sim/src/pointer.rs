@@ -143,6 +143,11 @@ impl Sim {
         self.grab_mouse
     }
 
+    /// Whether the camera follows the selected user (`--camera-mode track`, toggled by middle click).
+    pub fn is_tracking_users(&self) -> bool {
+        self.track_users
+    }
+
     /// `Gource::grabMouse`: the cursor hides while grabbed and comes back with a fresh idle clock.
     pub fn grab_mouse(&mut self, grab: bool) {
         self.grab_mouse = grab;
@@ -227,8 +232,7 @@ impl Sim {
             return;
         }
         match button {
-            // toggleCameraMode: the camera modes are not here yet
-            Button::Middle => {}
+            Button::Middle => self.toggle_camera_mode(),
             Button::Right => self.grab_mouse(true),
             Button::Left => self.mouseclicked = true,
         }
@@ -346,6 +350,15 @@ impl Sim {
             lines: vec![user.name.clone()],
             colour: user.usercol,
         })
+    }
+
+    /// What is selected, for the `pointer:` debug line: `user NAME`, `file PATH`, or `None`.
+    pub fn selection_text(&self) -> Option<String> {
+        if let Some(u) = self.selected_user {
+            return Some(format!("user {}", self.user(u).name));
+        }
+        self.selected_file
+            .map(|f| format!("file {}", self.file(f).fullpath))
     }
 
     /// A user's name, for a result of [`Sim::pick_at`].

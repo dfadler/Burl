@@ -55,10 +55,27 @@ file-to-dir 0.99997/0.99982/0.99977/0.99979; real-burl-git-250 (frames 100/300/5
 Minimum 0.9797 against the structural threshold 0.959 (no threshold changed; the bloom check only reports). The
 real-repo shortfall from 1.0 is the oracle's one-frame jitter mode (its frame counts varied 351-360 / 1073 across the
 reference renders), as in the structural set. **These 16 PNGs are report-only reference candidates, not gate inputs:**
-they were rendered under QEMU amd64 emulation on Apple silicon, not native x86, and nothing in CI compares against them
-yet. They become usable once regenerated on native amd64 (or compared on the runner) and the two agree. Mean
-luminance, Burl vs oracle, small-repo frames 30/70, is from the earlier 2026-11-03 run and was **not re-measured against
-these references**: 29.648 vs 29.702, 33.153 vs 33.106 (0.2%, inside the 5%).
+they were rendered under QEMU amd64 emulation on Apple silicon, not native x86. Since #176 the `visual-ssim` job in
+`heavy.yml` renders Burl on the x86 runner and reports SSIM and mean luminance against them in the step summary (report
+only, never fails the job). They become usable as gate inputs once regenerated on native amd64 and the two agree.
+Mean luminance, oracle vs Burl (oracle first in each pair), 16 frames, from `heavy.yml` run 42942335614 (master 714da55, x86 runner): every frame
+within 0.01-0.70% (limit 5%). small-repo frames 30/70/110/170 = 30.006 vs 30.025, 32.809 vs 32.832, 32.443 vs 32.463,
+31.278 vs 31.293 (0.05-0.07%); file-removal and file-to-dir 0.01-0.02%; real-burl-git-250 frames 100/300/500/800 =
+36.787 vs 37.045, 35.587 vs 35.678, 44.142 vs 44.337, 39.562 vs 39.716 (0.70/0.26/0.44/0.39%; the oracle's one-frame jitter
+is a possible cause of the larger ones, not established for these frames). SSIM on the same run, min 0.9797 (real-burl-git-250 frame 100), agrees with the 2026-11-04
+emulated-Burl figures above on all 16 frames (largest difference 0.0006, small-repo frame 170). The earlier 2026-11-03
+numbers (29.648 vs 29.702, 33.153 vs 33.106) are superseded.
+
+## Moving camera: no Burl gap, the cold first render is the outlier (2026-11-10, #172)
+
+The #172 draft fixture (`camera-cull`: 194-line custom log, `--camera-mode track`, structural flags, 640x360 at `-r 25`, 559 frames)
+reported Burl-vs-oracle SSIM 0.72/0.68/0.76/0.87 at frames 135/160/235/310. Re-measured in `burl-golden:amd64`, four oracle renders
+in separate containers, Burl with `--prng glibc`: the two **warm** oracle renders (second render in a container) are bit-identical to each other
+and to nothing else; Burl vs warm oracle over 111 frames (every 5th) has min **0.999876** (frames 135/160/235/310: 0.99990/0.99990/0.99991/0.99995).
+The two **cold** renders (first in a container) differ from the warm one in all 559 frames, and score 0.66-0.94 against it, the same numbers
+the draft reported. So the "gap" is the documented warm-up effect (#16, above): a cold oracle render is shifted in simulation time and a
+moving camera turns that shift into a large SSIM loss, where static frames hide it. Camera interpolation, the frame step and the track target
+agree with the oracle. A moving-camera fixture must render the oracle twice and keep the second (as `scripts/visual-in-container.sh stream` does).
 
 ## FMA (gcc on amd64)
 

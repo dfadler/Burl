@@ -1,6 +1,7 @@
 //! `cargo xtask ci [--pcre2]`: the fast-tier checks, run exactly as `.github/workflows/ci.yml`
 //! runs them (the workflow calls this command, so the two cannot drift).
 //! `cargo xtask sim-compare GOLDEN ACTUAL [--floats exact|report]`: the simulation-gate comparator.
+//! `cargo xtask display-harness`: the macOS virtual-display harness (ticket #152, macOS only).
 //! `cargo xtask ssim A B [--min X]`, `ssim-frames STREAM.ppm PREFIX I,J,..`, `ssim-threshold V..`:
 //! the visual-equivalence gate's comparator and helpers (ticket #12).
 
@@ -90,6 +91,13 @@ fn ssim_cmd(cmd: &str, args: &[String]) -> Result<ExitCode, String> {
             println!("ssim={s:.6}");
             Ok(ExitCode::from(u8::from(min.is_some_and(|m| s < m))))
         }
+        ("ssim-luma", [a, b]) => {
+            let (la, lb) = (ssim::mean_luma(&load(a)?), ssim::mean_luma(&load(b)?));
+            // a black reference has no relative difference: say so instead of printing NaN% / inf%
+            let diff = if la > 0.0 { format!("{:.2}%", (lb - la).abs() / la * 100.0) } else { "n/a (zero-luma ref)".into() };
+            println!("luma={la:.3}/{lb:.3} diff={diff}");
+            Ok(ExitCode::SUCCESS)
+        }
         ("ssim-frames", [stream, prefix, idx]) => {
             let bytes = std::fs::read(stream).map_err(|e| format!("{stream}: {e}"))?;
             let frames = ssim::ppm_frames(&bytes)?;
@@ -107,7 +115,30 @@ fn ssim_cmd(cmd: &str, args: &[String]) -> Result<ExitCode, String> {
             println!("runs={} worst={:.6} threshold={t:.6}", v.len(), t + ssim::MARGIN);
             Ok(ExitCode::SUCCESS)
         }
-        _ => Err("usage: cargo xtask ssim A B [--min X] | ssim-frames STREAM.ppm PREFIX I,J,.. | ssim-threshold V..".into()),
+        _ => Err("usage: cargo xtask ssim A B [--min X] | ssim-luma REF NEW | ssim-frames STREAM.ppm PREFIX I,J,.. | ssim-threshold V..".into()),
+    }
+}
+
+/// `display-harness`: macOS only (private CGVirtualDisplay API); exit 1 on a failed step or assertion.
+fn display_harness_cmd(args: &[String]) -> ExitCode {
+    let high_dpi = args.iter().any(|a| a == "--high-dpi");
+    if args.iter().any(|a| a != "--high-dpi") {
+        eprintln!("usage: cargo xtask display-harness [--high-dpi]");
+        return ExitCode::from(2);
+    }
+    if !cfg!(target_os = "macos") {
+        eprintln!("display-harness: needs macOS (virtual displays, System Events, screencapture)");
+        return ExitCode::FAILURE;
+    }
+    match xtask::display_harness::run_harness(&workspace_root(), high_dpi) {
+        Ok(()) => {
+            eprintln!("display-harness: all assertions passed");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("display-harness: FAIL: {e}");
+            ExitCode::FAILURE
+        }
     }
 }
 
@@ -119,11 +150,14 @@ fn main() -> ExitCode {
             ExitCode::from(2)
         });
     }
+    if args.first().map(String::as_str) == Some("display-harness") {
+        return display_harness_cmd(&args[1..]);
+    }
     if args.first().map(String::as_str) == Some("sim-compare") {
         return sim_compare(&args[1..]);
     }
     if args.first().map(String::as_str) != Some("ci") || args[1..].iter().any(|a| a != "--pcre2") {
-        eprintln!("usage: cargo xtask ci [--pcre2]");
+        eprintln!("usage: cargo xtask ci [--pcre2] | sim-compare .. | ssim* .. | display-harness [--high-dpi]");
         return ExitCode::from(2);
     }
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());

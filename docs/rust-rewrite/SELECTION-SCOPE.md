@@ -2,6 +2,8 @@
 
 Decision paper for [#92](https://github.com/dfadler/Burl/issues/92) (`OPTION-COVERAGE.md` Gap 9). It writes no feature code. The user picks an option; the chosen one becomes a ticket and, unless it is full parity, a row in `DEVIATIONS.md` (policy: #10). All C++ references are to `src/` at 0.57.
 
+**Status: historical.** Option B2 was chosen and has landed (#119-#124). Sections 2 to 7 describe `master` as it was before that stack; in particular `--selection-colour` is no longer unused (see `crates/burl/src/frame.rs` and `crates/burl-render/src/labels.rs`).
+
 ## 1. What Gource does
 
 There are two ways to select, one shared effect, and one hover effect.
@@ -45,12 +47,12 @@ Runs once per frame at the top of `draw` (2415-2427), only when `!hide_mouse && 
 
 Drawn after the slider. A file that is hovered and not selected shows two lines: the name, then the path with the leading `/` removed (if any is left). A hovered, unselected user shows its name. Colour is the pawn's `getColour()`; brightness 0.5. Font is 18 pt times `font_scale` (gource.cpp:142). `setPos(mousepos, true)` puts the corner above-left of the cursor and flips to stay in the window (textbox.cpp:`setPos`). Drawing: a black quad at alpha/3 offset (3,3), the coloured quad, then white text rows spaced `font size + 4` (textbox.cpp:`draw`). It is the only hover feature.
 
-## 2. What Burl has today
+## 2. What Burl had before #119-#124 (historical)
 
 - `selected_user` lives in `burl-sim` (`sim.rs:300`). `select_user` ports only the camera lock-on (`sim.rs:1216`); fade-deselect and follow-select are ported (`1165-1207`, golden `small-repo-follow`). There is no `selected_file` and no `selectedUser` in `SceneView`/`UserView`.
 - `Command::DragStart` ports `selectBackground` (`command.rs:195`). `Pointer::button` (`interactive/input.rs:173`) sends it for **every** left press. Burl therefore deselects and drags even when the press is on a user or file: there is no picking, and the checklist line "clicking a user selects it" cannot pass (`INTERACTIVE-CHECKLIST.md:35`). `Pointer` has no position at all: `CursorMoved` is not handled, only relative `DeviceEvent::MouseMotion` (`interactive.rs:459`).
 - Not ported: Tab / `selectNextUser` (no Tab key row in `input.rs`), middle-click camera toggle, `SelectedFile`, the text box (`overlays.rs:5`, `labels.rs:5` say so), the selected label pass.
-- `--selection-colour` is parsed into `Settings::selection_colour` (`burl-conf/src/settings.rs:212`) and used nowhere else. `--follow-user` and `--camera-mode track` are refused by the CLI while `sim-follow-track` is in flight (OPTION-COVERAGE Gap 3).
+- Before #119-#124, `--selection-colour` was parsed into `Settings::selection_colour` (`burl-conf/src/settings.rs:212`) and used nowhere else. It is now read in `crates/burl/src/frame.rs` and `crates/burl-render/src/labels.rs`. `--follow-user` and `--camera-mode track` were refused by the CLI at the time; both are wired now (OPTION-COVERAGE Gap 3).
 - Building blocks that exist: `QuadTree::visit_items_at` (`burl-util/src/quadtree.rs:168`), which has the same whole-leaf semantics as C++; the per-frame user tree (`sim.rs:1015`) and dir tree (`interact_dirs`, `sim.rs:2127`), both local to a step and not retained; `Font`/`FontManager::draw` and batches for quads (`burl-render`).
 
 **Important:** the selected *rendering* is not windowed-only. Once `--follow-user` lands in `-o` export, `selectUser` runs in the export path and the oracle draws the selected user white with a 18 pt label in `selection_colour` (1.3). So the "selected pawn look" has to exist for export parity regardless of the pointer. Picking, hover and the text box are windowed-only.
@@ -72,7 +74,7 @@ P6 hover text box  (quads+text near cursor)             needs: P3, quad renderin
 | P2 | `sim.rs` (`selected_file`, `select_file`, clear-on-removal, section reset, camera focus bounds incl. file), `command.rs` (`SelectUser`, `SelectFile`, `NextUser`) | ~120 LOC | Tab needs `tagusermap` order (tag id), which `UserId` may not preserve; check. |
 | P3 | new pure `pick(view, camera, mouse, W, H, settings) -> Option<Pick>` in `burl-render` or `burl-sim` | ~80 LOC | Linear scan of `SceneView` is enough for a window (hundreds of pawns). Using the real quadtrees would mean retaining them in `Sim` and `Sim` owning the mouse. See 4 on tie-break. |
 | P4 | `command.rs`, `input.rs` (`Pointer::button` stops sending `DragStart` unconditionally), `interactive.rs` | ~60 LOC | Must move the decision from event time to frame time (see 1.2 `selectBackground` quirk) or accept a deviation. |
-| P5 | `interactive.rs`, `input.rs` | ~50 LOC | `CursorMoved` carries physical pixels; C++ uses SDL window coordinates. Retina must be checked (G3, `--high-dpi`). Ignored while grabbed/hidden/disabled. |
+| P5 | `interactive.rs`, `input.rs` | ~50 LOC | `CursorMoved` carries physical pixels; C++ scales SDL window coordinates by `viewport_dpi_ratio` into drawable pixels (`sdlapp.cpp` lines 352-355 and 387-388), so both are drawable pixels; only sub-pixel truncation differs. Not run on a Retina display (G3, `--high-dpi`). Ignored while grabbed/hidden/disabled. |
 | P6 | new `burl-render` `textbox.rs`, hook in `frame.rs` | ~120 LOC | Needs an untextured alpha quad batch (the key legend already draws them), text at 18 pt x `font_scale`. **Touches `frame.rs`**, which other sessions are changing now. |
 
 Total for everything: roughly 600 LOC in 8 or 9 files and 3 crates, mostly new code with little to rewrite.
@@ -138,6 +140,6 @@ Decision wanted from the user: A, A+ (recommended), B1 or B2; and whether to acc
 
 ## 8. Decision
 
-The user chose **full parity** (B2: selected look, pointer picking of users and files, Tab, and the hover text box). The implementation is a separate ticket and PR sequence, to start once the windowed path (`interactive.rs`, `frame.rs`) is stable; suggested order: P1+P2, then P3-P5, then P6, with the scripted-pointer oracle fork patch ahead of P3 so picking has a real oracle test. Rows `D13` (deterministic overlap order) and `D14` (selection at event time) still need the user's explicit OK before they merge.
+The user chose **full parity** (B2: selected look, pointer picking of users and files, Tab, and the hover text box). The implementation is a separate ticket and PR sequence, to start once the windowed path (`interactive.rs`, `frame.rs`) is stable; suggested order: P1+P2, then P3-P5, then P6, with the scripted-pointer oracle fork patch ahead of P3 so picking has a real oracle test. Row `D13` (deterministic overlap order) was merged with #122 on 2026-11-04 and its approval issues (#127, #131) are closed; `D14` (selection at event time) still needs the user's explicit OK before it merges.
 
 Row numbers: `D12` is taken by the 0.58.0 version-line row in the release PR (#114), so the rows proposed here are `D13` (deterministic overlap order) and `D14` (selection at event time).

@@ -83,12 +83,51 @@ fn dpi_ratio(d: &DisplaySettings, scale_factor: f64) -> f32 {
 
 /// The default `font_scale` (`Gource::init`): the DPI ratio when above 1, else one more per full
 /// 1600 pixels of drawable height (integer division).
+/// The `display:` debug line (`--log-level debug`): report-only, so a platform's scale factor and
+/// size behaviour can be read off a real run.
+fn display_line(event: &str, scale: f64, physical: (u32, u32), logical: (u32, u32)) -> String {
+    format!(
+        "display: event={event} scale={scale} physical={}x{} logical={}x{}",
+        physical.0, physical.1, logical.0, logical.1
+    )
+}
+
+/// The `pointer:` debug line (`--log-level debug`): what is selected and what the hover box shows
+/// (its lines joined by `|`), logged when either changes, so a real-window run can be checked
+/// without reading pixels.
+fn pointer_line(selected: Option<&str>, hover: Option<&[String]>) -> String {
+    format!(
+        "pointer: selected={} hover={}",
+        selected.unwrap_or("none"),
+        hover.map_or("none".to_string(), |l| l.join("|"))
+    )
+}
+
+/// Logical size = physical / scale, rounded to the nearest pixel.
+fn logical_size(physical: (u32, u32), scale: f64) -> (u32, u32) {
+    let l = |p: u32| (f64::from(p) / scale).round() as u32;
+    (l(physical.0), l(physical.1))
+}
+
+/// Logs `display_line`, deriving logical = physical / scale.
+fn log_display(event: &str, scale: f64, physical: (u32, u32)) {
+    burl_util::log::debug(|| display_line(event, scale, physical, logical_size(physical, scale)));
+}
+
 fn font_scale(ratio: f32, height: u32) -> f32 {
     if ratio > 1.0 {
         ratio
     } else {
         (1 + height as i32 / 1600) as f32
     }
+}
+
+/// The layout state a resize updates (C++ reads the live `display.width`/`height`): the scene
+/// settings' camera size and the overlays, logo and background in `kit`.
+pub(crate) fn apply_resize(ss: &mut SceneSettings, kit: &mut FrameKit, w: u32, h: u32) {
+    ss.width = w as f32;
+    ss.height = h as f32;
+    kit.resize(w, h);
 }
 
 struct Live {
@@ -103,6 +142,8 @@ struct Live {
     avatars: Option<SharedAvatars>,
     clear: [f32; 4],
     last: Instant,
+    /// The last `pointer:` debug line, so only changes are logged.
+    pointer_line: String,
     /// Commands since the last frame, applied in order before the step.
     pending: Vec<Command>,
     arrows: Arrows,
@@ -219,7 +260,9 @@ fn slider_follows(hide_mouse: bool, grabbed: bool) -> bool {
 }
 
 /// The sim's pointer pixel. winit reports physical pixels and the drawable is physical too,
-/// so there is no scale to apply: Gource mixes points and pixels under `--high-dpi`, Burl doesn't.
+/// so there is no scale to apply. Gource scales SDL window coordinates by `viewport_dpi_ratio` into
+/// drawable pixels (`src/core/sdlapp.cpp` lines 352-355 and 387-388), so both pointers are in drawable pixels;
+/// only its int-point truncation differs from this float.
 fn pointer_px(p: PhysicalPosition<f64>) -> (i32, i32) {
     (p.x as i32, p.y as i32)
 }
@@ -243,6 +286,7 @@ impl App {
         let ctx = WindowedGl::new(el, attrs, self.display.vsync, self.display.multisample)?;
         let (w, h) = ctx.size();
         let ctx_scale = ctx.scale_factor();
+        log_display("start", ctx_scale, (w, h));
         let mut r = Renderer::new(ctx)?;
         let tex = upload_scene_textures(&mut r)?;
         let l = self.load_section(&mut r, w, h, ctx_scale)?;
@@ -268,6 +312,7 @@ impl App {
             disable_input: l.disable_input,
             hide_mouse: l.hide_mouse,
             grabbed: false,
+            pointer_line: String::new(),
             next: false,
         })
     }
@@ -384,6 +429,14 @@ impl App {
         if live.sim.is_grabbed() != live.grabbed {
             live.set_grab(live.sim.is_grabbed());
         }
+        let line = pointer_line(
+            live.sim.selection_text().as_deref(),
+            live.sim.hover_text().as_ref().map(|h| h.lines.as_slice()),
+        );
+        if line != live.pointer_line {
+            burl_util::log::debug(|| line.clone());
+            live.pointer_line = line;
+        }
         upload_avatars(&live.avatars, &mut live.r)?;
         let scene = live.sim.scene_view();
         let mut frame =
@@ -498,17 +551,29 @@ impl ApplicationHandler for App {
             }
             WindowEvent::CursorEntered { .. } => live.sim.set_cursor_focus(true),
             WindowEvent::CursorLeft { .. } => live.sim.set_cursor_focus(false),
+            // report only: winit keeps its own suggested size, and layout follows `Resized`
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                // `scale_factor` is the event's; the size is a sample of the window right now (the
+                // context's cached size is still the pre-change one here), so on a platform that
+                // queues events the two can describe different moments. The `resized` line that
+                // follows is the settled state.
+                let s = live.window().inner_size();
+                log_display("scale-changed", scale_factor, (s.width, s.height));
+            }
             WindowEvent::Resized(s) if s.width > 0 && s.height > 0 => {
+                log_display(
+                    "resized",
+                    live.r.context().scale_factor(),
+                    (s.width, s.height),
+                );
                 live.r.context().resize(s.width, s.height);
                 if let Err(e) = live.r.resize(s.width, s.height) {
                     self.error = Some(e);
                     el.exit();
                 }
-                live.ss.width = s.width as f32;
-                live.ss.height = s.height as f32;
+                apply_resize(&mut live.ss, &mut live.kit, s.width, s.height);
                 live.sim.set_display_size(s.width as i32, s.height as i32);
                 live.slider.resize(s.width, s.height);
-                live.kit.resize(s.width, s.height);
             }
             _ => {}
         }
@@ -691,5 +756,35 @@ mod tests {
             (1001, 599)
         );
         assert_eq!(pointer_px(PhysicalPosition::new(0.0, 0.0)), (0, 0));
+    }
+
+    #[test]
+    fn logical_size_divides_by_the_scale_and_rounds() {
+        assert_eq!(logical_size((1600, 1200), 2.0), (800, 600));
+        assert_eq!(logical_size((640, 360), 1.0), (640, 360));
+        // fractional scale, and a rounding boundary: 1000 / 1.5 = 666.67, 3 / 2 = 1.5
+        assert_eq!(logical_size((1500, 1000), 1.5), (1000, 667));
+        assert_eq!(logical_size((3, 3), 2.0), (2, 2));
+    }
+
+    #[test]
+    fn pointer_line_pins_the_log_format() {
+        assert_eq!(
+            pointer_line(None, None),
+            "pointer: selected=none hover=none"
+        );
+        let hover = ["lib.rs".to_string(), "src".to_string()];
+        assert_eq!(
+            pointer_line(Some("user bob"), Some(&hover)),
+            "pointer: selected=user bob hover=lib.rs|src"
+        );
+    }
+
+    #[test]
+    fn display_line_pins_the_log_format() {
+        assert_eq!(
+            display_line("scale-changed", 2.0, (1600, 1200), (800, 600)),
+            "display: event=scale-changed scale=2 physical=1600x1200 logical=800x600"
+        );
     }
 }

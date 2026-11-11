@@ -3,8 +3,8 @@
 //! updateEdgeVBO/calcEdges/calcScreenPos` (src/dirnode.cpp), `SplineEdge::update/drawToVBO`
 //! (src/spline.cpp) and `RAction::drawToVBO` (src/action.cpp).
 //!
-//! Not ported: the `in_frustum` culling of files and bloom (it only skips off-screen quads, so the
-//! image is unchanged), selection.
+//! `in_frustum` culling (`RDirNode::checkFrustum`) is ported by `dirs_in_frustum`: it gates files
+//! and bloom here and file names in `labels.rs`. Not ported: selection.
 
 use crate::{BloomBuf, Camera, Frame, QuadBuf, QuadVertex, TextureId, FULL_TEXCOORD};
 use burl_sim::view::{DirView, SceneView};
@@ -120,6 +120,58 @@ pub(crate) fn camera(scene: &SceneView) -> Camera {
     }
 }
 
+/// `RDirNode::checkFrustum`: per dir, `Frustum::intersects(quadItemBounds)` with the bounds
+/// `pos +- radius` at z = 0 (`Frustum::updatePerspective/updateView`, `Plane`). Gource skips a dir's
+/// files, file names and bloom when this is false, so a bloom reaching into view from a dir whose
+/// bounds are off screen is not drawn.
+pub(crate) fn dirs_in_frustum(scene: &SceneView, s: &SceneSettings) -> Vec<bool> {
+    let c = camera(scene);
+    let toa = (crate::camera::CAMERA_FOV * 0.5 * 0.017453292).tan();
+    let ratio = s.width / s.height;
+    let ray = (c.target - c.pos).normalize();
+    let horiz = ray.cross(crate::camera::CAMERA_UP).normalize();
+    let vert = horiz.cross(ray);
+    let corners = |dist: f32| {
+        let (centre, h) = (c.pos + ray * dist, dist * toa);
+        let (v, w) = (vert * h, horiz * (h * ratio));
+        [
+            centre + v - w,
+            centre + v + w,
+            centre - v - w,
+            centre - v + w,
+        ] // tl, tr, bl, br
+    };
+    let (n, f) = (
+        corners(crate::camera::CAMERA_ZNEAR),
+        corners(c.max_distance + 1.0),
+    );
+    // top, bottom, left, right, near, far: each as (v1, v2, v3) of `Plane::Plane`.
+    let planes = [
+        (n[1], n[0], f[0]),
+        (n[2], n[3], f[3]),
+        (n[0], n[2], f[2]),
+        (n[3], n[1], f[3]),
+        (n[0], n[1], n[3]),
+        (f[1], f[0], f[2]),
+    ]
+    .map(|(v1, v2, v3)| {
+        let normal = (v3 - v2).cross(v1 - v2).normalize();
+        (normal, -normal.dot(v2))
+    });
+    scene
+        .dirs
+        .iter()
+        .map(|d| {
+            let (min, max) = (d.pos - Vec2::splat(d.radius), d.pos + Vec2::splat(d.radius));
+            planes.iter().all(|(nm, dd)| {
+                let x = if nm.x > 0.0 { max.x } else { min.x };
+                let y = if nm.y > 0.0 { max.y } else { min.y };
+                dd + nm.dot(Vec3::new(x, y, 0.0)) >= 0.0
+            })
+        })
+        .collect()
+}
+
 /// `Gource::updateVBOs` plus the edge/bloom buffers: everything `drawScene` draws.
 pub fn build_frame(scene: &SceneView, tex: &SceneTextures, s: &SceneSettings) -> Frame {
     let cam = camera(scene);
@@ -154,7 +206,14 @@ pub fn build_frame(scene: &SceneView, tex: &SceneTextures, s: &SceneSettings) ->
         }
     }
 
-    for d in scene.dirs.iter().filter(|_| !s.hide_files) {
+    let in_frustum = dirs_in_frustum(scene, s);
+    for (d, _) in scene
+        .dirs
+        .iter()
+        .zip(&in_frustum)
+        .filter(|(_, &seen)| seen)
+        .filter(|_| !s.hide_files)
+    {
         for file in &d.files {
             let dims = Vec2::new(file.size, file.size * tex.file_ratio);
             f.files.add(
@@ -209,7 +268,12 @@ pub fn build_frame(scene: &SceneView, tex: &SceneTextures, s: &SceneSettings) ->
 
     if !s.hide_bloom {
         f.bloom = BloomBuf::default();
-        for d in scene.dirs.iter().filter(|d| d.visible) {
+        for (d, _) in scene
+            .dirs
+            .iter()
+            .zip(&in_frustum)
+            .filter(|(d, &seen)| seen && d.visible)
+        {
             let radius = d.radius * 2.0 * s.bloom_multiplier;
             let dims = Vec2::splat(radius * 2.0);
             let c = col(d) * s.bloom_intensity;

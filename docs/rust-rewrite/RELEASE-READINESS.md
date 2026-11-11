@@ -65,7 +65,7 @@ From [DEVIATIONS.md](DEVIATIONS.md) at the snapshot, with the open PRs that addr
 | G1 | No owning test. **#117 adds `deviation_g1_closed_pipe_ends_the_export_with_an_error`.** |
 | G2 | No owning test (not characterised). **#117 characterises it against compiled tinyxml (four differences) and pins them; it stays a Gap.** |
 | G4 | Pinned by tests, but the decision "does `pcre2` ship by default" is open (RELEASE.md step 3). **[#118](https://github.com/dfadler/Burl/pull/118) adds `G4-PCRE2-DECISION.md` with facts and a recommendation (ship without for 0.58.0); it decides nothing, the user does.** |
-| G7 | No owning test; needs a moving-camera visual fixture. |
+| G7 | No owning test; needs a moving-camera visual fixture (#172). |
 | G8 | No owning test (proposed downgrade to a note). |
 | G9 | No owning test, and the row text is stale: it says `export.rs` never loads avatars, but `fa38c17` ("avatars: ... in export") landed. The windowed half is [#91](https://github.com/dfadler/Burl/issues/91). **#118 rewrites the row and names the owning export tests.** |
 | G6 | Proposed closed; closes when the user merges the row. |
@@ -82,7 +82,7 @@ markers; the tree has no `not ported` / `unimplemented!` markers left):
 | 2, 3 start-position (random and N), `--loop`, `--follow-user`, camera mode track | Landed (`7b6e5e4`, `e1cc912`, `23e556b`). |
 | 4 `--hide-root`, 5 `--fixed-user-size`, 6 `--font-file`, 8 `--transparent` | Landed. |
 | 7 avatars | Export landed; windowed, NFC keys and the G8 mip check open ([#91](https://github.com/dfadler/Burl/issues/91)). |
-| 9 `--selection-colour` and pointer selection | **Open**, still `Stored-unused` on `master`. Scope decided in [#105](https://github.com/dfadler/Burl/pull/105) (option B2); implementation is the 5-PR stack #119-#124 ([#92](https://github.com/dfadler/Burl/issues/92)). |
+| 9 `--selection-colour` and pointer selection | **Landed** (option B2 from [#105](https://github.com/dfadler/Burl/pull/105); stack #119-#124, [#92](https://github.com/dfadler/Burl/issues/92)). `--selection-colour` is wired: it reaches the selected-name pass (`crates/burl/src/frame.rs`, `crates/burl-render/src/labels.rs`), and the sim picks, selects and hovers (`crates/burl-sim/src/pointer.rs`). Tests: `sim_gate_small_repo_select`, `selected_names_are_drawn_last_in_the_selection_colour_whatever_the_fade_or_hide`. Not yet checked against a real display or any Gource run on macOS (no oracle there); the checklist rows in `INTERACTIVE-CHECKLIST.md` stay manual. |
 | 10 `--multi-sampling`, `--screen` | Landed (`6f160b5`). |
 | 11 `--log-level` | Landed (`6e4f4fb`). |
 | 12 position slider | **Open** ([#93](https://github.com/dfadler/Burl/issues/93)). |
@@ -106,12 +106,12 @@ older Phase 5 tickets, some of which the landed work above covers (not triaged h
 2. Register rows: D3, D9, G1, G2 in #117 and G9, G4 note in #118 (both open, user merges). Still open: tests or closure for G7 and G8.
 3. `OPTION-COVERAGE.md` refresh: in #118.
 4. Decide a trigger for `heavy.yml` on `master` pushes, or accept PR-only plus the tag run.
-5. Windowed follow-ups #91, #93, #98, #99 (each pending its own triage or PR), and selection #92 (stack #119-#124).
+5. Windowed follow-ups #91, #93, #98, #99 (each pending its own triage or PR), and selection #92 (stack #119-#124, since landed; see Gap 9 in `OPTION-COVERAGE.md`).
 
 **User tasks**
 
 1. Run the interactive checklist on macOS Retina, macOS non-Retina and Linux X11 ([#94](https://github.com/dfadler/Burl/issues/94)).
-2. Review every `DEVIATIONS.md` row, decide G4, approve the new D12 version row in the release PR (and the D13/D14 rows from the selection scope paper, #105), and take the register hash last.
+2. Review every `DEVIATIONS.md` row, decide G4, approve the new D12 version row in the release PR (and the D14 row from the selection scope paper, #105; D13 is approved, see its row), and take the register hash last.
 3. Repository setup: required checks and the `release` environment ([#95](https://github.com/dfadler/Burl/issues/95)).
 4. Merge the golden-refresh PRs ([#89](https://github.com/dfadler/Burl/issues/89), [#90](https://github.com/dfadler/Burl/issues/90)) and the workflow edits.
 5. Fill the sign-off block in the release PR, optionally tag `v0.58.0-rc.1` to dry-run `release.yml` (it has never run), merge the release PR, tag `v0.58.0`, approve the `release` environment, publish the draft.

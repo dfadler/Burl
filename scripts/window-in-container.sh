@@ -21,9 +21,25 @@ bad() {
 
 Xvfb "$DISPLAY" -screen 0 "${SCREEN}x24" -nolisten tcp &
 for _ in $(seq 50); do xdpyinfo >/dev/null 2>&1 && break || sleep 0.1; done
-openbox >/dev/null 2>&1 &
-# A window mapped before the WM is ready is never managed: wait until it has announced itself.
-for _ in $(seq 100); do xprop -root _NET_SUPPORTING_WM_CHECK 2>/dev/null | grep -q 'window id' && break || sleep 0.1; done
+openbox >"$OUT/openbox.log" 2>&1 &
+OPENBOX=$!
+# A window mapped before the WM is ready is never managed. _NET_SUPPORTING_WM_CHECK is set early
+# in openbox's startup, well before it handles map requests (about 1 s later on a starved CPU), so
+# a window opened in between stays unmapped for good (#163). _NET_CLIENT_LIST is set once startup
+# is done. Fail loudly if that never happens rather than carry on with an unmanaged display.
+wm_ready=
+for _ in $(seq 100); do
+	xprop -root _NET_CLIENT_LIST 2>/dev/null | grep -q 'window id' && {
+		wm_ready=1
+		break
+	}
+	sleep 0.1
+done
+if [ -z "$wm_ready" ]; then
+	echo "FAIL openbox not ready within 10 s (still running: $(kill -0 "$OPENBOX" 2>/dev/null && echo yes || echo no))"
+	cat "$OUT/openbox.log"
+	exit 1
+fi
 ffmpeg -loglevel error -y -f x11grab -draw_mouse 0 -framerate 10 -video_size "$SCREEN" \
 	-i "$DISPLAY" "$OUT/session.mp4" &
 REC=$!
@@ -39,6 +55,22 @@ shot() { ffmpeg -loglevel error -y -f x11grab -draw_mouse 0 -video_size "$SCREEN
 luma() { # IMAGE CROP -> mean luma 0-255
 	ffmpeg -loglevel error -i "$OUT/$1.png" -vf "crop=$2,signalstats,metadata=print:key=lavfi.signalstats.YAVG:file=-" -f null - |
 		sed -n 's/.*YAVG=//p' | head -1
+}
+
+# diag NAME PID: say why a check could not run (is burl alive, which windows it owns and in what
+# map state, what X has, what the screen shows). Saved as OUT/NAME-fail.png.
+diag() {
+	if kill -0 "$2" 2>/dev/null; then echo "  diag: burl is still running"; else echo "  diag: burl has exited"; fi
+	local w
+	for w in $(xdotool search --pid "$2" 2>/dev/null); do
+		echo "  diag: window $w: $(xwininfo -id "$w" 2>/dev/null | grep 'Map State')"
+	done
+	# PID-independent too: a window that exists but has not set _NET_WM_PID yet is missed above.
+	for w in $(xwininfo -root -children 2>/dev/null | awk '/^ +0x/ {print $1}'); do
+		echo "  diag: top-level $w: $(xwininfo -id "$w" 2>/dev/null | grep 'Map State')"
+	done
+	xwininfo -root -tree
+	shot "$1-fail"
 }
 
 # Orientation, in a launch of its own with only the date caption drawn: the caption sits near the
@@ -69,9 +101,136 @@ if [ -n "$OWID" ]; then
 	fi
 else
 	bad "orientation launch: window never appeared"
+	diag orientation "$OBURL"
 fi
 kill "$OBURL" 2>/dev/null
 wait "$OBURL" 2>/dev/null
+
+# Selection and hover (#125), read from the `pointer:` debug line (`--log-level debug`) rather than
+# pixels: Tab selects a user, a background click clears it, sweeping the pointer finds a pawn whose
+# hover box would show, clicking it selects it, and a selected pawn gets no hover box. Where the box
+# is drawn, its text and the edge flip are not judged here; the pick itself is real X11 input.
+SLOG=$OUT/selection.log
+burl "$LOG" --log-format custom -640x360 --seconds-per-day 10 --hash-seed 31 --prng glibc \
+	--disable-auto-skip --disable-auto-rotate --file-idle-time 0 --log-level debug >"$SLOG" 2>&1 &
+SBURL=$!
+SWID=
+for _ in $(seq 200); do
+	SWID=$(xdotool search --onlyvisible --pid "$SBURL" 2>/dev/null | head -1)
+	[ -n "$SWID" ] && break
+	sleep 0.1
+done
+lastp() { grep -o 'pointer: .*' "$SLOG" | tail -1; }
+if [ -n "$SWID" ]; then
+	sleep 2
+	SX=$(xwininfo -id "$SWID" | awk '/Absolute upper-left X/ {print $4}')
+	SY=$(xwininfo -id "$SWID" | awk '/Absolute upper-left Y/ {print $4}')
+	xdotool windowfocus --sync "$SWID"
+	xdotool mousemove $((SX + 3)) $((SY + 3))
+	sleep 0.5
+	# Tab skips users that are not fully opaque, so press it until one is selected (6 tries)
+	for _ in 1 2 3 4 5 6; do
+		xdotool key Tab
+		sleep 0.4
+		lastp | grep -q 'selected=user ' && break
+	done
+	lastp | grep -q 'selected=user ' && ok "selection: Tab selects a user ($(lastp))" ||
+		{ bad "selection: Tab selected no user ($(lastp))"; diag selection "$SBURL"; }
+	# `selectBackground` needs the button still down when the frame draws, so hold it for a few frames
+	xdotool mousemove $((SX + 3)) $((SY + 3)) mousedown 1
+	sleep 0.3
+	xdotool mouseup 1
+	sleep 0.3
+	lastp | grep -q 'selected=none' && ok "selection: a background click deselects" ||
+		bad "selection: a background click did not deselect ($(lastp))"
+	# Sweep the client area in 12 px steps until the pointer is over a pawn (hover box content).
+	found=
+	for y in $(seq 20 12 340); do
+		for x in $(seq 12 12 628); do
+			xdotool mousemove $((SX + x)) $((SY + y))
+			sleep 0.05
+			if ! lastp | grep -q 'hover=none'; then
+				found="$x $y"
+				break 2
+			fi
+		done
+	done
+	if [ -n "$found" ]; then
+		hov=$(lastp)
+		ok "selection: hovering a pawn shows its box content at $found ($hov)"
+		xdotool click 1
+		sleep 0.4
+		if lastp | grep -q 'selected=\(user\|file\) '; then
+			ok "selection: a click on the hovered pawn selects it ($(lastp))"
+			lastp | grep -q 'hover=none' && ok "selection: no hover box on the selected pawn" ||
+				bad "selection: the selected pawn still shows a hover box ($(lastp))"
+		else
+			bad "selection: a click on the hovered pawn selected nothing (hovered: $hov; now: $(lastp))"
+		fi
+	else
+		bad "selection: the pointer swept the whole window without hovering a pawn"
+	fi
+else
+	bad "selection launch: window never appeared"
+	diag selection "$SBURL"
+fi
+kill "$SBURL" 2>/dev/null
+wait "$SBURL" 2>/dev/null
+
+# Cursor confinement (winit X11 `Confined` = core GrabPointer with confine_to the window): holding
+# the right button grabs the mouse (`Live::set_grab`); `Locked` is unsupported on X11 so Burl falls
+# back to `Confined`. A pointer pushed far outside the window must stay clamped inside it while the
+# button is down and go free once it is up. No `--hide mouse`: that flag ignores buttons.
+burl "$LOG" --log-format custom -640x360 --seconds-per-day 10 --hash-seed 31 --prng glibc \
+	--disable-auto-skip --disable-auto-rotate --file-idle-time 0 &
+CBURL=$!
+CWID=
+for _ in $(seq 200); do
+	CWID=$(xdotool search --onlyvisible --pid "$CBURL" 2>/dev/null | head -1)
+	[ -n "$CWID" ] && break
+	sleep 0.1
+done
+if [ -n "$CWID" ]; then
+	sleep 2
+	CX=$(xwininfo -id "$CWID" | awk '/Absolute upper-left X/ {print $4}')
+	CY=$(xwininfo -id "$CWID" | awk '/Absolute upper-left Y/ {print $4}')
+	CW=$(xwininfo -id "$CWID" | awk '/Width:/ {print $2}')
+	CH=$(xwininfo -id "$CWID" | awk '/Height:/ {print $2}')
+	# sets PX, PY; succeeds if the pointer is inside the window's client rectangle
+	pointer_inside() {
+		PX=$(xdotool getmouselocation --shell | awk -F= '/^X=/ {print $2}')
+		PY=$(xdotool getmouselocation --shell | awk -F= '/^Y=/ {print $2}')
+		[ "$PX" -ge "$CX" ] && [ "$PX" -lt $((CX + CW)) ] && [ "$PY" -ge "$CY" ] && [ "$PY" -lt $((CY + CH)) ]
+	}
+	# Push the pointer to the screen's far corner until it is `inside` or `outside` the window
+	# (polled for 5 s: the grab is requested a frame after the button goes down).
+	push_until() {
+		for _ in $(seq 50); do
+			xdotool mousemove 1270 710
+			if pointer_inside; then
+				[ "$1" = inside ] && return 0
+			else
+				[ "$1" = outside ] && return 0
+			fi
+			sleep 0.1
+		done
+		return 1
+	}
+	xdotool mousemove $((CX + CW / 2)) $((CY + CH / 2))
+	push_until outside && ok "control: an ungrabbed pointer can leave the window" ||
+		bad "control: the pointer cannot leave the window even without a grab"
+	xdotool mousemove $((CX + CW / 2)) $((CY + CH / 2)) mousedown 3
+	push_until inside && ok "holding a button confines the pointer to the window (Linux X11 Confined grab)" ||
+		bad "pointer left the window while the right button is held (at $PX,$PY)"
+	xdotool mouseup 3
+	push_until outside && ok "releasing the button releases the confinement" ||
+		bad "pointer is still confined after the button went up (at $PX,$PY)"
+else
+	bad "cursor-confine launch: window never appeared"
+	diag cursor "$CBURL"
+fi
+kill "$CBURL" 2>/dev/null
+wait "$CBURL" 2>/dev/null
 
 # Same flags as the visual gate: fixed seeds, no auto-rotate, glibc PRNG.
 # 10 s per day: the fixture spans a few days, so the clock is still running for the first ~30 s.
@@ -133,13 +292,21 @@ fi
 key alt+Return
 sleep 1
 shot fullscreen
-[ "$(size)" = 1280x720 ] && ok "Alt+Return goes fullscreen" || bad "fullscreen size $(size), want 1280x720"
+if [ "$(size)" = 1280x720 ]; then
+	ok "Alt+Return goes fullscreen"
+else
+	bad "fullscreen size $(size), want 1280x720"
+	diag fullscreen "$BURL"
+fi
 key alt+Return
 sleep 1
 [ "$(size)" != 1280x720 ] && ok "Alt+Return leaves fullscreen" || bad "still fullscreen"
 
 key Escape
-for _ in $(seq 50); do kill -0 "$BURL" 2>/dev/null || break; sleep 0.1; done
+for _ in $(seq 50); do
+	kill -0 "$BURL" 2>/dev/null || break
+	sleep 0.1
+done
 if kill -0 "$BURL" 2>/dev/null; then
 	bad "Esc did not quit"
 	kill "$BURL"

@@ -1,0 +1,66 @@
+# macOS display harness (ticket #153): `cargo xtask display-harness` on GitHub-hosted macOS runners.
+# It creates a 2x and a 1x virtual display, opens the real burl, moves its window between them and
+# checks the scale-change lines and the capture sizes, in two scenarios (exact-pixel and
+# --high-dpi). NOT a required check: it relies on a private macOS display API, so a runner-image
+# update can break it without any Burl change.
+name: display-harness
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/display-harness.yml"
+      - "tools/display-harness/**"
+      - "xtask/src/display_harness.rs"
+      - "xtask/src/pixels.rs"
+      - "xtask/src/ssim.rs"
+      - "crates/burl/src/interactive.rs"
+      - "crates/burl-gl/**"
+  schedule:
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: display-harness-${{ github.ref }}
+  # Only PR runs are superseded; a scheduled or manual run must finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  harness:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      # One image breaking must not hide the other; drop an image when GitHub retires it.
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-26]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: cargo xtask display-harness
+        env:
+          # Compares against tools/display-harness/baselines/<image> (regression baseline, not parity).
+          DISPLAY_HARNESS_BASELINE: ${{ matrix.os }}
+      # The --high-dpi scenario (#162): logical-size window, sizes and a golden-free crispness check.
+      # Runs even if the first scenario failed, so one failure does not hide the other.
+      - run: cargo xtask display-harness --high-dpi
+        if: ${{ !cancelled() }}
+      # Always kept: a passing run's captures are what the regression baselines are taken from.
+      - name: Keep the captures
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: display-harness-${{ matrix.os }}
+          path: |
+            target/display-harness/*.png
+            target/display-harness/burl.out
+            target/display-harness-high-dpi/*.png
+            target/display-harness-high-dpi/burl.out
+          if-no-files-found: ignore
+          retention-days: 7

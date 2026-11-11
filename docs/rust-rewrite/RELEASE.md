@@ -33,6 +33,8 @@ required reviewer. Nothing is public until the user also publishes the draft.
 
 ## One-time repository setup (user)
 
+`scripts/repo-setup.sh` (#180, #95) does the branch ruleset and the `release` environment below. The owner runs it with their own admin token: `check` (the default) only reads and prints the payloads it would send; `apply --confirm-apply` writes after a typed confirmation, then re-reads the settings. Defaults require only the fast-tier checks; `--require-heavy`, `--require-review` and `--admin-bypass` are opt-in decisions. GitHub has no dry-run, so the payloads are not proven accepted until the first `apply`. Making the ghcr package public after the first publish is believed to be UI-only; this is unverified.
+
 - Settings, Environments: create `release`, add yourself as **required reviewer**, restrict to tags `v*`. Without reviewers the environment gate is not enforced (the sign-off script still is).
 - Settings, Actions: workflow permissions can stay read-only; `publish` requests `contents: write` and `packages: write` itself.
 - After the first push, make the ghcr package public if it should be pullable without login.

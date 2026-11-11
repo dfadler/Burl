@@ -389,6 +389,20 @@ mod tests {
         assert_eq!((kit.os.width, kit.os.height), (300.0, 200.0));
     }
 
+    /// The window's `Resized` arm routes through `apply_resize`: it must move both the scene
+    /// settings and the frame kit.
+    #[test]
+    fn apply_resize_updates_scene_settings_and_frame_kit() {
+        let g = GourceSettings::default();
+        let mut fonts = new_fonts(burl_render::DEFAULT_FONT_FILE).unwrap();
+        let mut kit = FrameKit::with_images(&mut fonts, &g, 100, 100, None, None);
+        let mut ss = burl_render::SceneSettings::new(100, 100);
+        crate::interactive::apply_resize(&mut ss, &mut kit, 300, 200);
+        assert_eq!((ss.width, ss.height), (300.0, 200.0));
+        assert_eq!(kit.screen, Vec2::new(300.0, 200.0));
+        assert_eq!((kit.os.width, kit.os.height), (300.0, 200.0));
+    }
+
     /// The window and the exporter share this builder, so equal settings give equal batches, and
     /// the batches carry what the plain scene lacks: names, the title, the logo and the background.
     #[test]

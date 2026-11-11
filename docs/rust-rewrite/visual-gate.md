@@ -60,6 +60,17 @@ yet. They become usable once regenerated on native amd64 (or compared on the run
 luminance, Burl vs oracle, small-repo frames 30/70, is from the earlier 2026-11-03 run and was **not re-measured against
 these references**: 29.648 vs 29.702, 33.153 vs 33.106 (0.2%, inside the 5%).
 
+## Moving camera: no Burl gap, the cold first render is the outlier (2026-11-10, #172)
+
+The #172 draft fixture (`camera-cull`: 194-line custom log, `--camera-mode track`, structural flags, 640x360 at `-r 25`, 559 frames)
+reported Burl-vs-oracle SSIM 0.72/0.68/0.76/0.87 at frames 135/160/235/310. Re-measured in `burl-golden:amd64`, four oracle renders
+in separate containers, Burl with `--prng glibc`: the two **warm** oracle renders (second render in a container) are bit-identical to each other
+and to nothing else; Burl vs warm oracle over 111 frames (every 5th) has min **0.999876** (frames 135/160/235/310: 0.99990/0.99990/0.99991/0.99995).
+The two **cold** renders (first in a container) differ from the warm one in all 559 frames, and score 0.66-0.94 against it, the same numbers
+the draft reported. So the "gap" is the documented warm-up effect (#16, above): a cold oracle render is shifted in simulation time and a
+moving camera turns that shift into a large SSIM loss, where static frames hide it. Camera interpolation, the frame step and the track target
+agree with the oracle. A moving-camera fixture must render the oracle twice and keep the second (as `scripts/visual-in-container.sh stream` does).
+
 ## FMA (gcc on amd64)
 
 Not measured. #16's probe emitted no `fmadd`, and the fork is the right subject. Needs a gcc build of the

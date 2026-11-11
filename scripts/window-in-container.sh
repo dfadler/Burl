@@ -232,8 +232,10 @@ fi
 kill "$CBURL" 2>/dev/null
 wait "$CBURL" 2>/dev/null
 
-# Pointer checks (#180, #125): click-select, background deselect, hover box and its edge flip, no
-# box on the selected pawn, the 3 s idle. The simulation runs in real time, so nothing is hard-coded:
+# Pointer pixels (#180, #125): what the state-based selection block above cannot judge: selected
+# sprites drawn white, the hover box (present, left and right of the pointer, flipped at the right
+# edge, absent over a selected pawn or file) and its 3 s idle. Selecting and deselecting by state is
+# that block's; here Tab and the clicks are setup. The sim runs in real time, so nothing is hard-coded:
 # Space stops the clock, the camera then eases to rest (two shots a second apart come out identical
 # once it has), and every target is found in a screenshot. Tab selects one user, and what changes
 # is that pawn's place; a narrow window crops the scene so files sit at both side edges.
@@ -445,10 +447,10 @@ elif win_rect "$PWID" && scene_ready && xdotool windowfocus --sync "$PWID" key s
 		click_until p-desel "$bgx" "$bgy" p-tab
 		read -r back _ < <(blob p-base p-desel 20 "$rx" "$ry" "$rw" "$rh")
 		read -r gone _ < <(blob p-tab p-desel 20 "$rx" "$ry" "$rw" "$rh")
-		if [ "$gone" -gt 200 ] && [ "$back" -lt 10 ]; then
-			ok "a click on the background clears the selection (pawn back to its colour: $back px differ from before, $gone from selected)"
-		else
-			bad "background click did not clear the selection ($back px differ from unselected, $gone from selected)"
+		# Setup for the pixel checks below, not a check of its own (the selection block above judges
+		# deselecting by state): the pawn must be back in its own colour before it is clicked.
+		if [ "$gone" -le 200 ] || [ "$back" -ge 10 ]; then
+			bad "setup: the background click did not put the pawn back in its colour ($back px differ from before, $gone from selected)"
 		fi
 
 		# control for the next check: an unselected pawn under the pointer does get a box

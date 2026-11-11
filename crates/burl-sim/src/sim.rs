@@ -296,7 +296,7 @@ pub struct Sim {
     pub(crate) dir_bounds: Bounds2D,
     pub(crate) camera: Camera,
     /// `track_users` (`--camera-mode track`) and `selectedUser`.
-    track_users: bool,
+    pub(crate) track_users: bool,
     pub(crate) selected_user: Option<UserId>,
     /// `selectedFile`: only one of the two is ever set.
     pub(crate) selected_file: Option<FileId>,
@@ -1321,6 +1321,17 @@ impl Sim {
             Some(_) if self.track_users => self.camera.lock_on(true),
             Some(_) => {}
         }
+    }
+
+    /// `Gource::toggleCameraMode` (middle click): `setCameraMode(!track_users)`.
+    pub(crate) fn toggle_camera_mode(&mut self) {
+        self.manual_rotate = false;
+        self.manual_zoom = false;
+        self.track_users = !self.track_users;
+        if self.selected_user.is_some() {
+            self.camera.lock_on(self.track_users);
+        }
+        self.manual_camera = false;
     }
 
     /// `Gource::selectFile`: deselects the user and the file; no camera lock.

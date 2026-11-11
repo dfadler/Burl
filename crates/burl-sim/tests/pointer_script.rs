@@ -98,21 +98,22 @@ fn the_cursor_hides_after_three_idle_seconds_and_a_move_brings_it_back() {
     assert!(s.cursor_visible());
 }
 
-/// G10: `toggleCameraMode` (middle click) is not ported, so a middle press and release grabs
-/// nothing, selects nothing and leaves the pointer idle. If the toggle is ever ported this test
-/// must go with the G10 row.
+/// `toggleCameraMode` (middle click): each press flips track/overview, releases do nothing, and a
+/// middle press never grabs the mouse or selects.
 #[test]
-fn deviation_g10_middle_click_does_nothing() {
+fn middle_click_toggles_the_camera_mode() {
     let mut s = sim("middle", SimSettings::default());
     for _ in 0..100 {
         s.update().unwrap();
         s.end_frame();
     }
-    for down in [true, false] {
+    assert!(!s.is_tracking_users());
+    for (down, tracking) in [(true, true), (false, true), (true, false), (false, false)] {
         s.apply(Command::Button {
             button: Button::Middle,
             down,
         });
+        assert_eq!(s.is_tracking_users(), tracking, "down = {down}");
         assert!(!s.is_grabbed(), "grabbed, down = {down}");
     }
     assert_eq!(selected(&mut s), 0);

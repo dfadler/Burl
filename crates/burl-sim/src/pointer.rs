@@ -143,6 +143,11 @@ impl Sim {
         self.grab_mouse
     }
 
+    /// Whether the camera follows the selected user (`--camera-mode track`, toggled by middle click).
+    pub fn is_tracking_users(&self) -> bool {
+        self.track_users
+    }
+
     /// `Gource::grabMouse`: the cursor hides while grabbed and comes back with a fresh idle clock.
     pub fn grab_mouse(&mut self, grab: bool) {
         self.grab_mouse = grab;
@@ -227,8 +232,7 @@ impl Sim {
             return;
         }
         match button {
-            // toggleCameraMode: the camera modes are not here yet
-            Button::Middle => {}
+            Button::Middle => self.toggle_camera_mode(),
             Button::Right => self.grab_mouse(true),
             Button::Left => self.mouseclicked = true,
         }

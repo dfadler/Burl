@@ -348,6 +348,15 @@ impl Sim {
         })
     }
 
+    /// What is selected, for the `pointer:` debug line: `user NAME`, `file PATH`, or `None`.
+    pub fn selection_text(&self) -> Option<String> {
+        if let Some(u) = self.selected_user {
+            return Some(format!("user {}", self.user(u).name));
+        }
+        self.selected_file
+            .map(|f| format!("file {}", self.file(f).fullpath))
+    }
+
     /// A user's name, for a result of [`Sim::pick_at`].
     pub fn user_name(&self, u: UserId) -> &str {
         &self.user(u).name

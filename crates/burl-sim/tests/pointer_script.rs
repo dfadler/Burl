@@ -59,6 +59,52 @@ fn scripted_tab_is_ignored_under_disable_input() {
     }
 }
 
+fn selected_name(sim: &mut Sim) -> Option<String> {
+    sim.scene_view()
+        .users
+        .iter()
+        .find(|u| u.selected)
+        .map(|u| u.name.clone())
+}
+
+fn run(s: &mut Sim, frames: usize) {
+    for _ in 0..frames {
+        s.update().unwrap();
+        s.end_frame();
+    }
+}
+
+/// Tab walks the users in tag-id order and wraps from the last back to the first.
+#[test]
+fn tab_walks_the_users_and_wraps_to_the_first() {
+    let mut s = sim("wrap", SimSettings::default());
+    run(&mut s, 100);
+    let mut seen = Vec::new();
+    for _ in 0..3 {
+        s.apply_pointer(&tab(0));
+        seen.push(selected_name(&mut s).expect("a user is selected"));
+    }
+    assert_ne!(seen[0], seen[1], "{seen:?}");
+    assert_eq!(seen[0], seen[2], "wrap: {seen:?}");
+}
+
+/// `RUser::isFading` users are skipped by the pointer pick: pickable while active, not after
+/// they have idled past `user_idle_time`.
+#[test]
+fn a_fading_user_is_not_pickable() {
+    let mut s = sim("fade", SimSettings::default());
+    run(&mut s, 30);
+    let at = s.scene_view().users[0].pos;
+    assert!(s.pick_at(at).0.is_some(), "active user should be pickable");
+    // 3 s idle time at 60 fps, plus margin
+    run(&mut s, 400);
+    let u = &s.scene_view().users;
+    if let Some(u) = u.first() {
+        let at = u.pos;
+        assert!(s.pick_at(at).0.is_none(), "fading user was picked");
+    }
+}
+
 /// `gDump.pointer_pos` outlives the section: a Tab consumed in section 1 is not replayed in
 /// section 2, whose frame counter restarts at 0.
 #[test]

@@ -2539,6 +2539,27 @@ mod tests {
         Sim::new(settings, log, SimRng::from_script(vec![1, 2, 3]).unwrap())
     }
 
+    /// `toggleCameraMode` with a user selected: lock-on follows the new mode, and the manual
+    /// zoom, rotate and camera flags reset.
+    #[test]
+    fn toggle_camera_mode_locks_on_the_selected_user_and_clears_manual_flags() {
+        let mut s = sim(ok_settings()).unwrap();
+        for _ in 0..100 {
+            s.update().unwrap();
+            s.end_frame();
+        }
+        s.select_next_user();
+        assert!(s.selected_user.is_some() && !s.camera.lockon);
+        s.manual_zoom = true;
+        s.manual_rotate = true;
+        s.manual_camera = true;
+        s.toggle_camera_mode();
+        assert!(s.track_users && s.camera.lockon);
+        assert!(!s.manual_zoom && !s.manual_rotate && !s.manual_camera);
+        s.toggle_camera_mode();
+        assert!(!s.track_users && !s.camera.lockon);
+    }
+
     fn ok_settings() -> SimSettings {
         SimSettings {
             disable_auto_rotate: true,

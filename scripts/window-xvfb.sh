@@ -20,9 +20,13 @@ IMG=burl-window:${PLATFORM#linux/}
 mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
 docker build --platform "$PLATFORM" -t "$IMG" -f "$ROOT/docker/window.Dockerfile" "$ROOT"
-# The checks poll with timeouts; the 180 s cap here stops any other hang from running for hours.
+# The checks poll with timeouts; the 240 s cap here stops any other hang from running for hours.
 name="burl-window-$$" # the watchdog kills this run only, not another run of the same image
 docker run --rm --name "$name" --platform "$PLATFORM" -v "$ROOT":/repo:ro -v "$OUT":/out "$IMG" &
 pid=$!
-(sleep 180 && docker kill "$name" >/dev/null 2>&1) &
-wait "$pid"
+(sleep 240 && echo "FAIL window checks still running after 240 s: killing the container" >&2 && docker kill "$name" >/dev/null 2>&1) &
+watchdog=$!
+rc=0
+wait "$pid" || rc=$?
+kill "$watchdog" 2>/dev/null # a finished run must not leave the timer behind
+exit "$rc"

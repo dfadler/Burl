@@ -74,7 +74,7 @@ P6 hover text box  (quads+text near cursor)             needs: P3, quad renderin
 | P2 | `sim.rs` (`selected_file`, `select_file`, clear-on-removal, section reset, camera focus bounds incl. file), `command.rs` (`SelectUser`, `SelectFile`, `NextUser`) | ~120 LOC | Tab needs `tagusermap` order (tag id), which `UserId` may not preserve; check. |
 | P3 | new pure `pick(view, camera, mouse, W, H, settings) -> Option<Pick>` in `burl-render` or `burl-sim` | ~80 LOC | Linear scan of `SceneView` is enough for a window (hundreds of pawns). Using the real quadtrees would mean retaining them in `Sim` and `Sim` owning the mouse. See 4 on tie-break. |
 | P4 | `command.rs`, `input.rs` (`Pointer::button` stops sending `DragStart` unconditionally), `interactive.rs` | ~60 LOC | Must move the decision from event time to frame time (see 1.2 `selectBackground` quirk) or accept a deviation. |
-| P5 | `interactive.rs`, `input.rs` | ~50 LOC | `CursorMoved` carries physical pixels; C++ scales SDL window coordinates by `viewport_dpi_ratio` (`sdlapp.cpp`), so both are drawable pixels; only sub-pixel truncation differs. Not run on a Retina display. Ignored while grabbed/hidden/disabled. |
+| P5 | `interactive.rs`, `input.rs` | ~50 LOC | `CursorMoved` carries physical pixels; C++ scales SDL window coordinates by `viewport_dpi_ratio` into drawable pixels (`sdlapp.cpp` lines 352-355 and 387-388), so both are drawable pixels; only sub-pixel truncation differs. Not run on a Retina display (G3, `--high-dpi`). Ignored while grabbed/hidden/disabled. |
 | P6 | new `burl-render` `textbox.rs`, hook in `frame.rs` | ~120 LOC | Needs an untextured alpha quad batch (the key legend already draws them), text at 18 pt x `font_scale`. **Touches `frame.rs`**, which other sessions are changing now. |
 
 Total for everything: roughly 600 LOC in 8 or 9 files and 3 crates, mostly new code with little to rewrite.
@@ -140,6 +140,6 @@ Decision wanted from the user: A, A+ (recommended), B1 or B2; and whether to acc
 
 ## 8. Decision
 
-The user chose **full parity** (B2: selected look, pointer picking of users and files, Tab, and the hover text box). The implementation is a separate ticket and PR sequence, to start once the windowed path (`interactive.rs`, `frame.rs`) is stable; suggested order: P1+P2, then P3-P5, then P6, with the scripted-pointer oracle fork patch ahead of P3 so picking has a real oracle test. Rows `D13` (deterministic overlap order) and `D14` (selection at event time) still need the user's explicit OK before they merge.
+The user chose **full parity** (B2: selected look, pointer picking of users and files, Tab, and the hover text box). The implementation is a separate ticket and PR sequence, to start once the windowed path (`interactive.rs`, `frame.rs`) is stable; suggested order: P1+P2, then P3-P5, then P6, with the scripted-pointer oracle fork patch ahead of P3 so picking has a real oracle test. Row `D13` (deterministic overlap order) was merged with #122 on 2026-11-04 and its approval issues (#127, #131) are closed; `D14` (selection at event time) still needs the user's explicit OK before it merges.
 
 Row numbers: `D12` is taken by the 0.58.0 version-line row in the release PR (#114), so the rows proposed here are `D13` (deterministic overlap order) and `D14` (selection at event time).

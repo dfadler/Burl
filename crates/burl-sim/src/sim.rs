@@ -296,7 +296,7 @@ pub struct Sim {
     pub(crate) dir_bounds: Bounds2D,
     pub(crate) camera: Camera,
     /// `track_users` (`--camera-mode track`) and `selectedUser`.
-    track_users: bool,
+    pub(crate) track_users: bool,
     pub(crate) selected_user: Option<UserId>,
     /// `selectedFile`: only one of the two is ever set.
     pub(crate) selected_file: Option<FileId>,
@@ -1321,6 +1321,17 @@ impl Sim {
             Some(_) if self.track_users => self.camera.lock_on(true),
             Some(_) => {}
         }
+    }
+
+    /// `Gource::toggleCameraMode` (middle click): `setCameraMode(!track_users)`.
+    pub(crate) fn toggle_camera_mode(&mut self) {
+        self.manual_rotate = false;
+        self.manual_zoom = false;
+        self.track_users = !self.track_users;
+        if self.selected_user.is_some() {
+            self.camera.lock_on(self.track_users);
+        }
+        self.manual_camera = false;
     }
 
     /// `Gource::selectFile`: deselects the user and the file; no camera lock.
@@ -2526,6 +2537,27 @@ mod tests {
         .unwrap();
         let _ = std::fs::remove_file(&path);
         Sim::new(settings, log, SimRng::from_script(vec![1, 2, 3]).unwrap())
+    }
+
+    /// `toggleCameraMode` with a user selected: lock-on follows the new mode, and the manual
+    /// zoom, rotate and camera flags reset.
+    #[test]
+    fn toggle_camera_mode_locks_on_the_selected_user_and_clears_manual_flags() {
+        let mut s = sim(ok_settings()).unwrap();
+        for _ in 0..100 {
+            s.update().unwrap();
+            s.end_frame();
+        }
+        s.select_next_user();
+        assert!(s.selected_user.is_some() && !s.camera.lockon);
+        s.manual_zoom = true;
+        s.manual_rotate = true;
+        s.manual_camera = true;
+        s.toggle_camera_mode();
+        assert!(s.track_users && s.camera.lockon);
+        assert!(!s.manual_zoom && !s.manual_rotate && !s.manual_camera);
+        s.toggle_camera_mode();
+        assert!(!s.track_users && !s.camera.lockon);
     }
 
     fn ok_settings() -> SimSettings {

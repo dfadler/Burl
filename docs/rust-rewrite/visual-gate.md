@@ -61,8 +61,8 @@ only, never fails the job). They become usable as gate inputs once regenerated o
 Mean luminance, oracle vs Burl (oracle first in each pair), 16 frames, from `heavy.yml` run 42942335614 (master 714da55, x86 runner): every frame
 within 0.01-0.70% (limit 5%). small-repo frames 30/70/110/170 = 30.006 vs 30.025, 32.809 vs 32.832, 32.443 vs 32.463,
 31.278 vs 31.293 (0.05-0.07%); file-removal and file-to-dir 0.01-0.02%; real-burl-git-250 frames 100/300/500/800 =
-36.787 vs 37.045, 35.587 vs 35.678, 44.142 vs 44.337, 39.562 vs 39.716 (0.70/0.26/0.44/0.39%, the largest being the
-oracle's jitter mode again). SSIM on the same run, min 0.9797 (real-burl-git-250 frame 100), agrees with the 2026-11-04
+36.787 vs 37.045, 35.587 vs 35.678, 44.142 vs 44.337, 39.562 vs 39.716 (0.70/0.26/0.44/0.39%; the oracle's one-frame jitter
+is a possible cause of the larger ones, not established for these frames). SSIM on the same run, min 0.9797 (real-burl-git-250 frame 100), agrees with the 2026-11-04
 emulated-Burl figures above on all 16 frames (largest difference 0.0006, small-repo frame 170). The earlier 2026-11-03
 numbers (29.648 vs 29.702, 33.153 vs 33.106) are superseded.
 

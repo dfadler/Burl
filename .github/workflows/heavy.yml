@@ -93,6 +93,14 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           { echo '```'; cat "$RUNNER_TEMP/ssim.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Bloom set, report only (SSIM and mean luma per frame, luminance limit 5%)
+        # BLOOM=1 never fails the job; bloom luminance is non-blocking (visual-gate.md "What blocks")
+        # !cancelled(): still measure after a structural failure, which stays blocking via its own step
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          BLOOM=1 bash scripts/visual-burl.sh 0.959 | tee "$RUNNER_TEMP/bloom.txt"
+          { echo '### Bloom (report only)'; echo '```'; cat "$RUNNER_TEMP/bloom.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
 
   window-xvfb:
     # Linux X11 half of the interactive checklist: the real window under Xvfb + openbox, driven

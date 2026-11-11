@@ -170,6 +170,12 @@ pub fn ssim(a: &Image, b: &Image) -> Result<f64, String> {
     Ok(sum / mx.len() as f64)
 }
 
+/// Mean Rec. 601 luma (0..255) of a frame: the bloom luminance check (#53, D11).
+pub fn mean_luma(i: &Image) -> f64 {
+    let l = luma(i);
+    l.iter().sum::<f64>() / l.len() as f64
+}
+
 /// The #12 rule: worst observed self-SSIM minus [`MARGIN`]. At least 10 runs are the caller's job.
 pub fn threshold(self_ssims: &[f64]) -> Option<f64> {
     self_ssims
@@ -182,6 +188,16 @@ pub fn threshold(self_ssims: &[f64]) -> Option<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mean_luma_is_rec601() {
+        let i = Image {
+            w: 2,
+            h: 1,
+            rgb: vec![255, 0, 0, 0, 0, 0],
+        };
+        assert!((mean_luma(&i) - 0.299 * 255.0 / 2.0).abs() < 1e-9);
+    }
 
     /// A 64x64 frame with a bright square at (ox, oy) on a mid-grey ramp.
     fn scene(ox: usize, oy: usize) -> Image {

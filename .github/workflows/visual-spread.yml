@@ -1,0 +1,190 @@
+# Native-x86 visual measurement (specs #180 stories 7-11, #96): manually dispatched, never on push/PR/schedule.
+# On the hosted x86 runner it records the CPU model, measures the oracle's self-SSIM spread per fixture
+# (scripts/visual.sh self N -> cargo xtask ssim-threshold), the Burl-vs-oracle SSIM (scripts/visual.sh burl),
+# and regenerates the bloom references (scripts/visual.sh refs bloom) to compare them with the committed,
+# QEMU-rendered tests/golden/visual/bloom-*.png. Results go to the step summary and artifacts; NOTHING is
+# committed or pushed (the jobs have contents: read only; regeneration rewrites the runner's checkout only).
+# The oracle render's warm-up (a cold llvmpipe render differs, #16) is done inside scripts/visual-in-container.sh.
+# The self run is split per fixture (matrix) because ~160 oracle renders is an estimate against a 60-minute cap.
+name: visual-spread
+on:
+  workflow_dispatch:
+    inputs:
+      fixture:
+        description: Fixture to measure for the self-SSIM spread (all = one matrix leg per fixture)
+        type: choice
+        default: all
+        options: [all, small-repo, file-removal, file-to-dir, real-burl-git-250]
+      runs:
+        description: Oracle self-SSIM renders per fixture (scripts/visual.sh self N)
+        type: string
+        default: "10"
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      fixtures: ${{ steps.plan.outputs.fixtures }}
+    steps:
+      - id: plan
+        env:
+          FIXTURE: ${{ inputs.fixture }}
+          RUNS: ${{ inputs.runs }}
+        run: |
+          set -euo pipefail
+          [[ $RUNS =~ ^[0-9]+$ && $RUNS -ge 1 ]] || { echo "runs must be a positive integer" >&2; exit 2; }
+          # keep in sync with FIXTURES in scripts/visual.sh
+          all='["small-repo:30,70,110,170","file-removal:30,70,110,170","file-to-dir:30,70,110,170","real-burl-git-250:100,300,500,800"]'
+          if [ "$FIXTURE" = all ]; then
+            echo "fixtures=$all" >> "$GITHUB_OUTPUT"
+          else
+            sel=$(jq -c --arg f "$FIXTURE" '[.[] | select(startswith($f + ":"))]' <<< "$all")
+            [ "$sel" != '[]' ] || { echo "unknown fixture" >&2; exit 2; }
+            echo "fixtures=$sel" >> "$GITHUB_OUTPUT"
+          fi
+
+  self:
+    needs: plan
+    runs-on: ubuntu-24.04
+    # Per fixture: 2 renders per run (warm-up + measured); the 30 s real-repo fixture is the slow leg.
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        fixture: ${{ fromJSON(needs.plan.outputs.fixtures) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: CPU model
+        run: |
+          { echo '### CPU (self leg ${{ matrix.fixture }})'; echo '```'; lscpu; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Oracle self-SSIM spread
+        shell: bash
+        env:
+          VISUAL_FIXTURES: ${{ matrix.fixture }}
+          RUNS: ${{ inputs.runs }}
+        run: bash scripts/visual.sh self "$RUNS" | tee "$RUNNER_TEMP/self-out.txt"
+      - name: Report spread
+        if: ${{ !cancelled() }}
+        env:
+          FIXTURE: ${{ matrix.fixture }}
+        run: |
+          { echo "### Self-SSIM spread: ${FIXTURE%%:*}"; echo '```'; cat "$RUNNER_TEMP/self-out.txt" || true; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: self-${{ strategy.job-index }}
+          # not the PPM streams (hundreds of MB each) or the oracle binary
+          path: |
+            target/visual
+            !target/visual/*.ppm
+            !target/visual/gource
+
+  spread:
+    # Threshold over every fixture's values together (what a local `scripts/visual.sh self` prints for the full set).
+    needs: self
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: self-*
+          path: ${{ runner.temp }}/self
+      - name: Proposed threshold over all fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat "$RUNNER_TEMP"/self/*/self.txt > "$RUNNER_TEMP/all-self.txt"
+          # shellcheck disable=SC2046 # one word per SSIM value is intended
+          out=$(cargo run -q --locked -p xtask -- ssim-threshold $(sed 's/.*ssim=//' "$RUNNER_TEMP/all-self.txt"))
+          { echo '### Self-SSIM threshold, all fixtures'; echo '```'; echo "$out"; echo '```'; echo "Current gate: 0.959"; } >> "$GITHUB_STEP_SUMMARY"
+
+  burl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: CPU model
+        run: |
+          { echo '### CPU (burl job)'; echo '```'; lscpu; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Burl vs oracle SSIM
+        shell: bash
+        run: bash scripts/visual.sh burl | tee "$RUNNER_TEMP/burl.txt"
+      - name: Report
+        if: ${{ !cancelled() }}
+        run: |
+          { echo '### Burl vs oracle SSIM (structural)'; echo '```'; cat "$RUNNER_TEMP/burl.txt" || true; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: burl
+          path: |
+            target/visual
+            !target/visual/*.ppm
+            !target/visual/gource
+
+  bloom:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: CPU model
+        run: |
+          { echo '### CPU (bloom job)'; echo '```'; lscpu; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the committed bloom references
+        run: |
+          mkdir -p "$RUNNER_TEMP/bloom-committed"
+          cp tests/golden/visual/bloom-*.png "$RUNNER_TEMP/bloom-committed/"
+      - name: Regenerate the bloom references on this runner
+        id: regen
+        # overwrites tests/golden/visual/bloom-*.png in this checkout only; the job never commits
+        run: bash scripts/visual.sh refs bloom
+      - name: Compare regenerated with committed (SSIM and mean luma, committed first)
+        if: ${{ !cancelled() && steps.regen.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p target/visual/bloom-regenerated
+          {
+            echo '### Bloom set: regenerated on this runner vs committed (QEMU) references'
+            echo '| frame | SSIM | mean luma committed/regenerated, diff |'
+            echo '|---|---|---|'
+          } > "$RUNNER_TEMP/bloom.md"
+          for old in "$RUNNER_TEMP"/bloom-committed/bloom-*.png; do
+            f=$(basename "$old")
+            new=tests/golden/visual/$f
+            cp "$new" target/visual/bloom-regenerated/
+            s=$(cargo run -q --locked -p xtask -- ssim "$old" "$new" 2>&1 || echo 'ssim=ERROR')
+            l=$(cargo run -q --locked -p xtask -- ssim-luma "$old" "$new" 2>&1 || echo 'luma=ERROR')
+            echo "| ${f%.png} | ${s#ssim=} | ${l#luma=} |" >> "$RUNNER_TEMP/bloom.md"
+          done
+          cat "$RUNNER_TEMP/bloom.md" >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/bloom.md"
+      - name: Note a failed regeneration
+        if: ${{ !cancelled() && steps.regen.outcome != 'success' }}
+        run: echo 'Bloom regeneration failed; no comparison was made.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bloom
+          path: |
+            target/visual
+            tests/golden/visual/PROVENANCE-bloom.txt
+            !target/visual/*.ppm
+            !target/visual/gource

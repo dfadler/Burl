@@ -22,7 +22,7 @@ OUT="$ROOT/target/visual"
 REFS="$ROOT/tests/golden/visual"
 IMG=burl-golden:amd64
 # fixture:frame indices (-r 25: the 10 s fixtures run ~355 frames, the 30 s real-repo one ~1070)
-FIXTURES="small-repo:30,70,110,170 file-removal:30,70,110,170 file-to-dir:30,70,110,170 real-burl-git-250:100,300,500,800"
+FIXTURES=${VISUAL_FIXTURES:-"small-repo:30,70,110,170 file-removal:30,70,110,170 file-to-dir:30,70,110,170 real-burl-git-250:100,300,500,800"}
 
 # Optional second word: `bloom` selects the bloom set (bloom drawn, refs named bloom-*).
 export BLOOM='' PFX=''

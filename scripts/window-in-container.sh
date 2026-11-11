@@ -106,6 +106,77 @@ fi
 kill "$OBURL" 2>/dev/null
 wait "$OBURL" 2>/dev/null
 
+# Selection and hover (#125), read from the `pointer:` debug line (`--log-level debug`) rather than
+# pixels: Tab selects a user, a background click clears it, sweeping the pointer finds a pawn whose
+# hover box would show, clicking it selects it, and a selected pawn gets no hover box. Where the box
+# is drawn, its text and the edge flip are not judged here; the pick itself is real X11 input.
+SLOG=$OUT/selection.log
+burl "$LOG" --log-format custom -640x360 --seconds-per-day 10 --hash-seed 31 --prng glibc \
+	--disable-auto-skip --disable-auto-rotate --file-idle-time 0 --log-level debug >"$SLOG" 2>&1 &
+SBURL=$!
+SWID=
+for _ in $(seq 200); do
+	SWID=$(xdotool search --onlyvisible --pid "$SBURL" 2>/dev/null | head -1)
+	[ -n "$SWID" ] && break
+	sleep 0.1
+done
+lastp() { grep -o 'pointer: .*' "$SLOG" | tail -1; }
+if [ -n "$SWID" ]; then
+	sleep 2
+	SX=$(xwininfo -id "$SWID" | awk '/Absolute upper-left X/ {print $4}')
+	SY=$(xwininfo -id "$SWID" | awk '/Absolute upper-left Y/ {print $4}')
+	xdotool windowfocus --sync "$SWID"
+	xdotool mousemove $((SX + 3)) $((SY + 3))
+	sleep 0.5
+	# Tab skips users that are not fully opaque, so press it until one is selected (6 tries)
+	for _ in 1 2 3 4 5 6; do
+		xdotool key Tab
+		sleep 0.4
+		lastp | grep -q 'selected=user ' && break
+	done
+	lastp | grep -q 'selected=user ' && ok "selection: Tab selects a user ($(lastp))" ||
+		{ bad "selection: Tab selected no user ($(lastp))"; diag selection "$SBURL"; }
+	# `selectBackground` needs the button still down when the frame draws, so hold it for a few frames
+	xdotool mousemove $((SX + 3)) $((SY + 3)) mousedown 1
+	sleep 0.3
+	xdotool mouseup 1
+	sleep 0.3
+	lastp | grep -q 'selected=none' && ok "selection: a background click deselects" ||
+		bad "selection: a background click did not deselect ($(lastp))"
+	# Sweep the client area in 12 px steps until the pointer is over a pawn (hover box content).
+	found=
+	for y in $(seq 20 12 340); do
+		for x in $(seq 12 12 628); do
+			xdotool mousemove $((SX + x)) $((SY + y))
+			sleep 0.05
+			if ! lastp | grep -q 'hover=none'; then
+				found="$x $y"
+				break 2
+			fi
+		done
+	done
+	if [ -n "$found" ]; then
+		hov=$(lastp)
+		ok "selection: hovering a pawn shows its box content at $found ($hov)"
+		xdotool click 1
+		sleep 0.4
+		if lastp | grep -q 'selected=\(user\|file\) '; then
+			ok "selection: a click on the hovered pawn selects it ($(lastp))"
+			lastp | grep -q 'hover=none' && ok "selection: no hover box on the selected pawn" ||
+				bad "selection: the selected pawn still shows a hover box ($(lastp))"
+		else
+			bad "selection: a click on the hovered pawn selected nothing (hovered: $hov; now: $(lastp))"
+		fi
+	else
+		bad "selection: the pointer swept the whole window without hovering a pawn"
+	fi
+else
+	bad "selection launch: window never appeared"
+	diag selection "$SBURL"
+fi
+kill "$SBURL" 2>/dev/null
+wait "$SBURL" 2>/dev/null
+
 # Cursor confinement (winit X11 `Confined` = core GrabPointer with confine_to the window): holding
 # the right button grabs the mouse (`Live::set_grab`); `Locked` is unsupported on X11 so Burl falls
 # back to `Confined`. A pointer pushed far outside the window must stay clamped inside it while the

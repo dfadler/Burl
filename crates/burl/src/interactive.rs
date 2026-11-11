@@ -92,6 +92,17 @@ fn display_line(event: &str, scale: f64, physical: (u32, u32), logical: (u32, u3
     )
 }
 
+/// The `pointer:` debug line (`--log-level debug`): what is selected and what the hover box shows
+/// (its lines joined by `|`), logged when either changes, so a real-window run can be checked
+/// without reading pixels.
+fn pointer_line(selected: Option<&str>, hover: Option<&[String]>) -> String {
+    format!(
+        "pointer: selected={} hover={}",
+        selected.unwrap_or("none"),
+        hover.map_or("none".to_string(), |l| l.join("|"))
+    )
+}
+
 /// Logical size = physical / scale, rounded to the nearest pixel.
 fn logical_size(physical: (u32, u32), scale: f64) -> (u32, u32) {
     let l = |p: u32| (f64::from(p) / scale).round() as u32;
@@ -131,6 +142,8 @@ struct Live {
     avatars: Option<SharedAvatars>,
     clear: [f32; 4],
     last: Instant,
+    /// The last `pointer:` debug line, so only changes are logged.
+    pointer_line: String,
     /// Commands since the last frame, applied in order before the step.
     pending: Vec<Command>,
     arrows: Arrows,
@@ -247,7 +260,8 @@ fn slider_follows(hide_mouse: bool, grabbed: bool) -> bool {
 }
 
 /// The sim's pointer pixel. winit reports physical pixels and the drawable is physical too,
-/// so there is no scale to apply: Gource mixes points and pixels under `--high-dpi`, Burl doesn't.
+/// so there is no scale to apply. Gource ends up in drawable pixels too (`sdlapp.cpp` scales mouse
+/// events by `viewport_dpi_ratio`); only its int-point truncation differs from this float.
 fn pointer_px(p: PhysicalPosition<f64>) -> (i32, i32) {
     (p.x as i32, p.y as i32)
 }
@@ -297,6 +311,7 @@ impl App {
             disable_input: l.disable_input,
             hide_mouse: l.hide_mouse,
             grabbed: false,
+            pointer_line: String::new(),
             next: false,
         })
     }
@@ -412,6 +427,14 @@ impl App {
         live.sim.tick_cursor(dt.as_secs_f32());
         if live.sim.is_grabbed() != live.grabbed {
             live.set_grab(live.sim.is_grabbed());
+        }
+        let line = pointer_line(
+            live.sim.selection_text().as_deref(),
+            live.sim.hover_text().as_ref().map(|h| h.lines.as_slice()),
+        );
+        if line != live.pointer_line {
+            burl_util::log::debug(|| line.clone());
+            live.pointer_line = line;
         }
         upload_avatars(&live.avatars, &mut live.r)?;
         let scene = live.sim.scene_view();
@@ -741,6 +764,19 @@ mod tests {
         // fractional scale, and a rounding boundary: 1000 / 1.5 = 666.67, 3 / 2 = 1.5
         assert_eq!(logical_size((1500, 1000), 1.5), (1000, 667));
         assert_eq!(logical_size((3, 3), 2.0), (2, 2));
+    }
+
+    #[test]
+    fn pointer_line_pins_the_log_format() {
+        assert_eq!(
+            pointer_line(None, None),
+            "pointer: selected=none hover=none"
+        );
+        let hover = ["lib.rs".to_string(), "src".to_string()];
+        assert_eq!(
+            pointer_line(Some("user bob"), Some(&hover)),
+            "pointer: selected=user bob hover=lib.rs|src"
+        );
     }
 
     #[test]

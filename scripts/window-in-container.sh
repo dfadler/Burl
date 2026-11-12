@@ -357,16 +357,23 @@ hover_at() {
 USER_WHITE_MIN=10
 FILE_WHITE_MIN=5
 
-# click_until NAME X Y MIN RX RY RW RH: click at X,Y and shoot NAME.png once the box RX,RY,RW,RH
-# holds more than MIN white pixels. Only the delivery is retried, up to 3 times; the assertion on
-# the last shot is the caller's, with the same MIN.
+# click_until NAME X Y MIN RX RY RW RH: click at X,Y; with the pointer moved away (an unselected
+# sprite under it shows a hover box whose text is white too) shoot NAME-w.png, and once its box
+# RX,RY,RW,RH holds more than MIN white pixels put the pointer back on X,Y and shoot NAME.png. Only
+# the delivery is retried, up to 3 times; the assertion is the caller's, on NAME-w.png with the
+# same MIN. NAME.png is shot in any case (pointer on X,Y).
 click_until() {
 	local n
 	for _ in 1 2 3; do
 		click_at "$2" "$3"
 		sleep 1
+		xdotool mousemove $((WX + 12)) $((WY + WH - 14))
+		sleep 1
+		shot "$1-w"
+		n=$(white "$1-w" "$5" "$6" "$7" "$8")
+		xdotool mousemove "$2" "$3"
+		sleep 1
 		shot "$1"
-		n=$(white "$1" "$5" "$6" "$7" "$8")
 		[ "$n" -gt "$4" ] && return 0
 	done
 	return 1
@@ -496,7 +503,7 @@ elif win_rect "$PWID" && scene_ready && xdotool windowfocus --sync "$PWID" key s
 		read -r moved _ < <(blob p-desel p-sel 20 "$rx" "$ry" "$rw" "$rh")
 		read -r same _ < <(blob p-tab p-sel 20 "$rx" "$ry" "$rw" "$rh")
 		w0=$(white p-desel "$rx" "$ry" "$rw" "$rh")
-		w1=$(white p-sel "$rx" "$ry" "$rw" "$rh")
+		w1=$(white p-sel-w "$rx" "$ry" "$rw" "$rh")
 		if [ "$moved" -gt 200 ] && [ "$same" -lt 10 ] && [ "$w0" -lt "$USER_WHITE_MIN" ] && [ "$w1" -gt "$USER_WHITE_MIN" ]; then
 			ok "clicking a user selects it: the sprite turns white ($w0 -> $w1 white px, same pixels as the Tab selection)"
 		else
@@ -570,7 +577,7 @@ elif win_rect "$PWID" && scene_ready && xdotool windowfocus --sync "$PWID" key s
 				[ "$fw" -gt 28 ] && fw=28
 				click_until p-fsel "$hx" "$ry1" "$FILE_WHITE_MIN" "$fx" "$fy" "$fw" 28
 				w0=$(white p-narrow "$fx" "$fy" "$fw" 28)
-				w1=$(white p-fsel "$fx" "$fy" "$fw" 28)
+				w1=$(white p-fsel-w "$fx" "$fy" "$fw" 28)
 				if [ "$w0" -lt 3 ] && [ "$w1" -gt "$FILE_WHITE_MIN" ]; then
 					ok "clicking a file selects it: the sprite turns white ($w0 -> $w1 white px)"
 				else

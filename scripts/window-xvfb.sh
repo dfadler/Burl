@@ -39,6 +39,6 @@ secs=${WINDOW_WATCHDOG_SECS:-240}
 watchdog=$!
 rc=0
 wait "$pid" || rc=$?
-kill "$watchdog" 2>/dev/null
+kill "$watchdog" 2>/dev/null || true # best effort: after a timeout it has already exited, and set -e must not replace rc
 wait "$watchdog" 2>/dev/null || true
 exit "$rc"

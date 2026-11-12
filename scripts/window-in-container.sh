@@ -357,13 +357,23 @@ hover_at() {
 USER_WHITE_MIN=10
 FILE_WHITE_MIN=5
 
+# pointer_at X Y: succeeds when X reports the pointer at X,Y (a lost move leaves it elsewhere).
+pointer_at() {
+	local px py
+	px=$(xdotool getmouselocation --shell | awk -F= '/^X=/ {print $2}')
+	py=$(xdotool getmouselocation --shell | awk -F= '/^Y=/ {print $2}')
+	[ "$px" = "$1" ] && [ "$py" = "$2" ]
+}
+
 # click_until NAME X Y MIN RX RY RW RH: click at X,Y; with the pointer moved away (an unselected
 # sprite under it shows a hover box whose text is white too) shoot NAME-w.png, and once its box
 # RX,RY,RW,RH holds more than MIN white pixels put the pointer back on X,Y and shoot NAME.png. Only
 # the delivery is retried, up to 3 times; the assertion is the caller's, on NAME-w.png with the
-# same MIN. NAME.png is shot in any case (pointer on X,Y).
+# same MIN. NAME.png is shot in any case, and the pointer is checked to be back on X,Y first: if
+# the move back is lost, NAME.png would show the pawn with no pointer on it and the caller's "no
+# hover box over the selected pawn" comparison would pass for nothing, so that fails loudly.
 click_until() {
-	local n
+	local n back
 	for _ in 1 2 3; do
 		click_at "$2" "$3"
 		sleep 1
@@ -371,8 +381,13 @@ click_until() {
 		sleep 1
 		shot "$1-w"
 		n=$(white "$1-w" "$5" "$6" "$7" "$8")
-		xdotool mousemove "$2" "$3"
-		sleep 1
+		back=''
+		for _ in 1 2 3; do
+			xdotool mousemove "$2" "$3"
+			sleep 1
+			pointer_at "$2" "$3" && back=1 && break
+		done
+		[ -n "$back" ] || bad "pointer did not return to $2,$3 after the click (environment, not Burl: the X server did not take the move), so the shot would not show a hover box over the pawn"
 		shot "$1"
 		[ "$n" -gt "$4" ] && return 0
 	done
@@ -465,17 +480,22 @@ elif win_rect "$PWID" && scene_ready && xdotool windowfocus --sync "$PWID" key s
 	# Tab walks the users in order; some are out of view or cut by the window edge (their visible
 	# part is too small or too near the edge to click), so press it until a whole pawn well inside
 	# the window changes: the pixels it changes are that pawn.
-	n=0
+	n=0 found=''
 	for _ in $(seq 8); do
 		xdotool windowfocus --sync "$PWID" key Tab
 		sleep 1
 		shot p-tab
 		read -r n x0 x1 y0 y1 cx cy < <(blob p-base p-tab 20 "$WX" "$WY" "$WW" "$WH")
-		[ "$n" -gt 500 ] && [ "$x0" -gt $((WX + 8)) ] && [ "$x1" -lt $((WX + WW - 8)) ] &&
-			[ "$y0" -gt $((WY + 8)) ] && [ "$y1" -lt $((WY + WH - 8)) ] && break
+		if [ "$n" -gt 500 ] && [ "$x0" -gt $((WX + 8)) ] && [ "$x1" -lt $((WX + WW - 8)) ] &&
+			[ "$y0" -gt $((WY + 8)) ] && [ "$y1" -lt $((WY + WH - 8)) ]; then
+			found=1
+			break
+		fi
 	done
-	if [ "$n" -lt 500 ] || [ $((x1 - x0)) -gt 80 ] || [ $((y1 - y0)) -gt 80 ] || [ "$y0" -le $((WY + 8)) ]; then
-		bad "window did not react to Tab within 8 tries, so no pawn to aim at: input not delivered or no selectable user (environment, not a pointer check; changed pixels: $n, box $x0-$x1 x $y0-$y1)"
+	# found is the whole acceptance test (size and all four margins); the last candidate of a loop
+	# that never passed must not slip through on a partial re-check.
+	if [ -z "$found" ] || [ $((x1 - x0)) -gt 80 ] || [ $((y1 - y0)) -gt 80 ]; then
+		bad "window did not react to Tab within 8 tries, or no whole pawn well inside the window was selected, so no pawn to aim at: input not delivered or no selectable user (environment, not a pointer check; changed pixels: $n, box $x0-$x1 x $y0-$y1)"
 		diag pointer-tab "$PBURL"
 	else
 		rx=$((x0 - 4)) ry=$((y0 - 4)) rw=$((x1 - x0 + 9)) rh=$((y1 - y0 + 9))

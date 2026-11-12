@@ -232,6 +232,401 @@ fi
 kill "$CBURL" 2>/dev/null
 wait "$CBURL" 2>/dev/null
 
+# Pointer pixels (#180, #125): what the state-based selection block above cannot judge: selected
+# sprites drawn white, the hover box (present, left and right of the pointer, flipped at the right
+# edge, absent over a selected pawn or file) and its 3 s idle. Selecting and deselecting by state is
+# that block's; here Tab and the clicks are setup. The sim runs in real time, so nothing is hard-coded:
+# Space stops the clock, the camera then eases to rest (two shots a second apart come out identical
+# once it has), and every target is found in a screenshot. Tab selects one user, and what changes
+# is that pawn's place; a narrow window crops the scene so files sit at both side edges.
+
+# blob A B THR X Y W H: "COUNT MINX MAXX MINY MAXY CX CY" (screen pixels) of the pixels in the
+# rectangle whose luma differs by more than THR between shots A and B; COUNT is 0 for none.
+blob() {
+	ffmpeg -loglevel error -i "$OUT/$1.png" -i "$OUT/$2.png" \
+		-filter_complex "[0][1]blend=all_mode=difference,format=gray,crop=$6:$7:$4:$5" -f rawvideo -pix_fmt gray - |
+		od -An -v -tu1 -w"$6" |
+		awk -v thr="$3" -v ox="$4" -v oy="$5" '
+			{
+				for (i = 1; i <= NF; i++) {
+					if ($i <= thr) continue
+					x = ox + i - 1; y = oy + NR - 1
+					if (n == 0) { x0 = x1 = x; y0 = y1 = y }
+					if (x < x0) x0 = x
+					if (x > x1) x1 = x
+					if (y < y0) y0 = y
+					if (y > y1) y1 = y
+					sx += x; sy += y; n++
+				}
+			}
+			END { if (n) printf "%d %d %d %d %d %d %d\n", n, x0, x1, y0, y1, sx / n, sy / n; else print "0 0 0 0 0 0 0" }'
+}
+
+# nonbg IMG X Y W H: the same numbers for the pixels in the rectangle that are not the scene
+# background (taken from the window's top-left corner). With users hidden these are the files.
+nonbg() {
+	local bg
+	bg=$(ffmpeg -loglevel error -i "$OUT/$1.png" -vf "crop=1:1:$((WX + 3)):$((WY + 3))" -f rawvideo -pix_fmt rgb24 - | od -An -v -tu1)
+	ffmpeg -loglevel error -i "$OUT/$1.png" -vf "crop=$4:$5:$2:$3" -f rawvideo -pix_fmt rgb24 - |
+		od -An -v -tu1 -w"$(($4 * 3))" |
+		awk -v bg="$bg" -v ox="$2" -v oy="$3" '
+			BEGIN { split(bg, c, " ") }
+			{
+				for (i = 1; i + 2 <= NF; i += 3) {
+					d1 = $i - c[1]; d2 = $(i + 1) - c[2]; d3 = $(i + 2) - c[3]
+					if ((d1 < 0 ? -d1 : d1) + (d2 < 0 ? -d2 : d2) + (d3 < 0 ? -d3 : d3) < 60) continue
+					x = ox + (i - 1) / 3; y = oy + NR - 1
+					if (n == 0) { x0 = x1 = x; y0 = y1 = y }
+					if (x < x0) x0 = x
+					if (x > x1) x1 = x
+					if (y < y0) y0 = y
+					if (y > y1) y1 = y
+					sx += x; sy += y; n++
+				}
+			}
+			END { if (n) printf "%d %d %d %d %d %d %d\n", n, x0, x1, y0, y1, sx / n, sy / n; else print "0 0 0 0 0 0 0" }'
+}
+
+# white IMG X Y W H: how many pixels in the rectangle are near white (every channel above 200).
+# Selected sprites are drawn white; no unselected sprite or beam in the fixture gets that bright.
+white() {
+	ffmpeg -loglevel error -i "$OUT/$1.png" -vf "crop=$4:$5:$2:$3" -f rawvideo -pix_fmt rgb24 - |
+		od -An -v -tu1 -w"$(($4 * 3))" |
+		awk '{ for (i = 1; i + 2 <= NF; i += 3) if ($i > 200 && $(i + 1) > 200 && $(i + 2) > 200) n++ } END { print n + 0 }'
+}
+
+# inner_edge IMG X Y W H left|right: "X Y" (screen pixels) of the non-background pixel nearest
+# the left or right side of the rectangle whose 3x3 neighbourhood is all non-background, i.e. a
+# point inside a file, not on its rim; "0 0" if there is none. The rim of a disc cut by the
+# window edge is too thin to aim at, so the point is taken from the inside.
+inner_edge() {
+	local bg
+	bg=$(ffmpeg -loglevel error -i "$OUT/$1.png" -vf "crop=1:1:$((WX + 3)):$((WY + 3))" -f rawvideo -pix_fmt rgb24 - | od -An -v -tu1)
+	ffmpeg -loglevel error -i "$OUT/$1.png" -vf "crop=$4:$5:$2:$3" -f rawvideo -pix_fmt rgb24 - |
+		od -An -v -tu1 -w"$(($4 * 3))" |
+		awk -v bg="$bg" -v ox="$2" -v oy="$3" -v w="$4" -v side="$6" '
+			BEGIN { split(bg, c, " ") }
+			{
+				for (i = 1; i + 2 <= NF; i += 3) {
+					d1 = $i - c[1]; d2 = $(i + 1) - c[2]; d3 = $(i + 2) - c[3]
+					nb[NR - 1, (i - 1) / 3] = ((d1 < 0 ? -d1 : d1) + (d2 < 0 ? -d2 : d2) + (d3 < 0 ? -d3 : d3) >= 60)
+				}
+				h = NR
+			}
+			END {
+				for (k = 1; k < w - 1; k++) {
+					x = (side == "left") ? k : w - 1 - k
+					for (y = 1; y < h - 1; y++) {
+						ok = 1
+						for (dx = -1; dx <= 1 && ok; dx++) for (dy = -1; dy <= 1 && ok; dy++) if (!nb[y + dy, x + dx]) ok = 0
+						if (ok) { print ox + x, oy + y; exit }
+					}
+				}
+				print "0 0"
+			}'
+}
+
+# hover_at X Y NAME: put the pointer on X,Y and shoot NAME.png once a box shows (more than 150
+# px differ from p-narrow). Only the delivery is retried: up to 4 times the pointer leaves for the
+# corner and comes back, and a shot only counts once X reports the pointer at X,Y (a lost move
+# would leave the previous file's box on screen). Returns 0 with a box, 1 with the pointer there
+# but no box (the caller's assertion fails on the shot), 2 after reporting that the pointer never
+# arrived (environment: the caller skips its assertion).
+hover_at() {
+	local n arrived='' px py
+	for _ in 1 2 3 4; do
+		xdotool mousemove $((WX + 12)) $((WY + WH - 14))
+		sleep 0.3
+		xdotool mousemove "$1" "$2"
+		sleep 1
+		px=$(xdotool getmouselocation --shell | awk -F= '/^X=/ {print $2}')
+		py=$(xdotool getmouselocation --shell | awk -F= '/^Y=/ {print $2}')
+		{ [ "$px" = "$1" ] && [ "$py" = "$2" ]; } || continue
+		arrived=1
+		shot "$3"
+		read -r n _ < <(blob p-narrow "$3" 20 "$WX" "$WY" "$WW" "$WH")
+		[ "$n" -gt 150 ] && return 0
+	done
+	[ -n "$arrived" ] && return 1
+	bad "pointer never reached $1,$2 in 4 tries (environment, not Burl: the X server did not take the move; it is at ${px:-?},${py:-?})"
+	return 2
+}
+
+# The count of near-white pixels (see `white`) above which a sprite's box shows it selected.
+# Shared by the click retry and the caller's assertion, so the two cannot drift apart.
+USER_WHITE_MIN=10
+FILE_WHITE_MIN=5
+
+# pointer_at X Y: succeeds when X reports the pointer at X,Y (a lost move leaves it elsewhere).
+pointer_at() {
+	local px py
+	px=$(xdotool getmouselocation --shell | awk -F= '/^X=/ {print $2}')
+	py=$(xdotool getmouselocation --shell | awk -F= '/^Y=/ {print $2}')
+	[ "$px" = "$1" ] && [ "$py" = "$2" ]
+}
+
+# click_until NAME X Y MIN RX RY RW RH: click at X,Y; with the pointer moved away (an unselected
+# sprite under it shows a hover box whose text is white too) shoot NAME-w.png, and once its box
+# RX,RY,RW,RH holds more than MIN white pixels put the pointer back on X,Y and shoot NAME.png. Only
+# the delivery is retried, up to 3 times; the assertion is the caller's, on NAME-w.png with the
+# same MIN. NAME.png is shot in any case, and the pointer is checked to be back on X,Y first: if
+# the move back is lost, NAME.png would show the pawn with no pointer on it and the caller's "no
+# hover box over the selected pawn" comparison would pass for nothing, so that fails loudly.
+click_until() {
+	local n back
+	for _ in 1 2 3; do
+		click_at "$2" "$3"
+		sleep 1
+		xdotool mousemove $((WX + 12)) $((WY + WH - 14))
+		sleep 1
+		shot "$1-w"
+		n=$(white "$1-w" "$5" "$6" "$7" "$8")
+		back=''
+		for _ in 1 2 3; do
+			xdotool mousemove "$2" "$3"
+			sleep 1
+			pointer_at "$2" "$3" && back=1 && break
+		done
+		[ -n "$back" ] || bad "pointer did not return to $2,$3 after the click (environment, not Burl: the X server did not take the move), so the shot would not show a hover box over the pawn"
+		shot "$1"
+		[ "$n" -gt "$4" ] && return 0
+	done
+	return 1
+}
+
+# click_off NAME X Y RX RY RW RH: the same for the click that deselects, until the pawn's box has
+# at most USER_WHITE_MIN white pixels left.
+click_off() {
+	local n
+	for _ in 1 2 3; do
+		click_at "$2" "$3"
+		sleep 1
+		shot "$1"
+		n=$(white "$1" "$4" "$5" "$6" "$7")
+		[ "$n" -le "$USER_WHITE_MIN" ] && return 0
+	done
+	return 1
+}
+
+# scene_ready: wait until the window shows a filled-in scene (users and files drawn). The sim clock
+# advances by at most one frame's worth per frame, so on a starved CPU it is far behind the wall
+# clock and a fixed sleep can pause an empty scene. Fails after 40 s.
+scene_ready() {
+	local n
+	for _ in $(seq 80); do
+		shot p-wait
+		read -r n _ < <(nonbg p-wait "$WX" "$WY" "$WW" "$WH")
+		if [ "$n" -gt 4000 ]; then
+			rm -f "$OUT/p-wait.png"
+			return 0
+		fi
+		sleep 0.5
+	done
+	return 1
+}
+
+# settle NAME: shoot once a second until two shots in a row are identical; the last one is
+# NAME.png. Fails after 40 s.
+settle() {
+	rm -f "$OUT/$1-prev.png"
+	for _ in $(seq 40); do
+		sleep 1
+		shot "$1"
+		if [ -f "$OUT/$1-prev.png" ] && cmp -s "$OUT/$1.png" "$OUT/$1-prev.png"; then
+			rm -f "$OUT/$1-prev.png"
+			return 0
+		fi
+		cp "$OUT/$1.png" "$OUT/$1-prev.png"
+	done
+	return 1
+}
+
+# win_rect WID: sets WX WY WW WH, the client area on screen
+win_rect() {
+	WX=$(xwininfo -id "$1" | awk '/Absolute upper-left X/ {print $4}')
+	WY=$(xwininfo -id "$1" | awk '/Absolute upper-left Y/ {print $4}')
+	WW=$(xwininfo -id "$1" | awk '/Width:/ {print $2}')
+	WH=$(xwininfo -id "$1" | awk '/Height:/ {print $2}')
+}
+
+# click_at X Y: a left click that stays down for 0.3 s (a background click only counts if the
+# button is still down when a frame is drawn)
+click_at() {
+	xdotool mousemove "$1" "$2"
+	sleep 0.2
+	xdotool mousedown 1
+	sleep 0.3
+	xdotool mouseup 1
+}
+
+# A user that has been idle for `user-idle-time` fades and cannot be picked or Tab-selected, so a
+# pause at an arbitrary moment could catch one half-faded. `user-idle-time` is config-file only;
+# a very long one keeps every user whole.
+printf '[gource]\nuser-idle-time=1000\n' >"$OUT/pointer.conf"
+burl "$LOG" --load-config "$OUT/pointer.conf" --log-format custom -640x360 --seconds-per-day 10 \
+	--hash-seed 31 --prng glibc --disable-auto-skip --disable-auto-rotate --file-idle-time 0 \
+	--hide bloom,tree,usernames,filenames,dirnames,progress,date &
+PBURL=$!
+PWID=
+for _ in $(seq 200); do
+	PWID=$(xdotool search --onlyvisible --pid "$PBURL" 2>/dev/null | head -1)
+	[ -n "$PWID" ] && break
+	sleep 0.1
+done
+if [ -z "$PWID" ]; then
+	bad "pointer launch: window never appeared"
+	diag pointer "$PBURL"
+elif win_rect "$PWID" && scene_ready && xdotool windowfocus --sync "$PWID" key space && settle p-base; then
+	# Tab walks the users in order; some are out of view or cut by the window edge (their visible
+	# part is too small or too near the edge to click), so press it until a whole pawn well inside
+	# the window changes: the pixels it changes are that pawn.
+	n=0 found=''
+	for _ in $(seq 8); do
+		xdotool windowfocus --sync "$PWID" key Tab
+		sleep 1
+		shot p-tab
+		read -r n x0 x1 y0 y1 cx cy < <(blob p-base p-tab 20 "$WX" "$WY" "$WW" "$WH")
+		if [ "$n" -gt 500 ] && [ "$x0" -gt $((WX + 8)) ] && [ "$x1" -lt $((WX + WW - 8)) ] &&
+			[ "$y0" -gt $((WY + 8)) ] && [ "$y1" -lt $((WY + WH - 8)) ]; then
+			found=1
+			break
+		fi
+	done
+	# found is the whole acceptance test (size and all four margins); the last candidate of a loop
+	# that never passed must not slip through on a partial re-check.
+	if [ -z "$found" ] || [ $((x1 - x0)) -gt 80 ] || [ $((y1 - y0)) -gt 80 ]; then
+		bad "window did not react to Tab within 8 tries, or no whole pawn well inside the window was selected, so no pawn to aim at: input not delivered or no selectable user (environment, not a pointer check; changed pixels: $n, box $x0-$x1 x $y0-$y1)"
+		diag pointer-tab "$PBURL"
+	else
+		rx=$((x0 - 4)) ry=$((y0 - 4)) rw=$((x1 - x0 + 9)) rh=$((y1 - y0 + 9))
+		bgx=$((WX + 12)) bgy=$((WY + WH - 14))
+
+		click_off p-desel "$bgx" "$bgy" "$rx" "$ry" "$rw" "$rh"
+		read -r back _ < <(blob p-base p-desel 20 "$rx" "$ry" "$rw" "$rh")
+		read -r gone _ < <(blob p-tab p-desel 20 "$rx" "$ry" "$rw" "$rh")
+		# Setup for the pixel checks below, not a check of its own (the selection block above judges
+		# deselecting by state): the pawn must be back in its own colour before it is clicked.
+		if [ "$gone" -le 200 ] || [ "$back" -ge 10 ]; then
+			bad "setup: the background click did not put the pawn back in its colour ($back px differ from before, $gone from selected)"
+		fi
+
+		# control for the next check: an unselected pawn under the pointer does get a box
+		xdotool mousemove "$cx" "$cy"
+		sleep 1
+		shot p-hov-u
+		read -r box _ < <(blob p-desel p-hov-u 20 "$WX" "$WY" "$WW" "$WH")
+		if [ "$box" -gt 150 ]; then
+			ok "hovering an unselected user shows a hover box ($box px)"
+		else
+			bad "no hover box over an unselected user ($box px)"
+		fi
+
+		click_until p-sel "$cx" "$cy" "$USER_WHITE_MIN" "$rx" "$ry" "$rw" "$rh"
+		read -r moved _ < <(blob p-desel p-sel 20 "$rx" "$ry" "$rw" "$rh")
+		read -r same _ < <(blob p-tab p-sel 20 "$rx" "$ry" "$rw" "$rh")
+		w0=$(white p-desel "$rx" "$ry" "$rw" "$rh")
+		w1=$(white p-sel-w "$rx" "$ry" "$rw" "$rh")
+		if [ "$moved" -gt 200 ] && [ "$same" -lt 10 ] && [ "$w0" -lt "$USER_WHITE_MIN" ] && [ "$w1" -gt "$USER_WHITE_MIN" ]; then
+			ok "clicking a user selects it: the sprite turns white ($w0 -> $w1 white px, same pixels as the Tab selection)"
+		else
+			bad "click on the user at $cx,$cy did not select it ($moved px changed, $same px differ from the Tab selection, white px $w0 -> $w1)"
+		fi
+
+		# the pointer is still on the selected pawn: no hover box. Same state, pointer moved off.
+		xdotool mousemove "$bgx" "$bgy"
+		sleep 1
+		shot p-sel-off
+		read -r box _ < <(blob p-sel p-sel-off 20 "$WX" "$WY" "$WW" "$WH")
+		if [ "$box" -lt 5 ]; then
+			ok "no hover box over the selected pawn"
+		else
+			bad "something is drawn over the selected pawn that is not there with the pointer away ($box px)"
+		fi
+
+		# Narrow window, users hidden: the crop puts files at both side edges (a hover box that
+		# stays right of the pointer would not fit at the right one).
+		click_at "$bgx" "$bgy"
+		xdotool windowfocus --sync "$PWID" key g
+		xdotool windowsize --sync "$PWID" 260 600
+		win_rect "$PWID"
+		xdotool mousemove $((WX + 12)) $((WY + WH - 14))
+		if settle p-narrow; then
+			read -r n x0 x1 _ < <(nonbg p-narrow "$WX" "$WY" "$WW" "$WH")
+			# a point inside the file nearest each side edge
+			read -r lx ly < <(inner_edge p-narrow "$WX" "$WY" "$WW" "$WH" left)
+			read -r hx ry1 < <(inner_edge p-narrow "$WX" "$WY" "$WW" "$WH" right)
+			if [ "$n" -lt 100 ] || [ $((x1 - x0)) -lt $((WW - 60)) ] || [ "$lx" = 0 ] || [ "$hx" = 0 ]; then
+				bad "narrow window: no file to aim at on both side edges ($n px, x $x0-$x1 of $WX-$((WX + WW)), left $lx,$ly right $hx,$ry1)"
+				diag pointer-narrow "$PBURL"
+			else
+				# (a return of 2 has already said the pointer never arrived: no shot to judge)
+				hover_at "$lx" "$ly" p-hov-l
+				hrc=$?
+				if [ "$hrc" != 2 ]; then
+					read -r n _ _ _ _ bcx _ < <(blob p-narrow p-hov-l 20 "$WX" "$WY" "$WW" "$WH")
+					if [ "$n" -gt 150 ] && [ "$bcx" -gt $((lx + 20)) ]; then
+						ok "hovering a file near the left edge shows a box to the right of the pointer (box centre x $bcx, pointer $lx)"
+					else
+						bad "left hover: $n px changed, box centre x $bcx, pointer $lx,$ly"
+					fi
+				fi
+				hover_at "$hx" "$ry1" p-hov-r
+				hrc=$?
+				shown=0
+				if [ "$hrc" != 2 ]; then
+					read -r n _ _ _ _ bcx _ < <(blob p-narrow p-hov-r 20 "$WX" "$WY" "$WW" "$WH")
+					shown=$n
+					if [ "$n" -gt 150 ] && [ "$bcx" -lt $((hx - 20)) ]; then
+						ok "hovering a file near the right edge flips the box to the left of the pointer (box centre x $bcx, pointer $hx)"
+					else
+						bad "right hover: $n px changed, box centre x $bcx, pointer $hx"
+					fi
+				fi
+				sleep 3.6
+				shot p-idle
+				read -r n _ < <(blob p-narrow p-idle 20 "$WX" "$WY" "$WW" "$WH")
+				# the box was up ($shown px) a moment ago: the idle clock took it down
+				if [ "$shown" -gt 150 ] && [ "$n" -lt 5 ]; then
+					ok "the hover box goes after 3 s without pointer movement (MouseCursor idle timeout)"
+				else
+					bad "hover box not gone after 3.6 s idle ($n px differ from the no-hover shot, $shown while it was up)"
+				fi
+
+				# a file is selected the same way and turns white too; hovered while selected it
+				# gets no box. The click is the first input after the idle, so it also wakes the cursor.
+				# the file may be cut by the window edge: take the part of the 28 px square inside it
+				fx=$((hx - 14)) fy=$((ry1 - 14)) fw=$((WX + WW - hx + 14))
+				[ "$fw" -gt 28 ] && fw=28
+				click_until p-fsel "$hx" "$ry1" "$FILE_WHITE_MIN" "$fx" "$fy" "$fw" 28
+				w0=$(white p-narrow "$fx" "$fy" "$fw" 28)
+				w1=$(white p-fsel-w "$fx" "$fy" "$fw" 28)
+				if [ "$w0" -lt 3 ] && [ "$w1" -gt "$FILE_WHITE_MIN" ]; then
+					ok "clicking a file selects it: the sprite turns white ($w0 -> $w1 white px)"
+				else
+					bad "click on the file at $hx,$ry1 did not select it (white px $w0 -> $w1)"
+				fi
+				xdotool mousemove $((WX + 12)) $((WY + WH - 14))
+				sleep 1
+				shot p-fsel-off
+				read -r n _ < <(blob p-fsel p-fsel-off 20 "$WX" "$WY" "$WW" "$WH")
+				if [ "$n" -lt 5 ]; then
+					ok "no hover box over the selected file"
+				else
+					bad "something is drawn over the selected file that is not there with the pointer away ($n px)"
+				fi
+			fi
+		else
+			bad "narrow window never stopped changing"
+			diag pointer-narrow "$PBURL"
+		fi
+	fi
+else
+	bad "pointer checks: the scene never filled in, or never stopped moving after pausing"
+	diag pointer "$PBURL"
+fi
+kill "$PBURL" 2>/dev/null
+wait "$PBURL" 2>/dev/null
+
 # Same flags as the visual gate: fixed seeds, no auto-rotate, glibc PRNG.
 # 10 s per day: the fixture spans a few days, so the clock is still running for the first ~30 s.
 burl "$LOG" --log-format custom -640x360 --seconds-per-day 10 --hash-seed 31 \

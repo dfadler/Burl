@@ -63,8 +63,10 @@ jobs:
           # src/core is a submodule; the oracle build needs it (pinned by the superproject)
           submodules: true
       - name: CPU model
+        # also to the log and (below) the artifact: the step summary is not readable through the API
         run: |
-          { echo '### CPU (self leg ${{ matrix.fixture }})'; echo '```'; lscpu; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          lscpu | tee "$RUNNER_TEMP/lscpu.txt"
+          { echo '### CPU (self leg ${{ matrix.fixture }})'; echo '```'; cat "$RUNNER_TEMP/lscpu.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - name: Oracle self-SSIM spread
         shell: bash
         env:
@@ -77,6 +79,9 @@ jobs:
           FIXTURE: ${{ matrix.fixture }}
         run: |
           { echo "### Self-SSIM spread: ${FIXTURE%%:*}"; echo '```'; cat "$RUNNER_TEMP/self-out.txt" || true; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the CPU model
+        if: ${{ !cancelled() }}
+        run: mkdir -p target/visual && cp "$RUNNER_TEMP/lscpu.txt" target/visual/lscpu.txt
       - name: Keep the results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -110,6 +115,9 @@ jobs:
           # shellcheck disable=SC2046 # one word per SSIM value is intended
           out=$(cargo run -q --locked -p xtask -- ssim-threshold $(sed 's/.*ssim=//' "$RUNNER_TEMP/all-self.txt"))
           { echo '### Self-SSIM threshold, all fixtures'; echo '```'; echo "$out"; echo '```'; echo "Current gate: 0.959"; } >> "$GITHUB_STEP_SUMMARY"
+          # also to the log, which can be read through the API (the step summary cannot)
+          echo "$out"
+          echo "Current gate: 0.959"
 
   burl:
     runs-on: ubuntu-24.04
@@ -120,7 +128,8 @@ jobs:
           persist-credentials: false
       - name: CPU model
         run: |
-          { echo '### CPU (burl job)'; echo '```'; lscpu; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          lscpu | tee "$RUNNER_TEMP/lscpu.txt"
+          { echo '### CPU (burl job)'; echo '```'; cat "$RUNNER_TEMP/lscpu.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - name: Burl vs oracle SSIM
         shell: bash
         run: bash scripts/visual.sh burl | tee "$RUNNER_TEMP/burl.txt"
@@ -128,6 +137,9 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           { echo '### Burl vs oracle SSIM (structural)'; echo '```'; cat "$RUNNER_TEMP/burl.txt" || true; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the CPU model
+        if: ${{ !cancelled() }}
+        run: mkdir -p target/visual && cp "$RUNNER_TEMP/lscpu.txt" target/visual/lscpu.txt
       - name: Keep the results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -149,7 +161,8 @@ jobs:
           submodules: true
       - name: CPU model
         run: |
-          { echo '### CPU (bloom job)'; echo '```'; lscpu; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          lscpu | tee "$RUNNER_TEMP/lscpu.txt"
+          { echo '### CPU (bloom job)'; echo '```'; cat "$RUNNER_TEMP/lscpu.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - name: Keep the committed bloom references
         run: |
           mkdir -p "$RUNNER_TEMP/bloom-committed"
@@ -182,6 +195,9 @@ jobs:
       - name: Note a failed regeneration
         if: ${{ !cancelled() && steps.regen.outcome != 'success' }}
         run: echo 'Bloom regeneration failed; no comparison was made.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the CPU model
+        if: ${{ !cancelled() }}
+        run: mkdir -p target/visual && cp "$RUNNER_TEMP/lscpu.txt" target/visual/lscpu.txt
       - name: Keep the results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

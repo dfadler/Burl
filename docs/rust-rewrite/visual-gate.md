@@ -37,6 +37,30 @@ No x86 hardware was available. What was run: arm64-native oracle (same source an
 so the rasteriser contributes far less than the timing mode. Not measured: a real x86 CPU with a different
 AVX level (the amd64 container is emulated) and a second x86 microarchitecture, so R22 stays open for real
 x86 hosts: CI's ubuntu-24.04 runner is the first real check (run `scripts/visual.sh self 10` there; expect >= 0.959).
+That check has now run: see the next section.
+
+## Measured: native x86 runner (2026-11-12, `visual-spread` run 43134255630)
+
+Manual dispatch of `visual-spread.yml` on master f9ed949 (`fixture=all`, `runs=10`), GitHub-hosted `ubuntu-24.04`, 21 minutes
+(the `real-burl-git-250` leg took 20 of them). Read from the run's artifacts (`self-*/self.txt`) and the regenerated bloom frames.
+
+- **Self-SSIM, 160 values: worst 0.979105 (small-repo frame 30), above the 0.959 gate.** The same worst value as the emulated
+  measurement above, so the proposed threshold is unchanged (0.979105 - 0.02 = 0.959105).
+- **No run-to-run spread:** each of the 16 frames has one value across all 10 runs.
+- **Which mode each fixture lands in differs from the emulated set.** The deviating values are the same discrete ones as above
+  (small-repo 0.979105 / 0.986697 / 0.997216 / 0.999780), but here small-repo and file-removal (worst 0.996925) are in that mode
+  on every run (40 of 40 values below 1.0 each), where the emulated runs were mostly bit-identical for small-repo (4 of 40) and
+  mixed for file-removal (24 of 40). file-to-dir (worst 1.000000 here, 0.996941 emulated) and real-burl-git-250 (1.000000) match the
+  references exactly on every run. This is consistent with the oracle's asynchronous-load timing mode described above; why this
+  runner lands in it more often was not investigated.
+- **Bloom references:** regenerating them on this runner (`scripts/visual.sh refs bloom`, fresh oracle build, source f9ed949)
+  gave 16 of 16 frames **byte-identical** to the committed ones, which were rendered under QEMU amd64: SSIM 1.000000 and the same
+  mean luma to three decimals. The comparison was checked not to be trivial (the workflow copies the committed set aside before
+  regenerating; the run's provenance file shows the new build).
+
+Not established: the CPU model of the runner (the workflow wrote `lscpu` only to the step summary, which the API does not
+expose; read it on the run page, or from the next dispatch once the artifacts carry it), a second x86 microarchitecture, and
+the decisions on keeping `visual-ssim` blocking and on making it a required check (#95). R22 stays open for those.
 
 ## Measured: Burl vs oracle (2026-11-03, after the cadence and PRNG fixes)
 

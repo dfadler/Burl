@@ -58,9 +58,45 @@ Manual dispatch of `visual-spread.yml` on master f9ed949 (`fixture=all`, `runs=1
   mean luma to three decimals. The comparison was checked not to be trivial (the workflow copies the committed set aside before
   regenerating; the run's provenance file shows the new build).
 
-Not established: the CPU model of the runner (the workflow wrote `lscpu` only to the step summary, which the API does not
-expose; read it on the run page, or from the next dispatch once the artifacts carry it), a second x86 microarchitecture, and
-the decisions on keeping `visual-ssim` blocking and on making it a required check (#95). R22 stays open for those.
+The CPU models of this run were not captured (the workflow wrote `lscpu` only to the step summary, which the API does not
+expose); the next section is the run that records them.
+
+## Measured: four x86 CPU models (2026-11-12, `visual-spread` run 43306355546)
+
+Same dispatch (`fixture=all`, `runs=10`) on master e70a971, after #192 made the workflow write `lscpu` to each job's log and to
+`lscpu.txt` in each artifact. All eight jobs succeeded in 20 minutes. The six measuring jobs landed on four CPU models (4 vCPUs each):
+
+| job | CPU model | AVX-512 flags |
+|---|---|---|
+| bloom | Intel Xeon Platinum 8370C @ 2.80 GHz | yes |
+| burl | AMD EPYC 9V74 80-Core | no |
+| self small-repo | AMD EPYC 9V74 80-Core | yes |
+| self file-removal | AMD EPYC 9V74 80-Core | yes |
+| self file-to-dir | AMD EPYC 7763 64-Core | no |
+| self real-burl-git-250 | Intel Xeon Platinum 8573C | yes |
+
+AVX2 and FMA are present on all of them. The `burl` job and the two `self` legs on the EPYC 9V74 report the same model name but
+different AVX-512 flags; why was not investigated.
+
+- **Self-SSIM, 160 values: worst 0.979105, threshold proposal 0.959105** (the `spread` job's own log line: `runs=160
+  worst=0.979105 threshold=0.959105`). Each fixture's four values are identical to the previous run's, to the sixth decimal (the
+  previous run's CPU models are unknown), and again there is no run-to-run spread inside a leg.
+- **Bloom:** regenerated on the Intel 8370C from a fresh build (source e70a971): 16 of 16 frames byte-identical to the
+  committed references, as in the previous run.
+- **Burl vs oracle (structural):** worst 0.978948 (small-repo frame 30), the same values as the earlier heavy run.
+
+**A limit of this design.** Each leg runs one fixture, so a fixture and a CPU come as a pair. small-repo and file-removal, the two
+that sit in the deviating mode, both ran on the EPYC 9V74; file-to-dir and real-burl-git-250, which match the references exactly,
+ran on the EPYC 7763 and the Xeon 8573C. These runs cannot say whether the mode follows the fixture or the CPU. The emulated
+measurement above deviated on file-removal and file-to-dir on other hardware, which points at timing and not at the CPU, but
+that is not shown here. Running each fixture on more than one leg would separate the two only if the legs land on different
+CPU models, and a hosted runner does not choose that (three of this run's six jobs landed on the same EPYC 9V74). A follow-up
+has to read the recorded models per fixture and count a fixture as covered only once it has been seen on at least two
+different models, repeating the dispatch until it has.
+
+Not established: that these four models cover what R22 cares about (a CPU lottery, not a chosen set; microarchitecture names are
+not stated here), the cause of the deviating mode, and the decisions on keeping `visual-ssim` blocking and on making it a
+required check (#95).
 
 ## Measured: Burl vs oracle (2026-11-03, after the cadence and PRNG fixes)
 

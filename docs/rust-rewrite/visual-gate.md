@@ -89,7 +89,10 @@ different AVX-512 flags; why was not investigated.
 that sit in the deviating mode, both ran on the EPYC 9V74; file-to-dir and real-burl-git-250, which match the references exactly,
 ran on the EPYC 7763 and the Xeon 8573C. These runs cannot say whether the mode follows the fixture or the CPU. The emulated
 measurement above deviated on file-removal and file-to-dir on other hardware, which points at timing and not at the CPU, but
-that is not shown here. Running each fixture on more than one leg would separate the two.
+that is not shown here. Running each fixture on more than one leg would separate the two only if the legs land on different
+CPU models, and a hosted runner does not choose that (three of this run's six jobs landed on the same EPYC 9V74). A follow-up
+has to read the recorded models per fixture and count a fixture as covered only once it has been seen on at least two
+different models, repeating the dispatch until it has.
 
 Not established: that these four models cover what R22 cares about (a CPU lottery, not a chosen set; microarchitecture names are
 not stated here), the cause of the deviating mode, and the decisions on keeping `visual-ssim` blocking and on making it a

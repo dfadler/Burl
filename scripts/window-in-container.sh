@@ -328,32 +328,60 @@ inner_edge() {
 
 # hover_at X Y NAME: put the pointer on X,Y and shoot NAME.png once a box shows (more than 150
 # px differ from p-narrow). Only the delivery is retried: up to 4 times the pointer leaves for the
-# corner and comes back. The shot of the last try stays for the caller to judge.
+# corner and comes back, and a shot only counts once X reports the pointer at X,Y (a lost move
+# would leave the previous file's box on screen). Returns 0 with a box, 1 with the pointer there
+# but no box (the caller's assertion fails on the shot), 2 after reporting that the pointer never
+# arrived (environment: the caller skips its assertion).
 hover_at() {
-	local n
+	local n arrived='' px py
 	for _ in 1 2 3 4; do
 		xdotool mousemove $((WX + 12)) $((WY + WH - 14))
 		sleep 0.3
 		xdotool mousemove "$1" "$2"
 		sleep 1
+		px=$(xdotool getmouselocation --shell | awk -F= '/^X=/ {print $2}')
+		py=$(xdotool getmouselocation --shell | awk -F= '/^Y=/ {print $2}')
+		{ [ "$px" = "$1" ] && [ "$py" = "$2" ]; } || continue
+		arrived=1
 		shot "$3"
 		read -r n _ < <(blob p-narrow "$3" 20 "$WX" "$WY" "$WW" "$WH")
 		[ "$n" -gt 150 ] && return 0
 	done
-	return 1
+	[ -n "$arrived" ] && return 1
+	bad "pointer never reached $1,$2 in 4 tries (environment, not Burl: the X server did not take the move; it is at ${px:-?},${py:-?})"
+	return 2
 }
 
-# click_until NAME X Y REF: click at X,Y and shoot NAME.png once it differs from REF.png (more than
-# 20 px anywhere in the window). Only the delivery is retried, up to 3 times; the assertion about
-# what changed is the caller's, on the last shot.
+# The count of near-white pixels (see `white`) above which a sprite's box shows it selected.
+# Shared by the click retry and the caller's assertion, so the two cannot drift apart.
+USER_WHITE_MIN=10
+FILE_WHITE_MIN=5
+
+# click_until NAME X Y MIN RX RY RW RH: click at X,Y and shoot NAME.png once the box RX,RY,RW,RH
+# holds more than MIN white pixels. Only the delivery is retried, up to 3 times; the assertion on
+# the last shot is the caller's, with the same MIN.
 click_until() {
 	local n
 	for _ in 1 2 3; do
 		click_at "$2" "$3"
 		sleep 1
 		shot "$1"
-		read -r n _ < <(blob "$4" "$1" 20 "$WX" "$WY" "$WW" "$WH")
-		[ "$n" -gt 20 ] && return 0
+		n=$(white "$1" "$5" "$6" "$7" "$8")
+		[ "$n" -gt "$4" ] && return 0
+	done
+	return 1
+}
+
+# click_off NAME X Y RX RY RW RH: the same for the click that deselects, until the pawn's box has
+# at most USER_WHITE_MIN white pixels left.
+click_off() {
+	local n
+	for _ in 1 2 3; do
+		click_at "$2" "$3"
+		sleep 1
+		shot "$1"
+		n=$(white "$1" "$4" "$5" "$6" "$7")
+		[ "$n" -le "$USER_WHITE_MIN" ] && return 0
 	done
 	return 1
 }
@@ -444,7 +472,7 @@ elif win_rect "$PWID" && scene_ready && xdotool windowfocus --sync "$PWID" key s
 		rx=$((x0 - 4)) ry=$((y0 - 4)) rw=$((x1 - x0 + 9)) rh=$((y1 - y0 + 9))
 		bgx=$((WX + 12)) bgy=$((WY + WH - 14))
 
-		click_until p-desel "$bgx" "$bgy" p-tab
+		click_off p-desel "$bgx" "$bgy" "$rx" "$ry" "$rw" "$rh"
 		read -r back _ < <(blob p-base p-desel 20 "$rx" "$ry" "$rw" "$rh")
 		read -r gone _ < <(blob p-tab p-desel 20 "$rx" "$ry" "$rw" "$rh")
 		# Setup for the pixel checks below, not a check of its own (the selection block above judges
@@ -464,12 +492,12 @@ elif win_rect "$PWID" && scene_ready && xdotool windowfocus --sync "$PWID" key s
 			bad "no hover box over an unselected user ($box px)"
 		fi
 
-		click_until p-sel "$cx" "$cy" p-desel
+		click_until p-sel "$cx" "$cy" "$USER_WHITE_MIN" "$rx" "$ry" "$rw" "$rh"
 		read -r moved _ < <(blob p-desel p-sel 20 "$rx" "$ry" "$rw" "$rh")
 		read -r same _ < <(blob p-tab p-sel 20 "$rx" "$ry" "$rw" "$rh")
 		w0=$(white p-desel "$rx" "$ry" "$rw" "$rh")
 		w1=$(white p-sel "$rx" "$ry" "$rw" "$rh")
-		if [ "$moved" -gt 200 ] && [ "$same" -lt 10 ] && [ "$w0" -lt 10 ] && [ "$w1" -gt 10 ]; then
+		if [ "$moved" -gt 200 ] && [ "$same" -lt 10 ] && [ "$w0" -lt "$USER_WHITE_MIN" ] && [ "$w1" -gt "$USER_WHITE_MIN" ]; then
 			ok "clicking a user selects it: the sprite turns white ($w0 -> $w1 white px, same pixels as the Tab selection)"
 		else
 			bad "click on the user at $cx,$cy did not select it ($moved px changed, $same px differ from the Tab selection, white px $w0 -> $w1)"
@@ -502,20 +530,28 @@ elif win_rect "$PWID" && scene_ready && xdotool windowfocus --sync "$PWID" key s
 				bad "narrow window: no file to aim at on both side edges ($n px, x $x0-$x1 of $WX-$((WX + WW)), left $lx,$ly right $hx,$ry1)"
 				diag pointer-narrow "$PBURL"
 			else
+				# (a return of 2 has already said the pointer never arrived: no shot to judge)
 				hover_at "$lx" "$ly" p-hov-l
-				read -r n _ _ _ _ bcx _ < <(blob p-narrow p-hov-l 20 "$WX" "$WY" "$WW" "$WH")
-				if [ "$n" -gt 150 ] && [ "$bcx" -gt $((lx + 20)) ]; then
-					ok "hovering a file near the left edge shows a box to the right of the pointer (box centre x $bcx, pointer $lx)"
-				else
-					bad "left hover: $n px changed, box centre x $bcx, pointer $lx,$ly"
+				hrc=$?
+				if [ "$hrc" != 2 ]; then
+					read -r n _ _ _ _ bcx _ < <(blob p-narrow p-hov-l 20 "$WX" "$WY" "$WW" "$WH")
+					if [ "$n" -gt 150 ] && [ "$bcx" -gt $((lx + 20)) ]; then
+						ok "hovering a file near the left edge shows a box to the right of the pointer (box centre x $bcx, pointer $lx)"
+					else
+						bad "left hover: $n px changed, box centre x $bcx, pointer $lx,$ly"
+					fi
 				fi
 				hover_at "$hx" "$ry1" p-hov-r
-				read -r n _ _ _ _ bcx _ < <(blob p-narrow p-hov-r 20 "$WX" "$WY" "$WW" "$WH")
-				shown=$n
-				if [ "$n" -gt 150 ] && [ "$bcx" -lt $((hx - 20)) ]; then
-					ok "hovering a file near the right edge flips the box to the left of the pointer (box centre x $bcx, pointer $hx)"
-				else
-					bad "right hover: $n px changed, box centre x $bcx, pointer $hx"
+				hrc=$?
+				shown=0
+				if [ "$hrc" != 2 ]; then
+					read -r n _ _ _ _ bcx _ < <(blob p-narrow p-hov-r 20 "$WX" "$WY" "$WW" "$WH")
+					shown=$n
+					if [ "$n" -gt 150 ] && [ "$bcx" -lt $((hx - 20)) ]; then
+						ok "hovering a file near the right edge flips the box to the left of the pointer (box centre x $bcx, pointer $hx)"
+					else
+						bad "right hover: $n px changed, box centre x $bcx, pointer $hx"
+					fi
 				fi
 				sleep 3.6
 				shot p-idle
@@ -529,13 +565,13 @@ elif win_rect "$PWID" && scene_ready && xdotool windowfocus --sync "$PWID" key s
 
 				# a file is selected the same way and turns white too; hovered while selected it
 				# gets no box. The click is the first input after the idle, so it also wakes the cursor.
-				click_until p-fsel "$hx" "$ry1" p-narrow
 				# the file may be cut by the window edge: take the part of the 28 px square inside it
 				fx=$((hx - 14)) fy=$((ry1 - 14)) fw=$((WX + WW - hx + 14))
 				[ "$fw" -gt 28 ] && fw=28
+				click_until p-fsel "$hx" "$ry1" "$FILE_WHITE_MIN" "$fx" "$fy" "$fw" 28
 				w0=$(white p-narrow "$fx" "$fy" "$fw" 28)
 				w1=$(white p-fsel "$fx" "$fy" "$fw" 28)
-				if [ "$w0" -lt 3 ] && [ "$w1" -gt 5 ]; then
+				if [ "$w0" -lt 3 ] && [ "$w1" -gt "$FILE_WHITE_MIN" ]; then
 					ok "clicking a file selects it: the sprite turns white ($w0 -> $w1 white px)"
 				else
 					bad "click on the file at $hx,$ry1 did not select it (white px $w0 -> $w1)"

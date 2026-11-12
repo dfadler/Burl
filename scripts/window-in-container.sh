@@ -462,17 +462,19 @@ if [ -z "$PWID" ]; then
 	bad "pointer launch: window never appeared"
 	diag pointer "$PBURL"
 elif win_rect "$PWID" && scene_ready && xdotool windowfocus --sync "$PWID" key space && settle p-base; then
-	# Tab walks the users in order and some may be out of view, so press it until a pawn in the
-	# window changes: the pixels it changes are that pawn.
+	# Tab walks the users in order; some are out of view or cut by the window edge (their visible
+	# part is too small or too near the edge to click), so press it until a whole pawn well inside
+	# the window changes: the pixels it changes are that pawn.
 	n=0
 	for _ in $(seq 8); do
 		xdotool windowfocus --sync "$PWID" key Tab
 		sleep 1
 		shot p-tab
 		read -r n x0 x1 y0 y1 cx cy < <(blob p-base p-tab 20 "$WX" "$WY" "$WW" "$WH")
-		[ "$n" -gt 50 ] && break
+		[ "$n" -gt 500 ] && [ "$x0" -gt $((WX + 8)) ] && [ "$x1" -lt $((WX + WW - 8)) ] &&
+			[ "$y0" -gt $((WY + 8)) ] && [ "$y1" -lt $((WY + WH - 8)) ] && break
 	done
-	if [ "$n" -lt 200 ] || [ $((x1 - x0)) -gt 80 ] || [ $((y1 - y0)) -gt 80 ]; then
+	if [ "$n" -lt 500 ] || [ $((x1 - x0)) -gt 80 ] || [ $((y1 - y0)) -gt 80 ] || [ "$y0" -le $((WY + 8)) ]; then
 		bad "window did not react to Tab within 8 tries, so no pawn to aim at: input not delivered or no selectable user (environment, not a pointer check; changed pixels: $n, box $x0-$x1 x $y0-$y1)"
 		diag pointer-tab "$PBURL"
 	else

@@ -56,6 +56,10 @@ jobs:
       # virtual display; separate so a failure here does not hide the display scenarios.
       - run: cargo xtask display-harness --grab
         if: ${{ !cancelled() }}
+      # Real title-bar drag between the displays (mouse.m, CGEventPost). First hosted run is the
+      # experiment: whether the synthetic drag moves the window across the virtual displays.
+      - run: cargo xtask display-harness --drag
+        if: ${{ !cancelled() }}
       # Always kept: a passing run's captures are what the regression baselines are taken from.
       - name: Keep the captures
         if: ${{ !cancelled() }}
@@ -68,5 +72,7 @@ jobs:
             target/display-harness-high-dpi/*.png
             target/display-harness-high-dpi/burl.out
             target/display-harness-grab/burl.out
+            target/display-harness-drag/burl.out
+            target/display-harness-drag/vd.out
           if-no-files-found: ignore
           retention-days: 7

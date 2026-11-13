@@ -607,31 +607,16 @@ pub fn parse_grab_events(text: &str) -> Vec<(bool, String)> {
     text.lines().filter_map(parse_grab_line).collect()
 }
 
-/// A free cursor follows posted motion: after `steps` events of `step` points it moved about that far.
-const MIN_FOLLOW_FRACTION: f64 = 0.6;
-/// A locked cursor stays put: rounding of the reported position only.
-const HELD_TOLERANCE: i32 = 2;
-
-/// The cursor moved right by at least `MIN_FOLLOW_FRACTION` of `want` and stayed on its row (this is
-/// the control: it proves the helper's events do move the cursor, so "held" below means something).
-pub fn check_follows(start: (i32, i32), end: (i32, i32), want: i32) -> Result<(), String> {
-    let dx = end.0 - start.0;
-    if f64::from(dx) < f64::from(want) * MIN_FOLLOW_FRACTION || (end.1 - start.1).abs() > 3 {
-        return Err(format!(
-            "the cursor went {start:?} -> {end:?} after motion of {want} points right; it should follow"
-        ));
+/// One press and release must make exactly one `on` with mode `locked`, then one `off`: macOS only
+/// has `Locked` (`Confined` is unsupported there), a second `on` would be a re-grab, and an `off`
+/// before the release would be a grab that dropped while the button was still down.
+pub fn check_grab_cycle(events: &[(bool, String)]) -> Result<(), String> {
+    match events {
+        [(true, mode), (false, _)] if mode == "locked" => Ok(()),
+        _ => Err(format!(
+            "expected `grab: on mode=locked` then `grab: off`, got {events:?}"
+        )),
     }
-    Ok(())
-}
-
-/// The cursor did not move although motion was posted: the grab holds it.
-pub fn check_held(start: (i32, i32), end: (i32, i32)) -> Result<(), String> {
-    if (end.0 - start.0).abs() > HELD_TOLERANCE || (end.1 - start.1).abs() > HELD_TOLERANCE {
-        return Err(format!(
-            "the cursor went {start:?} -> {end:?} while burl held a grab; a locked cursor stays put"
-        ));
-    }
-    Ok(())
 }
 
 fn cursor(mouse: &Path) -> Result<(i32, i32), String> {
@@ -662,12 +647,16 @@ fn push_right(bin: &Path, kind: &str, p: (i32, i32), steps: i32, step: i32) -> R
     Ok(())
 }
 
-/// `cargo xtask display-harness --grab` (draft, #180): a left click on burl's background grabs the
-/// cursor (`Gource::grabMouse`); this clicks, posts motion and reads the cursor back. On macOS the
-/// grab is `CGAssociateMouseAndMouseCursorPosition(false)`, so a locked cursor must not follow the
-/// posted motion. Three phases: a control (free cursor follows), the held grab, and the release.
-/// It needs no virtual display. UNVERIFIED until a hosted run: whether synthetic `CGEventPost`
-/// motion respects the lock; a failure of the held phase says which side to doubt.
+/// `cargo xtask display-harness --grab`: a left press on burl's background grabs the cursor
+/// (`Gource::grabMouse`) and the release lets go. A real press reaches the real window through the
+/// window server, and burl's `grab:` line says what it asked winit for (on macOS `Locked`, which is
+/// `CGAssociateMouseAndMouseCursorPosition(false)`; the call's `Ok` is what makes the mode `locked`).
+/// Phases: no grab without a press, one grab on the press (kept through drag motion), one release.
+///
+/// It does NOT assert where the cursor goes: on hosted `macos-15` and `macos-26` the cursor followed
+/// 50 points of synthetic `CGEventPost` drag while burl held a locked grab (`(412, 390) -> (462, 390)`),
+/// so synthetic events bypass the detach and a position check cannot tell a lock from none. It needs
+/// no virtual display.
 pub fn run_grab_check(root: &Path) -> Result<(), String> {
     let dir = root.join("target/display-harness-grab");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -755,47 +744,44 @@ pub fn run_grab_check(root: &Path) -> Result<(), String> {
     };
     let seen = || parse_grab_events(&read(&burl_out)).len();
 
-    // Phase A, control: no button, no grab; posted motion must move the cursor.
-    place()?;
-    let start = cursor(&mouse_bin)?;
-    push_right(&mouse_bin, "move", p, 5, 10)?;
-    check_follows(start, cursor(&mouse_bin)?, 50)
-        .map_err(|e| format!("control (no grab): {e}; the helper's events do not move the cursor, so the held check below would be vacuous"))?;
-    eprintln!("ok   control: a free cursor follows the helper's motion");
-
-    // Phase B, held: press on the background, wait for burl's grab, post drag motion.
+    // Phase A, control: motion with no button down grabs nothing, so the `on` below is the press's.
     place()?;
     let before = seen();
+    push_right(&mouse_bin, "move", p, 5, 10)?;
+    std::thread::sleep(Duration::from_secs(1));
+    if seen() != before {
+        return Err(format!(
+            "burl logged a grab with no button down: {:?}",
+            parse_grab_events(&read(&burl_out))
+        ));
+    }
+    eprintln!("ok   control: motion alone does not grab");
+
+    // Phase B, press on the background: one grab, locked, kept through drag motion.
+    place()?;
     mouse(&mouse_bin, &["down".into(), s(p.0), s(p.1)])?;
     let held = (|| -> Result<(), String> {
-        let (on, mode) = poll("burl's `grab: event=on` line after the press", 15, || {
+        poll("burl's `grab: event=on` line after the press", 15, || {
             parse_grab_events(&read(&burl_out))
                 .get(before..)?
                 .iter()
-                .find(|(on, _)| *on)
-                .cloned()
+                .any(|(on, _)| *on)
+                .then_some(())
         })?;
-        debug_assert!(on);
-        if mode != "locked" {
-            return Err(format!(
-                "burl grabbed with mode `{mode}`; macOS only supports `locked`"
-            ));
-        }
-        eprintln!("ok   burl reports grab on, mode locked");
-        let start = cursor(&mouse_bin)?;
+        eprintln!("ok   burl reports grab on");
         push_right(&mouse_bin, "drag", p, 5, 10)?;
-        check_held(start, cursor(&mouse_bin)?)?;
-        eprintln!(
-            "ok   held: the cursor did not follow {} points of posted drag",
-            50
-        );
+        let now = &parse_grab_events(&read(&burl_out))[before..];
+        if now.len() != 1 {
+            return Err(format!("the grab changed during the drag: {now:?}"));
+        }
+        eprintln!("ok   the grab holds through drag motion");
         Ok(())
     })();
-    // Release whatever happened, so a failure above cannot leave the cursor detached.
+    // Release whatever happened, so a failure above cannot leave the button down.
     mouse(&mouse_bin, &["up".into(), s(p.0), s(p.1)])?;
     held?;
 
-    // Phase C, release: burl lets go and the cursor follows motion again.
+    // Phase C, release: burl lets go, and the whole cycle is on, locked, off.
     poll(
         "burl's `grab: event=off` line after the release",
         15,
@@ -807,12 +793,8 @@ pub fn run_grab_check(root: &Path) -> Result<(), String> {
                 .then_some(())
         },
     )?;
-    eprintln!("ok   burl reports grab off");
-    place()?;
-    let start = cursor(&mouse_bin)?;
-    push_right(&mouse_bin, "move", p, 5, 10)?;
-    check_follows(start, cursor(&mouse_bin)?, 50).map_err(|e| format!("after release: {e}"))?;
-    eprintln!("ok   released: the cursor follows motion again");
+    check_grab_cycle(&parse_grab_events(&read(&burl_out))[before..])?;
+    eprintln!("ok   burl reports grab off: one press, one locked grab, one release");
     Ok(())
 }
 
@@ -835,17 +817,23 @@ mod tests {
     }
 
     #[test]
-    fn a_free_cursor_follows_and_a_locked_one_stays() {
-        assert_eq!(check_follows((100, 200), (150, 200), 50), Ok(()));
-        assert_eq!(check_follows((100, 200), (140, 201), 50), Ok(())); // 80%
-        assert!(check_follows((100, 200), (110, 200), 50).is_err()); // barely moved
-        assert!(check_follows((100, 200), (150, 260), 50).is_err()); // wandered off the row
-        assert_eq!(check_held((100, 200), (101, 200)), Ok(()));
-        assert!(check_held((100, 200), (150, 200)).is_err());
-        assert!(check_held((100, 200), (100, 230)).is_err());
-        // the control and the held check cannot both pass on the same movement
-        let (a, b) = ((100, 200), (150, 200));
-        assert!(check_follows(a, b, 50).is_ok() && check_held(a, b).is_err());
+    fn one_press_is_one_locked_grab_then_one_release() {
+        let ev = |l: &[(bool, &str)]| -> Vec<(bool, String)> {
+            l.iter().map(|(on, m)| (*on, m.to_string())).collect()
+        };
+        assert_eq!(
+            check_grab_cycle(&ev(&[(true, "locked"), (false, "none")])),
+            Ok(())
+        );
+        assert!(check_grab_cycle(&ev(&[])).is_err()); // the click never reached the grab
+        assert!(check_grab_cycle(&ev(&[(true, "locked")])).is_err()); // never released
+        assert!(check_grab_cycle(&ev(&[(true, "none"), (false, "none")])).is_err()); // grab failed
+        assert!(check_grab_cycle(&ev(&[(true, "confined"), (false, "none")])).is_err());
+        assert!(
+            check_grab_cycle(&ev(&[(true, "locked"), (true, "locked"), (false, "none")])).is_err()
+        );
+        assert!(check_grab_cycle(&ev(&[(false, "none"), (true, "locked")])).is_err());
+        // wrong order
     }
 
     const START: &str = "  debug: display: event=start scale=1 physical=640x360 logical=640x360";

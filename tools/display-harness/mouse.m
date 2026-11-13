@@ -4,9 +4,10 @@
 //   mouse move X Y DX DY           a mouse-moved event at X Y carrying delta DX DY
 //   mouse down X Y | up X Y        left button press / release at X Y
 //   mouse drag X Y DX DY           a left-drag event at X Y carrying delta DX DY
-// While the cursor is detached from the mouse (CGAssociateMouseAndMouseCursorPosition(false), what
-// winit's Locked grab does on macOS) the posted location should not move the cursor, so `pos`
-// after a run of `drag` events tells a lock from no lock. Needs Accessibility, as CGEventPost does.
+// Posted events carry an absolute location, and on hosted macos-15 and macos-26 the cursor follows
+// it even while burl holds a Locked grab (CGAssociateMouseAndMouseCursorPosition(false)), so `pos`
+// cannot tell a lock from none. The check asserts burl's `grab:` log lines instead.
+// Needs Accessibility, as CGEventPost does.
 #import <Cocoa/Cocoa.h>
 
 static void post(CGEventType type, double x, double y, int dx, int dy) {

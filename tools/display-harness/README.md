@@ -83,6 +83,27 @@ so `CGEventPost` bypasses the detach and a position check cannot tell a lock fro
 covered: that the cursor is hidden (`set_cursor_visible(false)` has no getter) and a real device's
 relative motion, so the checklist's cursor-grab box stays manual.
 
+## Real window drag, `--drag`
+
+```
+cargo xtask display-harness --drag
+```
+
+The real cross-display drag the earlier text said stayed manual. Needs the virtual displays.
+Burl is moved to the 1x display with System Events once, then `mouse.m` does what a user does:
+`warp` to the title bar (window origin + half the width across, 12 pt down), `down`, 40 `drag`
+events stepping in a straight line to the centre of the other display (global bounds from `vd`,
+so a negative x is fine), `up`. Then 2x back to 1x. Artifacts in `target/display-harness-drag/`.
+
+- **Asserted, per crossing:** burl's `display:` lines after the drag pass `check_move` (target
+  scale, logical = physical / scale, `scale-changed` then `resized`), and `wid` shows the window's
+  origin on the target display.
+- **Not asserted:** the cursor position (synthetic events carry absolute locations, see `--grab`),
+  layout, crispness, pixels.
+- **Unverified until a hosted run:** that a `CGEventPost` title-bar drag across the virtual display
+  boundary moves the window and makes winit fire `ScaleFactorChanged`. The path is a straight line
+  between display centres, so it assumes the displays touch; a gap or offset may clamp the pointer.
+
 ## Needs
 
 - macOS with a logged-in GUI session, `clang`, and a Rust toolchain.
@@ -106,7 +127,6 @@ relative motion, so the checklist's cursor-grab box stays manual.
   switched to 1280x720 the same way.
 - Display positions are read from the helper, not hard-coded (the 1x display can sit at a
   negative x).
-- Moving with System Events `set position` is not a mouse drag; a real cross-display drag stays
-  manual.
+- Moving with System Events `set position` is not a mouse drag; `--drag` is the real one.
 - The window starts on whichever display macOS picks (often a Retina panel), so the harness moves
   to 1x first and only requires `scale-changed` when the scale actually differs.

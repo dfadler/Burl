@@ -798,9 +798,285 @@ pub fn run_grab_check(root: &Path) -> Result<(), String> {
     Ok(())
 }
 
+// ---- real title-bar drag (`--drag`) ----
+
+/// Points below the window's top edge where the drag grabs: inside the title bar (28 to 32 pt tall).
+const TITLE_BAR_GRAB_DOWN: i32 = 12;
+
+/// Where to press on `w`'s title bar: horizontally centred (clear of the traffic lights at the
+/// left, and inside even the 320 pt wide window on the 2x display), a few points down.
+pub fn title_bar_point(w: &Window) -> (i32, i32) {
+    (w.x + (w.w as i32) / 2, w.y + TITLE_BAR_GRAB_DOWN)
+}
+
+/// The middle of a display, in the global coordinates the helper printed (may be negative).
+pub fn display_centre(d: &Display) -> (i32, i32) {
+    (d.x + d.w / 2, d.y + d.h / 2)
+}
+
+/// Is the window's origin inside display `d`? (The same test the `set position` flow uses.)
+pub fn window_on(d: &Display, w: &Window) -> bool {
+    w.x >= d.x && w.x < d.x + d.w && w.y >= d.y && w.y < d.y + d.h
+}
+
+/// `steps` points on the straight line `from` -> `to`, each with the delta from the previous point
+/// (the first from `from`). The last point is exactly `to`; integer maths, so deltas sum exactly.
+pub fn drag_path(from: (i32, i32), to: (i32, i32), steps: i32) -> Vec<(i32, i32, i32, i32)> {
+    let mut prev = from;
+    (1..=steps)
+        .map(|k| {
+            let p = (
+                from.0 + (to.0 - from.0) * k / steps,
+                from.1 + (to.1 - from.1) * k / steps,
+            );
+            let step = (p.0, p.1, p.0 - prev.0, p.1 - prev.1);
+            prev = p;
+            step
+        })
+        .collect()
+}
+
+/// `cargo xtask display-harness --drag`: the window is dragged by its title bar with real mouse
+/// events (`mouse.m`) from the 1x display to the 2x display and back; each crossing must make burl
+/// log `scale-changed` then `resized` at the target scale (`check_move`) and leave the window on
+/// the target display. Replaces the `set position` move for this one thing: a user drags.
+///
+/// Unverified until a hosted run: that a synthetic title-bar drag across the virtual display
+/// boundary makes the window server move the window and winit fire `ScaleFactorChanged`.
+pub fn run_drag_check(root: &Path) -> Result<(), String> {
+    let dir = root.join("target/display-harness-drag");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let src = root.join("tools/display-harness");
+    for (m, bin) in [("vd.m", "vd"), ("wid.m", "wid"), ("mouse.m", "mouse")] {
+        run(Command::new("clang")
+            .args([
+                "-fobjc-arc",
+                "-framework",
+                "Cocoa",
+                "-framework",
+                "CoreGraphics",
+            ])
+            .arg(src.join(m))
+            .arg("-o")
+            .arg(dir.join(bin)))?;
+    }
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+    eprintln!("+ cargo build --release -p burl");
+    run(Command::new(&cargo)
+        .args(["build", "--release", "-p", "burl"])
+        .current_dir(root))?;
+    let target =
+        std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), PathBuf::from);
+    let burl_bin = target.join("release/burl");
+
+    let vd_out = dir.join("vd.out");
+    let vd_file = std::fs::File::create(&vd_out).map_err(|e| e.to_string())?;
+    let mut vd = Proc(
+        Command::new(dir.join("vd"))
+            .stdout(vd_file)
+            .stderr(Stdio::inherit())
+            .spawn()
+            .map_err(|e| format!("vd: {e}"))?,
+    );
+    let text = poll("the helper's `ready` line", 60, || {
+        let t = read(&vd_out);
+        if t.lines().any(|l| l == "ready") {
+            return Some(Ok(t));
+        }
+        let st = vd.0.try_wait().ok().flatten()?;
+        Some(Err(format!(
+            "the display helper exited ({st}) before printing `ready` (a leftover `vd` process \
+             may still hold the virtual displays)"
+        )))
+    })??;
+    let displays: Vec<Display> = text.lines().filter_map(parse_display).collect();
+    let find = |name: &str| {
+        displays
+            .iter()
+            .find(|d| d.name == name)
+            .cloned()
+            .ok_or(format!("helper reported no {name} display"))
+    };
+    let (d2, d1) = (find("2x")?, find("1x")?);
+    eprintln!("displays: {d2:?} {d1:?}");
+
+    // `--hide mouse` is not passed (it drops button presses); the title bar is the OS's anyway.
+    let burl_out = dir.join("burl.out");
+    let out = std::fs::File::create(&burl_out).map_err(|e| e.to_string())?;
+    let _burl = Proc(
+        Command::new(&burl_bin)
+            .arg(root.join("tests/golden/sim/small-repo.log"))
+            .args([
+                "--log-format",
+                "custom",
+                "-640x360",
+                "--seconds-per-day",
+                "10",
+            ])
+            .args([
+                "--hash-seed",
+                "31",
+                "--prng",
+                "glibc",
+                "--disable-auto-skip",
+            ])
+            .args(["--disable-auto-rotate", "--log-level", "debug"])
+            .stdout(out.try_clone().map_err(|e| e.to_string())?)
+            .stderr(out)
+            .spawn()
+            .map_err(|e| format!("{}: {e}", burl_bin.display()))?,
+    );
+    let window = || -> Option<Window> {
+        let o = Command::new(dir.join("wid")).arg("burl").output().ok()?;
+        String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .find_map(parse_window)
+    };
+    poll("burl's window", 60, window)?;
+    poll("burl's `display: event=start` line", 30, || {
+        parse_display_events(&read(&burl_out)).first().map(|_| ())
+    })?;
+    let mouse_bin = dir.join("mouse");
+
+    // Start on the 1x display (System Events move, as the other scenarios), then drag 1x -> 2x -> 1x.
+    for (leg, (from, to)) in [(&d1, &d2), (&d2, &d1)].into_iter().enumerate() {
+        if leg == 0 {
+            let script = format!(
+                "tell application \"System Events\" to tell (first process whose name is \"burl\") to set position of window 1 to {{{}, {}}}",
+                from.x + 100,
+                from.y + 100
+            );
+            run(Command::new("osascript").args(["-e", &script]))?;
+        }
+        let w = poll(
+            &format!("the window to sit on the {} display", from.name),
+            20,
+            || window().filter(|w| window_on(from, w)),
+        )?;
+        // The resize after the positioning move must have settled so `seen` is a clean baseline.
+        poll(
+            &format!("burl at scale {} on the {} display", from.scale, from.name),
+            20,
+            || {
+                let last = parse_display_events(&read(&burl_out)).pop()?;
+                (last.scale == from.scale).then_some(())
+            },
+        )?;
+        std::thread::sleep(Duration::from_secs(2));
+        run(Command::new("osascript").args([
+            "-e",
+            "tell application \"System Events\" to set frontmost of (first process whose name is \"burl\") to true",
+        ]))?;
+        std::thread::sleep(Duration::from_secs(1));
+        let w = window().unwrap_or(w);
+        let seen = parse_display_events(&read(&burl_out)).len();
+        let start = title_bar_point(&w);
+        let end = display_centre(to);
+        let steps = drag_path(start, end, 40);
+        eprintln!(
+            "drag {}: window {w:?}, press at {start:?}, release at {end:?}",
+            leg_label(leg)
+        );
+
+        mouse(&mouse_bin, &["warp".into(), s(start.0), s(start.1)])?;
+        std::thread::sleep(Duration::from_millis(300));
+        mouse(&mouse_bin, &["down".into(), s(start.0), s(start.1)])?;
+        let dragged = (|| -> Result<(), String> {
+            for (x, y, dx, dy) in steps {
+                mouse(&mouse_bin, &["drag".into(), s(x), s(y), s(dx), s(dy)])?;
+                std::thread::sleep(Duration::from_millis(30));
+            }
+            std::thread::sleep(Duration::from_millis(500));
+            Ok(())
+        })();
+        // Release whatever happened, so a failure above cannot leave the button down.
+        mouse(&mouse_bin, &["up".into(), s(end.0), s(end.1)])?;
+        dragged?;
+
+        let mut why = String::new();
+        poll(
+            &format!("burl's `display:` lines after the drag {}", leg_label(leg)),
+            20,
+            || {
+                let all = parse_display_events(&read(&burl_out));
+                match check_move(&all[seen.min(all.len())..], from.scale, to.scale) {
+                    Ok(()) => Some(()),
+                    Err(e) => {
+                        why = e;
+                        None
+                    }
+                }
+            },
+        )
+        .map_err(|e| {
+            format!(
+                "drag {}: {e}: {why} (did the title-bar drag move the window? it is at {:?})",
+                leg_label(leg),
+                window()
+            )
+        })?;
+        poll(
+            &format!("the window to land on the {} display", to.name),
+            20,
+            || window().filter(|w| window_on(to, w)),
+        )?;
+        eprintln!(
+            "ok   drag {}: scale-changed then resized at scale {}, window on the {} display",
+            leg_label(leg),
+            to.scale,
+            to.name
+        );
+    }
+    Ok(())
+}
+
+fn leg_label(leg: usize) -> &'static str {
+    ["1x -> 2x", "2x -> 1x"][leg]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn disp(name: &str, x: i32, w: i32, scale: f64) -> Display {
+        Display {
+            name: name.into(),
+            x,
+            y: 0,
+            w,
+            h: 720,
+            scale,
+            pixels: (0, 0),
+        }
+    }
+
+    #[test]
+    fn drag_path_ends_exactly_and_steps_sum_to_the_distance() {
+        let (from, to) = ((-1180, 112), (960, 540));
+        let p = drag_path(from, to, 40);
+        assert_eq!(p.len(), 40);
+        assert_eq!((p[39].0, p[39].1), to);
+        let (dx, dy) = p.iter().fold((0, 0), |a, s| (a.0 + s.2, a.1 + s.3));
+        assert_eq!((dx, dy), (to.0 - from.0, to.1 - from.1));
+        // from the 1x display (x in -1280..0) to the 2x one (x >= 0): some point is on each side
+        assert!(p.iter().any(|s| s.0 < 0) && p.iter().any(|s| s.0 >= 0));
+    }
+
+    #[test]
+    fn the_press_is_in_the_title_bar_and_the_release_in_the_target_display() {
+        let w = Window {
+            id: 1,
+            x: -1180,
+            y: 100,
+            w: 640,
+            h: 392,
+        };
+        assert_eq!(title_bar_point(&w), (-860, 112));
+        let one = disp("1x", -1280, 1280, 1.0);
+        assert_eq!(display_centre(&one), (-640, 360));
+        assert!(window_on(&one, &w));
+        assert!(!window_on(&disp("2x", 0, 1920, 2.0), &w));
+    }
 
     #[test]
     fn parses_burls_grab_lines_and_ignores_others() {

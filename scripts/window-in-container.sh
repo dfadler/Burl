@@ -627,6 +627,42 @@ fi
 kill "$PBURL" 2>/dev/null
 wait "$PBURL" 2>/dev/null
 
+# Scale factor 2: winit on X11 reads WINIT_X11_SCALE_FACTOR first (then Xft.dpi, then the XRandR mm
+# size), so the variable forces 2 on this 96 dpi Xvfb. With `--high-dpi`, `-640x360` is logical: the
+# `display:` debug line must say scale=2 logical=640x360 physical=1280x720 and the X window must be
+# 1280x720 real pixels. If winit ignores the variable, the FAIL message carries what it reported.
+DLOG=$OUT/scale2.log
+WINIT_X11_SCALE_FACTOR=2 burl "$LOG" --log-format custom -640x360 --high-dpi --seconds-per-day 10 \
+	--hash-seed 31 --prng glibc --disable-auto-skip --disable-auto-rotate --file-idle-time 0 \
+	--hide mouse --log-level debug >"$DLOG" 2>&1 &
+DBURL=$!
+DWID=
+for _ in $(seq 200); do
+	DWID=$(xdotool search --onlyvisible --pid "$DBURL" 2>/dev/null | head -1)
+	[ -n "$DWID" ] && break
+	sleep 0.1
+done
+if [ -n "$DWID" ]; then
+	dline=
+	for _ in $(seq 50); do
+		dline=$(grep -o 'display: event=start .*' "$DLOG" | head -1)
+		[ -n "$dline" ] && break
+		sleep 0.1
+	done
+	dsize=$(xwininfo -id "$DWID" | awk '/Width:/ {w = $2} /Height:/ {h = $2} END {print w "x" h}')
+	if [ "$dline" = "display: event=start scale=2 physical=1280x720 logical=640x360" ] && [ "$dsize" = 1280x720 ]; then
+		ok "scale factor 2: burl reports scale=2 logical=640x360 physical=1280x720 and the X window is 1280x720 pixels"
+	else
+		bad "scale factor 2: want scale=2 logical=640x360 physical=1280x720 and a 1280x720 X window; got '${dline:-no display: line}', X window $dsize"
+		diag scale2 "$DBURL"
+	fi
+else
+	bad "scale-factor-2 launch: window never appeared"
+	diag scale2 "$DBURL"
+fi
+kill "$DBURL" 2>/dev/null
+wait "$DBURL" 2>/dev/null
+
 # Same flags as the visual gate: fixed seeds, no auto-rotate, glibc PRNG.
 # 10 s per day: the fixture spans a few days, so the clock is still running for the first ~30 s.
 burl "$LOG" --log-format custom -640x360 --seconds-per-day 10 --hash-seed 31 \

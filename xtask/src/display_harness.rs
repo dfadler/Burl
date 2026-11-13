@@ -969,7 +969,9 @@ pub fn run_drag_check(root: &Path) -> Result<(), String> {
         ]))?;
         std::thread::sleep(Duration::from_secs(1));
         let w = window().unwrap_or(w);
-        let seen = parse_display_events(&read(&burl_out)).len();
+        let before = parse_display_events(&read(&burl_out));
+        let seen = before.len();
+        let before_logical = before.last().ok_or("no display: line")?.logical;
         let start = title_bar_point(&w);
         let end = display_centre(to);
         let steps = drag_path(start, end, 40);
@@ -1026,6 +1028,84 @@ pub fn run_drag_check(root: &Path) -> Result<(), String> {
             to.scale,
             to.name
         );
+
+        // Layout judged after the move: the window keeps its point size and burl its logical size,
+        // and a capture of the window is scale x its points and not blank.
+        let mut why = String::new();
+        let landed = poll(
+            &format!("the window size to hold after the drag {}", leg_label(leg)),
+            20,
+            || {
+                let now = window()?;
+                let logical = parse_display_events(&read(&burl_out)).pop()?.logical;
+                match check_size_kept((w.w, w.h), (now.w, now.h), before_logical, logical) {
+                    Ok(()) => Some((now, logical)),
+                    Err(e) => {
+                        why = e;
+                        None
+                    }
+                }
+            },
+        )
+        .map_err(|e| format!("drag {}: {e}: {why}", leg_label(leg)))?;
+        let png = dir.join(format!("drag-{}.png", to.name));
+        let mut last = String::new();
+        poll("a capture of the right size", 30, || {
+            let w = window().unwrap_or(landed.0);
+            let shot = Command::new("screencapture")
+                .args(["-x", "-o", "-l", &w.id.to_string()])
+                .arg(&png)
+                .status();
+            if !shot.is_ok_and(|s| s.success()) {
+                last = "screencapture failed (Screen Recording permission?)".into();
+                return None;
+            }
+            match distinct_colours(&png)
+                .and_then(|(px, c)| check_capture(px, (w.w, w.h), to.scale, c))
+            {
+                Ok(()) => Some(()),
+                Err(e) => {
+                    last = e;
+                    None
+                }
+            }
+        })
+        .map_err(|e| {
+            format!(
+                "drag {}: {e}: {last} (capture kept at {})",
+                leg_label(leg),
+                png.display()
+            )
+        })?;
+        eprintln!(
+            "ok   drag {}: window {}x{} pt and logical {:?} unchanged, capture {}",
+            leg_label(leg),
+            landed.0.w,
+            landed.0.h,
+            landed.1,
+            png.display()
+        );
+    }
+    Ok(())
+}
+
+/// A move must not resize the window: its point size (the OS's frame) and burl's logical size
+/// (`display:` line) are the same after the move as before it.
+pub fn check_size_kept(
+    points_before: (u32, u32),
+    points_after: (u32, u32),
+    logical_before: (u32, u32),
+    logical_after: (u32, u32),
+) -> Result<(), String> {
+    if points_before != points_after {
+        return Err(format!(
+            "window frame changed from {points_before:?} pt to {points_after:?} pt"
+        ));
+    }
+    if logical_before != logical_after {
+        return Err(format!(
+            "burl's logical size changed from {logical_before:?} to {logical_after:?}"
+        ));
     }
     Ok(())
 }
@@ -1203,6 +1283,14 @@ mod tests {
         assert!(check_high_dpi(&one, &shot(2.0, (1280, 720), V, V), V).is_err());
         // Frame shorter than the content.
         assert!(check_high_dpi(&one, &shot(2.0, (1280, 720), V, (640, 300)), V).is_err());
+    }
+
+    #[test]
+    fn a_move_must_keep_the_point_and_logical_sizes() {
+        let v = (640, 360);
+        assert_eq!(check_size_kept((640, 392), (640, 392), v, v), Ok(()));
+        assert!(check_size_kept((640, 392), (320, 212), v, v).is_err());
+        assert!(check_size_kept((640, 392), (640, 392), v, (320, 180)).is_err());
     }
 
     #[test]

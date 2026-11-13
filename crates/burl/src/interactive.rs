@@ -92,6 +92,13 @@ fn display_line(event: &str, scale: f64, physical: (u32, u32), logical: (u32, u3
     )
 }
 
+/// The `grab:` debug line (`--log-level debug`): what `set_grab` asked the window system for, so a
+/// harness can tell that a click reached the grab without reading the cursor. `mode` is the grab
+/// that took (`locked`, `confined`, `none`); `on` with `none` means both requests failed.
+fn grab_line(on: bool, mode: &str) -> String {
+    format!("grab: event={} mode={mode}", if on { "on" } else { "off" })
+}
+
 /// The `pointer:` debug line (`--log-level debug`): what is selected and what the hover box shows
 /// (its lines joined by `|`), logged when either changes, so a real-window run can be checked
 /// without reading pixels.
@@ -201,16 +208,23 @@ impl Live {
     /// `Gource::grabMouse`: confine the cursor while a button drags, and hide it.
     fn set_grab(&mut self, on: bool) {
         let w = self.window();
-        if on {
+        let mode = if on {
             // Locked is not available everywhere (X11 has only Confined)
-            if w.set_cursor_grab(CursorGrabMode::Locked).is_err() {
-                let _ = w.set_cursor_grab(CursorGrabMode::Confined);
-            }
+            let mode = if w.set_cursor_grab(CursorGrabMode::Locked).is_ok() {
+                "locked"
+            } else if w.set_cursor_grab(CursorGrabMode::Confined).is_ok() {
+                "confined"
+            } else {
+                "none"
+            };
             w.set_cursor_visible(false);
+            mode
         } else {
             let _ = w.set_cursor_grab(CursorGrabMode::None);
             w.set_cursor_visible(!self.hide_mouse);
-        }
+            "none"
+        };
+        burl_util::log::debug(|| grab_line(on, mode));
         self.grabbed = on;
     }
 
@@ -778,6 +792,12 @@ mod tests {
             pointer_line(Some("user bob"), Some(&hover)),
             "pointer: selected=user bob hover=lib.rs|src"
         );
+    }
+
+    #[test]
+    fn grab_line_pins_the_log_format() {
+        assert_eq!(grab_line(true, "locked"), "grab: event=on mode=locked");
+        assert_eq!(grab_line(false, "none"), "grab: event=off mode=none");
     }
 
     #[test]

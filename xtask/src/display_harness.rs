@@ -589,9 +589,252 @@ pub fn run_harness(root: &Path, high_dpi: bool) -> Result<(), String> {
     Ok(())
 }
 
+// ---- cursor grab (`--grab`) ----
+
+/// One `grab:` debug line from burl (`interactive::grab_line`): `(on, mode)`.
+pub fn parse_grab_line(line: &str) -> Option<(bool, String)> {
+    let rest = &line[line.find("grab: event=")? + "grab: ".len()..];
+    let field = |k: &str| rest.split_whitespace().find_map(|t| t.strip_prefix(k));
+    let on = match field("event=")? {
+        "on" => true,
+        "off" => false,
+        _ => return None,
+    };
+    Some((on, field("mode=")?.to_string()))
+}
+
+pub fn parse_grab_events(text: &str) -> Vec<(bool, String)> {
+    text.lines().filter_map(parse_grab_line).collect()
+}
+
+/// One press and release must make exactly one `on` with mode `locked`, then one `off`: macOS only
+/// has `Locked` (`Confined` is unsupported there), a second `on` would be a re-grab, and an `off`
+/// before the release would be a grab that dropped while the button was still down.
+pub fn check_grab_cycle(events: &[(bool, String)]) -> Result<(), String> {
+    match events {
+        [(true, mode), (false, _)] if mode == "locked" => Ok(()),
+        _ => Err(format!(
+            "expected `grab: on mode=locked` then `grab: off`, got {events:?}"
+        )),
+    }
+}
+
+fn cursor(mouse: &Path) -> Result<(i32, i32), String> {
+    let out = run(Command::new(mouse).arg("pos"))?;
+    let mut it = out.split_whitespace().map(|t| t.parse::<i32>());
+    match (it.next(), it.next()) {
+        (Some(Ok(x)), Some(Ok(y))) => Ok((x, y)),
+        _ => Err(format!("mouse pos printed {out:?}")),
+    }
+}
+
+fn mouse(bin: &Path, args: &[String]) -> Result<(), String> {
+    run(Command::new(bin).args(args)).map(|_| ())
+}
+
+fn s(n: impl ToString) -> String {
+    n.to_string()
+}
+
+/// Posts `steps` events of `kind` (`move` or `drag`) moving right by `step` points each, from `p`.
+fn push_right(bin: &Path, kind: &str, p: (i32, i32), steps: i32, step: i32) -> Result<(), String> {
+    for k in 1..=steps {
+        let args = [kind, &s(p.0 + k * step), &s(p.1), &s(step), "0"].map(String::from);
+        mouse(bin, &args)?;
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    std::thread::sleep(Duration::from_millis(300));
+    Ok(())
+}
+
+/// `cargo xtask display-harness --grab`: a left press on burl's background grabs the cursor
+/// (`Gource::grabMouse`) and the release lets go. A real press reaches the real window through the
+/// window server, and burl's `grab:` line says what it asked winit for (on macOS `Locked`, which is
+/// `CGAssociateMouseAndMouseCursorPosition(false)`; the call's `Ok` is what makes the mode `locked`).
+/// Phases: no grab without a press, one grab on the press (kept through drag motion), one release.
+///
+/// It does NOT assert where the cursor goes: on hosted `macos-15` and `macos-26` the cursor followed
+/// 50 points of synthetic `CGEventPost` drag while burl held a locked grab (`(412, 390) -> (462, 390)`),
+/// so synthetic events bypass the detach and a position check cannot tell a lock from none. It needs
+/// no virtual display.
+pub fn run_grab_check(root: &Path) -> Result<(), String> {
+    let dir = root.join("target/display-harness-grab");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let src = root.join("tools/display-harness");
+    for (m, bin) in [("mouse.m", "mouse"), ("wid.m", "wid")] {
+        run(Command::new("clang")
+            .args([
+                "-fobjc-arc",
+                "-framework",
+                "Cocoa",
+                "-framework",
+                "CoreGraphics",
+            ])
+            .arg(src.join(m))
+            .arg("-o")
+            .arg(dir.join(bin)))?;
+    }
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+    eprintln!("+ cargo build --release -p burl");
+    run(Command::new(&cargo)
+        .args(["build", "--release", "-p", "burl"])
+        .current_dir(root))?;
+    let target =
+        std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), PathBuf::from);
+    let burl_bin = target.join("release/burl");
+
+    // Nothing is hidden but the mouse is NOT: `--hide mouse` makes burl drop button presses. With
+    // the tree, files, users and slider hidden every click lands on the background, which is what
+    // grabs.
+    let burl_out = dir.join("burl.out");
+    let out = std::fs::File::create(&burl_out).map_err(|e| e.to_string())?;
+    let _burl = Proc(
+        Command::new(&burl_bin)
+            .arg(root.join("tests/golden/sim/small-repo.log"))
+            .args([
+                "--log-format",
+                "custom",
+                "-640x360",
+                "--seconds-per-day",
+                "10",
+            ])
+            .args([
+                "--hash-seed",
+                "31",
+                "--prng",
+                "glibc",
+                "--disable-auto-skip",
+            ])
+            .args(["--disable-auto-rotate", "--log-level", "debug"])
+            .args([
+                "--hide",
+                "tree,files,users,usernames,filenames,dirnames,bloom,progress",
+            ])
+            .stdout(out.try_clone().map_err(|e| e.to_string())?)
+            .stderr(out)
+            .spawn()
+            .map_err(|e| format!("{}: {e}", burl_bin.display()))?,
+    );
+    let window = || -> Option<Window> {
+        let o = Command::new(dir.join("wid")).arg("burl").output().ok()?;
+        String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .find_map(parse_window)
+    };
+    let w = poll("burl's window", 60, window)?;
+    run(Command::new("osascript").args([
+        "-e",
+        "tell application \"System Events\" to set frontmost of (first process whose name is \"burl\") to true",
+    ]))?;
+    std::thread::sleep(Duration::from_secs(3));
+
+    let mouse_bin = dir.join("mouse");
+    // Well inside the content area, clear of the title bar and the window edges.
+    let p = (w.x + (w.w as i32) / 2 - 100, w.y + (w.h as i32) * 3 / 4);
+    let place = || -> Result<(), String> {
+        mouse(&mouse_bin, &["warp".into(), s(p.0), s(p.1)])?;
+        std::thread::sleep(Duration::from_millis(300));
+        let at = cursor(&mouse_bin)?;
+        if (at.0 - p.0).abs() > 3 || (at.1 - p.1).abs() > 3 {
+            return Err(format!(
+                "the helper could not place the cursor at {p:?} (it is at {at:?})"
+            ));
+        }
+        Ok(())
+    };
+    let seen = || parse_grab_events(&read(&burl_out)).len();
+
+    // Phase A, control: motion with no button down grabs nothing, so the `on` below is the press's.
+    place()?;
+    let before = seen();
+    push_right(&mouse_bin, "move", p, 5, 10)?;
+    std::thread::sleep(Duration::from_secs(1));
+    if seen() != before {
+        return Err(format!(
+            "burl logged a grab with no button down: {:?}",
+            parse_grab_events(&read(&burl_out))
+        ));
+    }
+    eprintln!("ok   control: motion alone does not grab");
+
+    // Phase B, press on the background: one grab, locked, kept through drag motion.
+    place()?;
+    mouse(&mouse_bin, &["down".into(), s(p.0), s(p.1)])?;
+    let held = (|| -> Result<(), String> {
+        poll("burl's `grab: event=on` line after the press", 15, || {
+            parse_grab_events(&read(&burl_out))
+                .get(before..)?
+                .iter()
+                .any(|(on, _)| *on)
+                .then_some(())
+        })?;
+        eprintln!("ok   burl reports grab on");
+        push_right(&mouse_bin, "drag", p, 5, 10)?;
+        let now = &parse_grab_events(&read(&burl_out))[before..];
+        if now.len() != 1 {
+            return Err(format!("the grab changed during the drag: {now:?}"));
+        }
+        eprintln!("ok   the grab holds through drag motion");
+        Ok(())
+    })();
+    // Release whatever happened, so a failure above cannot leave the button down.
+    mouse(&mouse_bin, &["up".into(), s(p.0), s(p.1)])?;
+    held?;
+
+    // Phase C, release: burl lets go, and the whole cycle is on, locked, off.
+    poll(
+        "burl's `grab: event=off` line after the release",
+        15,
+        || {
+            parse_grab_events(&read(&burl_out))
+                .get(before..)?
+                .iter()
+                .any(|(on, _)| !*on)
+                .then_some(())
+        },
+    )?;
+    check_grab_cycle(&parse_grab_events(&read(&burl_out))[before..])?;
+    eprintln!("ok   burl reports grab off: one press, one locked grab, one release");
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_burls_grab_lines_and_ignores_others() {
+        assert_eq!(
+            parse_grab_line("  debug: grab: event=on mode=locked"),
+            Some((true, "locked".into()))
+        );
+        assert_eq!(
+            parse_grab_line("grab: event=off mode=none"),
+            Some((false, "none".into()))
+        );
+        assert_eq!(parse_grab_line("grab: event=sideways mode=locked"), None);
+        assert_eq!(parse_grab_line("pointer: selected=none hover=none"), None);
+    }
+
+    #[test]
+    fn one_press_is_one_locked_grab_then_one_release() {
+        let ev = |l: &[(bool, &str)]| -> Vec<(bool, String)> {
+            l.iter().map(|(on, m)| (*on, m.to_string())).collect()
+        };
+        assert_eq!(
+            check_grab_cycle(&ev(&[(true, "locked"), (false, "none")])),
+            Ok(())
+        );
+        assert!(check_grab_cycle(&ev(&[])).is_err()); // the click never reached the grab
+        assert!(check_grab_cycle(&ev(&[(true, "locked")])).is_err()); // never released
+        assert!(check_grab_cycle(&ev(&[(true, "none"), (false, "none")])).is_err()); // grab failed
+        assert!(check_grab_cycle(&ev(&[(true, "confined"), (false, "none")])).is_err());
+        assert!(
+            check_grab_cycle(&ev(&[(true, "locked"), (true, "locked"), (false, "none")])).is_err()
+        );
+        assert!(check_grab_cycle(&ev(&[(false, "none"), (true, "locked")])).is_err());
+        // wrong order
+    }
 
     const START: &str = "  debug: display: event=start scale=1 physical=640x360 logical=640x360";
     const CHANGED: &str =

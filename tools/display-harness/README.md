@@ -106,9 +106,12 @@ so a negative x is fine), `up`. Then 2x back to 1x. Artifacts in `target/display
   behaviour, not a measurement: if a hosted run shows burl's logical size changing on the 2x display
   (deviation G3), record the measured numbers here and relax the assertion.
 - **Asserted, per crossing, coarse scene placement** (`check_scene_fills_window`, on the capture
-  with the title bar cropped): eight probe patches (four corners and four edge midpoints, inset
-  12 px x scale) are each within 24 levels of the median luma of the whole content, so an unfilled
-  bar, a clear-colour block or a scene drawn in a corner fails; and the near-white pixels (all
+  with the title bar cropped): seven probe patches (four corners and the left, right and bottom
+  edge midpoints, inset 12 px x scale) are each within 24 levels of the median luma of the whole
+  content, so an unfilled bar, a clear-colour block or a scene drawn in a corner fails. There is no
+  top-centre probe: the date caption sits there, and the first hosted run (macos-15 and macos-26)
+  read luma 99.7 at that point at 2x while every other probe read 26.0, so the caption check below
+  covers that band instead. The near-white pixels (all
   channels > 200) in the top 15% number at least 40 x scale^2 with their centroid x within +-5% of
   the content centre, so the date caption is present and centred. The dark field makes the median
   a robust reference; the tolerances are deliberately generous (baselines measure 0 off the median,

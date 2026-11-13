@@ -313,9 +313,11 @@ pub fn check_scene_fills_window(img: &Image, scale: f64) -> Result<String, Strin
     };
     let (l, rt, t, b) = (inset + r, w - 1 - inset - r, inset + r, h - 1 - inset - r);
     let (mx, my) = (w / 2, h / 2);
+    // No top-centre probe: the date caption lives there, and at 2x the inset row lands inside the
+    // text (hosted macos-15 and macos-26 read luma 99.7 there, every other probe 26.0). The
+    // caption check below covers that band, and the top corners still probe the top edge.
     let probes = [
         ("top-left", l, t),
-        ("top", mx, t),
         ("top-right", rt, t),
         ("left", l, my),
         ("right", rt, my),
@@ -563,6 +565,32 @@ mod tests {
             let r = check_scene_fills_window(&fill_scene(k, 320, true), k as f64);
             assert!(r.is_ok(), "{k}x: {r:?}");
         }
+    }
+
+    /// The first hosted run failed on a probe at top-centre that fell inside the caption text at 2x
+    /// (luma 99.7 against a median of 26). A caption covering the inset row must not fail the fill.
+    #[test]
+    fn a_caption_covering_the_top_inset_row_is_not_an_unfilled_edge() {
+        let mut img = fill_scene(2, 320, true);
+        for y in 20..36 {
+            for x in 540..740 {
+                img.rgb[(y * img.w + x) * 3..][..3].fill(255);
+            }
+        }
+        let r = check_scene_fills_window(&img, 2.0);
+        assert!(r.is_ok(), "{r:?}");
+    }
+
+    #[test]
+    fn a_white_bar_on_the_top_edge_fails() {
+        let mut img = fill_scene(1, 320, true);
+        for y in 0..40 {
+            for x in 0..img.w {
+                img.rgb[(y * img.w + x) * 3..][..3].fill(255);
+            }
+        }
+        let e = check_scene_fills_window(&img, 1.0).unwrap_err();
+        assert!(e.contains("does not fill"), "{e}");
     }
 
     #[test]

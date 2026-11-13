@@ -98,8 +98,17 @@ so a negative x is fine), `up`. Then 2x back to 1x. Artifacts in `target/display
 - **Asserted, per crossing:** burl's `display:` lines after the drag pass `check_move` (target
   scale, logical = physical / scale, `scale-changed` then `resized`), and `wid` shows the window's
   origin on the target display.
+- **Asserted, per crossing, once the window has settled on the target display** (`check_size_kept`,
+  `check_capture`): the window's point size (`wid` frame) is the same as before the drag; burl's last
+  `display:` logical size is the same as before the drag; a `screencapture -o -l` of the window is
+  scale x its point size and has several distinct colours (not blank). This is burl without
+  `--high-dpi` (exact-pixel `-640x360`); the logical-size-kept assertion is the expected winit
+  behaviour, not a measurement: if a hosted run shows burl's logical size changing on the 2x display
+  (deviation G3), record the measured numbers here and relax the assertion.
 - **Not asserted:** the cursor position (synthetic events carry absolute locations, see `--grab`),
-  layout, crispness, pixels.
+  layout by eye (overlap, clipping, text size), crispness, doubled lines, and pixel equality
+  between a dragged capture and a `set position` one (the sim is not paused in `--drag`, so frames
+  differ; reusing the Space-pause loop would mean refactoring `run_harness`).
 - **Unverified until a hosted run:** that a `CGEventPost` title-bar drag across the virtual display
   boundary moves the window and makes winit fire `ScaleFactorChanged`. The path is a straight line
   between display centres, so it assumes the displays touch; a gap or offset may clamp the pointer.

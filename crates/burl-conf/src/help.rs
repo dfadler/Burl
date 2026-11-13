@@ -2,6 +2,6 @@
 //! `docs/rust-rewrite/discovery/golden/help-{short,long}.txt` (gource_settings.cpp:42-209) except for the program name, which the golden harness normalises (`crates/burl/tests/golden.rs`).
 //! Platform variants (Windows omits `--high-dpi`) are deferred.
 
-pub const VERSION: &str = "0.57";
+pub const VERSION: &str = "0.58";
 pub const HELP_SHORT: &str = include_str!("help-short.txt");
 pub const HELP_LONG: &str = include_str!("help-long.txt");

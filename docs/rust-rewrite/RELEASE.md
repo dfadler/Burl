@@ -2,7 +2,7 @@
 
 Implements the parity-release exit criterion ([#14](https://github.com/dfadler/Burl/issues/14) item 5)
 and the release design ([#21](https://github.com/dfadler/Burl/issues/21)). The first release is
-**0.58.0**, continuing Gource's numbering; the workspace stays at 0.57.0 until the release PR.
+**0.58.0**, continuing Gource's numbering; the workspace is 0.58.0 from the release PR on.
 
 ## Exit criteria, each as a command
 

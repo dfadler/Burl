@@ -59,6 +59,30 @@ follows the DPI ratio; artifacts go to `target/display-harness-high-dpi/`. Measu
   real harness fail (1.43 < 1.8), as do the unit tests. Not reproduced: a real compositor upscale of a 1x render (its
   filter may differ from bilinear), and doubled lines.
 
+
+## Cursor grab, `--grab`
+
+```
+cargo xtask display-harness --grab
+```
+
+No virtual display needed. Opens burl with the tree, files, users and slider hidden (so a click
+lands on the background, which grabs) and **without** `--hide mouse` (that drops button presses).
+`mouse.m` posts a real left press and release with `CGEventPost`, and the check reads burl's
+`grab:` debug lines. Three phases:
+
+1. **Control:** motion with no button down logs no grab, so the `on` below is the press's.
+2. **Press:** burl logs `grab: event=on mode=locked` and keeps it through drag motion. winit's macOS
+   `Locked` is `CGAssociateMouseAndMouseCursorPosition(false)` and `Confined` is unsupported there,
+   so `locked` also means the OS call returned `Ok`.
+3. **Release:** burl logs `grab: event=off`; the whole cycle must be on, locked, off.
+
+**Not asserted: where the cursor goes.** The first hosted runs (`macos-15`, `macos-26`) showed the
+cursor following 50 points of synthetic drag while burl held the lock (`(412, 390) -> (462, 390)`),
+so `CGEventPost` bypasses the detach and a position check cannot tell a lock from none. Also not
+covered: that the cursor is hidden (`set_cursor_visible(false)` has no getter) and a real device's
+relative motion, so the checklist's cursor-grab box stays manual.
+
 ## Needs
 
 - macOS with a logged-in GUI session, `clang`, and a Rust toolchain.

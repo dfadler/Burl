@@ -10,6 +10,7 @@ on:
       - ".github/workflows/display-harness.yml"
       - "tools/display-harness/**"
       - "xtask/src/display_harness.rs"
+      - "xtask/src/main.rs"
       - "xtask/src/pixels.rs"
       - "xtask/src/ssim.rs"
       - "crates/burl/src/interactive.rs"
@@ -51,6 +52,10 @@ jobs:
       # Runs even if the first scenario failed, so one failure does not hide the other.
       - run: cargo xtask display-harness --high-dpi
         if: ${{ !cancelled() }}
+      # Cursor grab (draft): click the background, post motion, read the cursor back. Needs no
+      # virtual display; separate so a failure here does not hide the display scenarios.
+      - run: cargo xtask display-harness --grab
+        if: ${{ !cancelled() }}
       # Always kept: a passing run's captures are what the regression baselines are taken from.
       - name: Keep the captures
         if: ${{ !cancelled() }}
@@ -62,5 +67,6 @@ jobs:
             target/display-harness/burl.out
             target/display-harness-high-dpi/*.png
             target/display-harness-high-dpi/burl.out
+            target/display-harness-grab/burl.out
           if-no-files-found: ignore
           retention-days: 7

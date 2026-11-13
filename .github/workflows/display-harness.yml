@@ -76,3 +76,39 @@ jobs:
             target/display-harness-drag/vd.out
           if-no-files-found: ignore
           retention-days: 7
+
+  # Canary: a failed SCHEDULED run (runner-image drift, usually) opens or updates one issue.
+  # `needs.harness.result` is 'failure' if any matrix leg failed; success/cancelled/skipped do nothing.
+  notify-on-schedule-failure:
+    name: notify on scheduled failure
+    needs: harness
+    if: ${{ always() && github.event_name == 'schedule' && needs.harness.result == 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TITLE: "display-harness: the weekly macOS run failed"
+        run: |
+          set -euo pipefail
+          today="$(date -u +%F)"
+          number="$(gh issue list --state open --search "\"$TITLE\" in:title" --limit 100 \
+            --json number,title | jq -r --arg t "$TITLE" '[.[] | select(.title == $t)][0].number // empty')"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "The weekly run failed again on $today: $RUN_URL"
+          else
+            body="The weekly display-harness run failed on $today: $RUN_URL
+
+          The harness (\`cargo xtask display-harness\`) creates virtual displays on hosted macOS runners and checks that Burl's window moves between them. It uses a private macOS API (CGVirtualDisplay), so a runner-image update can break it with no Burl change. It is not a required check.
+
+          Check first:
+          - Read the failed step's log in the run above.
+          - Compare \`target/display-harness*/burl.out\` in the run's uploaded artifacts.
+          - See the Caveats section of tools/display-harness/README.md."
+            gh issue create --title "$TITLE" --body "$body"
+          fi

@@ -129,7 +129,9 @@ so a negative x is fine), `up`. Then 2x back to 1x. Artifacts in `target/display
 ## Caveats
 
 - `CGVirtualDisplay` is private API, declared by hand in `vd.m`; a macOS update can break it.
-  macOS 14+ needs a unique non-zero vendor/serial per display.
+  macOS 14+ needs a unique non-zero vendor/serial per display. The CI run log and job summary
+  record the macOS build and runner image (`sw_vers`, `ImageOS`, `ImageVersion`), so a failed
+  weekly run can be matched to a runner-image update.
 - NSScreen never lists the displays unless AppKit events are pumped (`nextEventMatchingMask`).
 - `hiDPI` advertises the 2x mode; `vd.m` still switches into 1920x1080 pt / 3840x2160 px with
   `CGConfigureDisplayWithDisplayMode`. The 1x display otherwise defaults to 1024x576, so it is

@@ -44,6 +44,29 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # Drift record: the runner image labels move, so log which macOS build this leg really ran on.
+      # Informational only: every lookup is guarded and the step cannot fail the job.
+      - name: Record macOS build and runner image
+        env:
+          MATRIX_OS: ${{ matrix.os }}
+        run: |
+          name="$(sw_vers -productName 2>/dev/null || echo unknown)"
+          version="$(sw_vers -productVersion 2>/dev/null || echo unknown)"
+          build="$(sw_vers -buildVersion 2>/dev/null || echo unknown)"
+          arch="$(uname -m 2>/dev/null || echo unknown)"
+          {
+            echo "runner label: ${MATRIX_OS:-unknown}"
+            echo "macOS: $name $version ($build)"
+            echo "arch: $arch"
+            echo "ImageOS: ${ImageOS:-unset}"
+            echo "ImageVersion: ${ImageVersion:-unset}"
+          } | tee "${RUNNER_TEMP:-/tmp}/image-info.txt"
+          {
+            echo "### Runner image (${MATRIX_OS:-unknown})"
+            echo '```'
+            cat "${RUNNER_TEMP:-/tmp}/image-info.txt"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY:-/dev/null}" || true
       - run: cargo xtask display-harness
         env:
           # Compares against tools/display-harness/baselines/<image> (regression baseline, not parity).

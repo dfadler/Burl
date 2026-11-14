@@ -9,7 +9,8 @@
 #   and a built target/release/burl (BURL=path to override). Linux only; see window-uinput.yml.
 # Exit 1 if any check fails; all checks always run.
 # `test && ok ... || bad ...` below: `ok` only echoes and cannot fail, so `bad` never runs after a pass.
-# shellcheck disable=SC2015
+# SC2329: cleanup is called by the EXIT trap.
+# shellcheck disable=SC2015,SC2329
 set -uo pipefail
 
 case "${1:-}" in -h | --help)
@@ -77,7 +78,7 @@ cleanup() {
 	sudo kill "$XORG" 2>/dev/null
 	sudo chmod a+r "$OUT/Xorg.log" 2>/dev/null
 }
-BURLPID= OPENBOX=
+BURLPID='' OPENBOX=''
 trap cleanup EXIT
 for _ in $(seq 100); do xdpyinfo >/dev/null 2>&1 && break || sleep 0.1; done
 xdpyinfo >/dev/null 2>&1 || {
@@ -194,7 +195,8 @@ cursor_is hidden && ok "cursor is hidden while the real button is held" ||
 	bad "cursor is not hidden while the right button is held (max alpha: ${CURSOR_ALPHA:-?})"
 # every edge and corner; the pointer is recentred by the device between pushes
 for d in "60 0 right" "-60 0 left" "0 60 bottom" "0 -60 top" "60 60 bottom-right" "-60 -60 top-left"; do
-	set -- $d
+	read -r -a a <<<"$d"
+	set -- "${a[@]}"
 	push "$1" "$2"
 	pointer_inside && ok "real motion past the $3 edge stays inside the window while the button is held (at $PX,$PY)" ||
 		bad "pointer left the window past the $3 edge while the right button is held (at $PX,$PY)"

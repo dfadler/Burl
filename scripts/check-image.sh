@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Docker headless export check (#14 exit criterion): run the image on a fixture log and verify
 # the PPM stream is valid (P6 header, whole frames only, at least one frame).
-#   scripts/check-image.sh [IMAGE]    (default burl:release; build it with docker/release.Dockerfile)
+#   scripts/check-image.sh [IMAGE]    (default gnarl:release; build it with docker/release.Dockerfile)
 set -euo pipefail
 
 case "${1:-}" in -h | --help)
@@ -11,7 +11,7 @@ case "${1:-}" in -h | --help)
 esac
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-IMG=${1:-burl:release}
+IMG=${1:-gnarl:release}
 W=320 H=240
 out=$(mktemp)
 trap 'rm -f "$out"' EXIT

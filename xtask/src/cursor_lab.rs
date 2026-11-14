@@ -1,4 +1,4 @@
-//! `cargo xtask cursor-lab`: a measurement LAB, not a check. It runs burl as `--grab` does and
+//! `cargo xtask cursor-lab`: a measurement LAB, not a check. It runs gnarl as `--grab` does and
 //! measures, on a hosted macOS runner, what the cursor does under a held grab for several ways of
 //! injecting motion, whether a listen-only event tap sees the deltas, whether the cursor sprite is
 //! hidden in screen captures, and whether a virtual HID mouse can be created. It prints a table and
@@ -198,13 +198,13 @@ pub struct Row {
     pub after: (i32, i32),
     pub visible: Option<bool>,
     pub tap: Option<TapSummary>,
-    /// For a held-grab phase: burl's `grab: event=on` line was seen with `mode=locked`. A row
+    /// For a held-grab phase: gnarl's `grab: event=on` line was seen with `mode=locked`. A row
     /// measured without a confirmed locked grab (no `on` line, `mode=none` meaning both grab
     /// requests failed, or `confined`) must not yield a lock verdict. Always true outside a grab.
     pub locked: bool,
 }
 
-/// Phases measured while burl holds a grab: `grab/..` and `<label>/grab` (not `no-grab/..`).
+/// Phases measured while gnarl holds a grab: `grab/..` and `<label>/grab` (not `no-grab/..`).
 pub fn is_grab_phase(phase: &str) -> bool {
     phase.starts_with("grab/") || phase.ends_with("/grab")
 }
@@ -285,7 +285,7 @@ pub fn summary(rows: &[Row]) -> Vec<String> {
                     )
                 } else {
                     format!(
-                        "Inconclusive: burl's grab was not confirmed locked (no grab {none}, {g} {gd}, posted {posted})"
+                        "Inconclusive: gnarl's grab was not confirmed locked (no grab {none}, {g} {gd}, posted {posted})"
                     )
                 }
             });
@@ -335,7 +335,7 @@ pub struct ShotScores {
     pub held_luma: f64,
     /// `-C` against no `-C`, before the press: is the sprite in the capture at all?
     pub sprite: f64,
-    /// Two `-C` captures in a row before the press: the noise floor (burl animates).
+    /// Two `-C` captures in a row before the press: the noise floor (gnarl animates).
     pub noise: f64,
     /// `-C` before the press against `-C` during the held press: did the sprite go?
     pub hide: f64,
@@ -522,14 +522,14 @@ struct Ctx {
     mouse: PathBuf,
     tapwatch: PathBuf,
     wid: PathBuf,
-    burl_out: PathBuf,
-    /// Where the cursor is placed: well inside burl's content area.
+    gnarl_out: PathBuf,
+    /// Where the cursor is placed: well inside gnarl's content area.
     p: (i32, i32),
     screen_pts: (i32, i32),
     log: Log,
     rows: RefCell<Vec<Row>>,
     tap_failed: Cell<bool>,
-    /// Set by `with_grab`: burl logged `grab: event=on mode=locked` for the current press.
+    /// Set by `with_grab`: gnarl logged `grab: event=on mode=locked` for the current press.
     locked: Cell<bool>,
     n: Cell<u32>,
 }
@@ -538,7 +538,7 @@ impl Ctx {
     /// Bounded like every other helper call: a hung `wid` must not block the caller's own poll.
     fn window(&self) -> Option<Window> {
         let c = capture(
-            Command::new(&self.wid).arg("burl"),
+            Command::new(&self.wid).arg("gnarl"),
             10,
             &self.dir.join("wid.out"),
         )
@@ -680,10 +680,10 @@ impl Ctx {
         })
     }
 
-    /// Press on the background, wait for burl's `grab: on`, run `f`, always release.
+    /// Press on the background, wait for gnarl's `grab: on`, run `f`, always release.
     fn with_grab(&self, f: &mut dyn FnMut() -> Result<(), String>) -> Result<(), String> {
         self.place()?;
-        let seen = parse_grab_events(&read(&self.burl_out)).len();
+        let seen = parse_grab_events(&read(&self.gnarl_out)).len();
         let mut button = Button {
             bin: self.mouse.clone(),
             scratch: self.dir.join("mouse-up.out"),
@@ -696,9 +696,9 @@ impl Ctx {
         button.down = true;
         self.locked.set(false);
         self.mouse(&["down".into(), self.p.0.to_string(), self.p.1.to_string()])?;
-        // The first `on` line after the press, with the mode burl reported (None until it arrives).
+        // The first `on` line after the press, with the mode gnarl reported (None until it arrives).
         let first_on = || {
-            parse_grab_events(&read(&self.burl_out))
+            parse_grab_events(&read(&self.gnarl_out))
                 .get(seen..)?
                 .iter()
                 .find(|(on, _)| *on)
@@ -706,7 +706,7 @@ impl Ctx {
         };
         let on = |want: bool| {
             poll("a grab line", 15, || {
-                parse_grab_events(&read(&self.burl_out))
+                parse_grab_events(&read(&self.gnarl_out))
                     .get(seen..)?
                     .iter()
                     .any(|(on, _)| *on == want)
@@ -718,25 +718,25 @@ impl Ctx {
                 let mode = first_on().unwrap_or_default();
                 self.locked.set(mode == "locked");
                 if mode == "locked" {
-                    self.log.line("burl: grab on seen, mode=locked");
+                    self.log.line("gnarl: grab on seen, mode=locked");
                 } else {
                     self.log.line(&format!(
-                        "burl: grab on seen but mode={mode:?}, not locked: lock verdicts for this press are inconclusive"
+                        "gnarl: grab on seen but mode={mode:?}, not locked: lock verdicts for this press are inconclusive"
                     ));
                 }
             }
             Err(e) => self.log.line(&format!(
-                "burl: NO grab on after the press ({e}); measuring anyway, lock verdicts inconclusive"
+                "gnarl: NO grab on after the press ({e}); measuring anyway, lock verdicts inconclusive"
             )),
         }
         sleep_ms(500);
         let r = f();
         button.release();
         match on(false) {
-            Ok(()) => self.log.line("burl: grab off seen after the release"),
+            Ok(()) => self.log.line("gnarl: grab off seen after the release"),
             Err(e) => self
                 .log
-                .line(&format!("burl: NO grab off after the release ({e})")),
+                .line(&format!("gnarl: NO grab off after the release ({e})")),
         }
         r
     }
@@ -942,10 +942,10 @@ pub fn run_lab(root: &Path) -> Result<(), String> {
         )?;
     }
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
-    eprintln!("+ cargo build --release -p burl");
+    eprintln!("+ cargo build --release -p gnarl");
     run_ok(
         Command::new(&cargo)
-            .args(["build", "--release", "-p", "burl"])
+            .args(["build", "--release", "-p", "gnarl"])
             .current_dir(root),
         900,
         &dir.join("cargo.out"),
@@ -954,10 +954,10 @@ pub fn run_lab(root: &Path) -> Result<(), String> {
         std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), PathBuf::from);
 
     // As run_grab_check: nothing hidden but the mouse, so a click lands on the background and grabs.
-    let burl_out = dir.join("burl.out");
-    let out = File::create(&burl_out).map_err(|e| e.to_string())?;
-    let _burl = Proc(
-        Command::new(target.join("release/burl"))
+    let gnarl_out = dir.join("gnarl.out");
+    let out = File::create(&gnarl_out).map_err(|e| e.to_string())?;
+    let _gnarl = Proc(
+        Command::new(target.join("release/gnarl"))
             .arg(root.join("tests/golden/sim/small-repo.log"))
             .args([
                 "--log-format",
@@ -981,7 +981,7 @@ pub fn run_lab(root: &Path) -> Result<(), String> {
             .stdout(out.try_clone().map_err(|e| e.to_string())?)
             .stderr(out)
             .spawn()
-            .map_err(|e| format!("burl: {e}"))?,
+            .map_err(|e| format!("gnarl: {e}"))?,
     );
     let wid = dir.join("wid");
     let mut ctx = Ctx {
@@ -989,7 +989,7 @@ pub fn run_lab(root: &Path) -> Result<(), String> {
         mouse: dir.join("mouse"),
         tapwatch: dir.join("tapwatch"),
         wid,
-        burl_out,
+        gnarl_out,
         p: (0, 0),
         screen_pts: (0, 0),
         log,
@@ -998,11 +998,11 @@ pub fn run_lab(root: &Path) -> Result<(), String> {
         locked: Cell::new(false),
         n: Cell::new(0),
     };
-    let w = poll("burl's window", 60, || ctx.window())?;
+    let w = poll("gnarl's window", 60, || ctx.window())?;
     run_ok(
         Command::new("osascript").args([
             "-e",
-            "tell application \"System Events\" to set frontmost of (first process whose name is \"burl\") to true",
+            "tell application \"System Events\" to set frontmost of (first process whose name is \"gnarl\") to true",
         ]),
         30,
         &dir.join("osascript.out"),

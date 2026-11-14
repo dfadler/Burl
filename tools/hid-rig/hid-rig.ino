@@ -1,6 +1,6 @@
-// Burl HID rig firmware: a Raspberry Pi Pico (RP2040) as a USB HID mouse, driven by text lines
+// Gnarl HID rig firmware: a Raspberry Pi Pico (RP2040) as a USB HID mouse, driven by text lines
 // over its USB serial port. Protocol (one command per line, replies `ok [info]` or `err MSG`):
-//   ping            ->  ok burl-hid-rig 1
+//   ping            ->  ok gnarl-hid-rig 1
 //   rel DX DY       ->  ok          relative motion, each part -127..127, no wheel
 //   down | up       ->  ok          left button press / release
 // Build: Arduino IDE or arduino-cli with the arduino-pico core (earlephilhower), board "Raspberry
@@ -19,7 +19,7 @@ static void handle(const char *line) {
   int dx, dy;
   char extra;
   if (!strcmp(line, "ping")) {
-    Serial.println("ok burl-hid-rig 1");
+    Serial.println("ok gnarl-hid-rig 1");
   } else if (!strcmp(line, "down")) {
     Mouse.press(MOUSE_LEFT);
     held = true;

@@ -34,8 +34,8 @@ jobs:
           ls -l /dev/uinput
           sudo chmod a+rw /dev/uinput
           sudo udevadm info --version || true
-      - name: Build burl
-        run: cargo build --release --locked -p burl
+      - name: Build gnarl
+        run: cargo build --release --locked -p gnarl
       - name: Window checks with a uinput mouse
         run: bash scripts/window-uinput.sh target/window-uinput
       - name: Keep the logs

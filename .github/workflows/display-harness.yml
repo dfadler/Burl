@@ -1,8 +1,8 @@
 # macOS display harness (ticket #153): `cargo xtask display-harness` on GitHub-hosted macOS runners.
-# It creates a 2x and a 1x virtual display, opens the real burl, moves its window between them and
+# It creates a 2x and a 1x virtual display, opens the real gnarl, moves its window between them and
 # checks the scale-change lines and the capture sizes, in two scenarios (exact-pixel and
 # --high-dpi). NOT a required check: it relies on a private macOS display API, so a runner-image
-# update can break it without any Burl change.
+# update can break it without any Gnarl change.
 name: display-harness
 on:
   pull_request:
@@ -15,8 +15,8 @@ on:
       - "xtask/src/main.rs"
       - "xtask/src/pixels.rs"
       - "xtask/src/ssim.rs"
-      - "crates/burl/src/interactive.rs"
-      - "crates/burl-gl/**"
+      - "crates/gnarl/src/interactive.rs"
+      - "crates/gnarl-gl/**"
   schedule:
     - cron: "41 4 * * 1"
   workflow_dispatch:
@@ -121,15 +121,15 @@ jobs:
           name: display-harness-${{ matrix.os }}
           path: |
             target/display-harness/*.png
-            target/display-harness/burl.out
+            target/display-harness/gnarl.out
             target/display-harness-high-dpi/*.png
-            target/display-harness-high-dpi/burl.out
+            target/display-harness-high-dpi/gnarl.out
             target/display-harness-grab/*.png
-            target/display-harness-grab/burl.out
-            target/display-harness-drag/burl.out
+            target/display-harness-grab/gnarl.out
+            target/display-harness-drag/gnarl.out
             target/display-harness-drag/vd.out
             target/display-harness-roundtrip/*.png
-            target/display-harness-roundtrip/burl.out
+            target/display-harness-roundtrip/gnarl.out
             target/display-harness-roundtrip/vd.out
             target/crisp-control/*.png
             target/crisp-control/*.out
@@ -163,11 +163,11 @@ jobs:
           else
             body="The weekly display-harness run failed on $today: $RUN_URL
 
-          The harness (\`cargo xtask display-harness\`) creates virtual displays on hosted macOS runners and checks that Burl's window moves between them. It uses a private macOS API (CGVirtualDisplay), so a runner-image update can break it with no Burl change. It is not a required check.
+          The harness (\`cargo xtask display-harness\`) creates virtual displays on hosted macOS runners and checks that Gnarl's window moves between them. It uses a private macOS API (CGVirtualDisplay), so a runner-image update can break it with no Gnarl change. It is not a required check.
 
           Check first:
           - Read the failed step's log in the run above.
-          - Compare \`target/display-harness*/burl.out\` in the run's uploaded artifacts.
+          - Compare \`target/display-harness*/gnarl.out\` in the run's uploaded artifacts.
           - See the Caveats section of tools/display-harness/README.md."
             gh issue create --title "$TITLE" --body "$body"
           fi

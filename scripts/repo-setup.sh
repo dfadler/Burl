@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# One-time repository protection for Burl (#180 stories 1-6, #95). Owner-run.
+# One-time repository protection for Gnarl (#180 stories 1-6, #95). Owner-run.
 #
 #   scripts/repo-setup.sh [check] [options]           read-only: GETs only, prints the payloads
 #   scripts/repo-setup.sh apply --confirm-apply [...]  writes; then asks you to type a confirmation
 #
 # Creates (or updates, by name; idempotent):
-#   - ruleset "burl-master" on the default branch requiring status checks;
+#   - ruleset "gnarl-master" on the default branch requiring status checks;
 #   - environment "release" with the authenticated user as required reviewer and a deployment
 #     policy that accepts only tags matching v*.
 #
@@ -37,7 +37,7 @@ readonly EXIT_FAILURE=1
 readonly EXIT_USAGE=2
 readonly EXIT_DEPENDENCY=4
 
-RULESET_NAME=burl-master
+RULESET_NAME=gnarl-master
 FAST_CHECKS=(linux linux-pcre2 macos deny golden-label)
 HEAVY_CHECKS=(goldens-reproduce sim-goldens-reproduce slow-tests render-smoke visual-ssim window-xvfb)
 

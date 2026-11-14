@@ -1,7 +1,7 @@
 # HID rig: a real mouse for the macOS cursor-grab check (#211)
 
 `cargo xtask display-harness --grab-device [--port PATH]` proves what hosted runners cannot (#205):
-that a **real device's relative motion** does not move the cursor while burl holds a `Locked` grab.
+that a **real device's relative motion** does not move the cursor while gnarl holds a `Locked` grab.
 Synthetic `CGEventPost` events carry absolute locations and bypass the lock, delta-only events do
 not move the cursor at all, and a virtual HID device cannot be created from an ad-hoc signed
 binary. So the input has to come from a device the OS sees as hardware.
@@ -12,17 +12,17 @@ scenario itself are UNRUN until a rig exists. Expect a first-run fix or two.
 
 ## What the scenario does
 
-1. Starts burl as `--grab` does and parks the cursor on its background (`mouse warp`, the only
+1. Starts gnarl as `--grab` does and parks the cursor on its background (`mouse warp`, the only
    synthetic input).
 2. **Control, no grab:** the device sends 100 counts right; the cursor must move at least 20 pt the
    same way. If not, the device does not reach the system and the check fails as such.
-3. **Press and hold** the device's left button on the background: burl logs `grab: event=on
+3. **Press and hold** the device's left button on the background: gnarl logs `grab: event=on
    mode=locked`. Send the same 100 counts; the cursor must move at most 3 pt.
-4. Release; burl logs `grab: event=off`.
+4. Release; gnarl logs `grab: event=off`.
 
 No backend found: it prints `SKIPPED (not a pass)` and **exits 0**. A skip is not evidence; the
 checklist box stays open until a run prints `ok`. A device you named (`--port`, or
-`BURL_VHID_HELPER`) that does not answer is a failure (exit 1), not a skip.
+`GNARL_VHID_HELPER`) that does not answer is a failure (exit 1), not a skip.
 
 ## Route 1: Pico rig (any Mac, a self-hosted runner)
 
@@ -42,7 +42,7 @@ Flash (Arduino IDE or `arduino-cli`):
 3. Open `hid-rig.ino`, upload (hold BOOTSEL while plugging in the first time).
 
 Check: `ls /dev/cu.usbmodem*` shows a port; `screen /dev/cu.usbmodem* 115200`, then typing `ping`
-and Enter, answers `ok burl-hid-rig 1` (quit screen with Ctrl-A K). If macOS blocks the new mouse,
+and Enter, answers `ok gnarl-hid-rig 1` (quit screen with Ctrl-A K). If macOS blocks the new mouse,
 the control phase fails and says so.
 
 ### Protocol
@@ -51,7 +51,7 @@ One command per line, `\n` terminated. Replies `ok [info]` or `err MSG`.
 
 | command | effect |
 |---|---|
-| `ping` | `ok burl-hid-rig 1` (how the host recognises the rig) |
+| `ping` | `ok gnarl-hid-rig 1` (how the host recognises the rig) |
 | `rel DX DY` | relative move, each part -127..127 counts, no wheel |
 | `down`, `up` | left button press, release |
 
@@ -61,7 +61,7 @@ sketch's parser). The serial port is opened raw at 115200 with a 2 s read timeou
 ### Safety
 
 - The rig moves the **real cursor** of the Mac it is plugged into. Run it on a Mac nobody is
-  using, or accept that the cursor jumps (the harness warps it to burl's window, then the rig
+  using, or accept that the cursor jumps (the harness warps it to gnarl's window, then the rig
   pushes it 100 counts). Unplug the Pico to stop it instantly.
 - The sketch releases a held button after 5 s without a command, so a crashed run cannot leave the
   button stuck down.
@@ -104,7 +104,7 @@ Evaluated from its documentation, **not built or run**:
   is the property the check needs. Whether a Karabiner device counts as "real" for the `Locked`
   grab was not measured.
 
-How it plugs in: `BURL_VHID_HELPER=/path/to/helper` makes the backend spawn that executable and
+How it plugs in: `GNARL_VHID_HELPER=/path/to/helper` makes the backend spawn that executable and
 speak the same line protocol on stdin/stdout. **The helper is not written**: it is a small C++
 program (read lines, call `async_post_report`) built against the Karabiner headers and run as
 root, for example through a `sudo` wrapper script on the owner's Mac. Write it once the Pico route

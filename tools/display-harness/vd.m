@@ -109,8 +109,8 @@ int main(void) { @autoreleasepool {
   CGVirtualDisplayMode *(^mode)(NSUInteger, NSUInteger) = ^(NSUInteger w, NSUInteger h) {
     return [[CGVirtualDisplayMode alloc] initWithWidth:w height:h refreshRate:60];
   };
-  CGVirtualDisplay *hi = make(@"burl-2x", 1, 3840, 2160, 600, 340, YES, @[ mode(3840, 2160), mode(1920, 1080) ]);
-  CGVirtualDisplay *lo = make(@"burl-1x", 2, 1280, 720, 300, 170, NO, @[ mode(1280, 720) ]);
+  CGVirtualDisplay *hi = make(@"gnarl-2x", 1, 3840, 2160, 600, 340, YES, @[ mode(3840, 2160), mode(1920, 1080) ]);
+  CGVirtualDisplay *lo = make(@"gnarl-1x", 2, 1280, 720, 300, 170, NO, @[ mode(1280, 720) ]);
   if (!hi || !lo) return fail("could not create the virtual displays");
   CGDirectDisplayID hid = hi.displayID, lid = lo.displayID;
 

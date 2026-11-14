@@ -41,7 +41,7 @@ int main(void) {
 	us.id.bustype = BUS_USB;
 	us.id.vendor = 0x1234;
 	us.id.product = 0x5678;
-	strcpy(us.name, "burl-uinput-mouse");
+	strcpy(us.name, "gnarl-uinput-mouse");
 	if (ioctl(fd, UI_DEV_SETUP, &us) < 0 || ioctl(fd, UI_DEV_CREATE) < 0) {
 		perror("uinput-mouse: create device");
 		return 2;

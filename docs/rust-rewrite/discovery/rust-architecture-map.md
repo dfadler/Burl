@@ -1,6 +1,6 @@
 # Rust architecture map (where an implementer starts)
 
-Updated 2026-10-31 for the final decisions; see docs/rust-rewrite/discovery/LEDGER.md Decisions. The binary crate is `burl` (`crates/burl`); the internal library crates keep their `gource-*` names below, and renaming them is still undecided.
+Updated 2026-10-31 for the final decisions; see docs/rust-rewrite/discovery/LEDGER.md Decisions. The binary crate is `gnarl` (`crates/gnarl`); the internal library crates keep their `gource-*` names below, and renaming them is still undecided.
 
 Synthesis of the other discovery docs; nothing here is new C++ research. Doc abbreviations: APP = app-core.md, SCN = scene-model.md, SET = settings-cli.md, LOG = log-formats.md, COR = core-lib.md, OUT = output-pipeline.md, DEP = deps-and-rust-mapping.md, TIM = timing.md, TST = tests-and-golden-strategy.md, BLD = build-and-goldens.md. Section refs are the doc's own headings ("T2.x" = its Tick 2 additions). Where docs conflict, TIM wins on timing (TIM sec. 6).
 
@@ -20,7 +20,7 @@ Dependency arrows point downward only. `gource-sim` never imports a renderer, wi
 | `gource-sim` | simulation state | util, formats, conf | `dir_tree` (arena), `file`, `user`, `action`, `pawn`, `camera` (ZoomCamera), `gource` (Gource logic, no draw), `shell` (multi-section state machine), `dump` (debug state dump) |
 | `gource-render` | trait + CPU-side batching | sim, util | `Renderer` trait, `scene` (builds vertex batches from sim state), `text` layout, `ui` overlays, `spline` (SplineEdge geometry), `bloom` |
 | `gource-gl` | backend impl | render, winit, glutin, glutin-winit, glow | window/context, shaders (`#version 150`), VBOs, textures, FreeType atlas, `PpmWriter`, PNG |
-| `burl` (bin, `crates/burl`) | app | all | `main` flow, `GourceShell` loop, input mapping, exit/err handling |
+| `gnarl` (bin, `crates/gnarl`) | app | all | `main` flow, `GourceShell` loop, input mapping, exit/err handling |
 
 Rationale for the split: the parity gates (parser golden, sim dump) must run with only `gource-formats` / `gource-sim` compiled and no GL or windowing available, matching TST sec. 4 (the C++ sim is not headless; the Rust one must be).
 
@@ -35,7 +35,7 @@ crates/
   gource-sim/src/{lib,pawn,dir_tree,file,user,action,camera,gource,shell,dump}.rs
   gource-render/src/{lib,renderer,scene,text,ui,spline,bloom,key,slider,textbox,caption}.rs
   gource-gl/src/{lib,context,shader,vbo,texture,font,ppm,png}.rs  + shaders/*.vert|*.frag (GLSL 150)
-  burl/src/{main,app,input,shell_loop}.rs
+  gnarl/src/{main,app,input,shell_loop}.rs
 ```
 
 ### 1.3 C++ file to Rust module
@@ -44,9 +44,9 @@ Class column: S = sim-state (parity-gated), R = render, U = UI/input only, I = I
 
 | C++ file | Major class / content | Rust module | Type | Class |
 |---|---|---|---|---|
-| src/main.cpp | program flow (SET sec. 1) | `burl/main.rs` | `fn main`, `run()` | I |
-| src/gource_shell.cpp | `GourceShell : SDLApp`, multi-section state machine (SET T2.1) | `gource-sim/shell.rs` (state machine) + `burl/shell_loop.rs` (frame loop, transition texture) | `Shell` | S + R |
-| src/gource.cpp / .h | `Gource` (logic, commit ingestion, camera drive, processCommit, writeCustomLog, draw) | `gource-sim/gource.rs` (logic) + `gource-render/scene.rs` (draw) + `burl/input.rs` (key/mouse map, APP T2.2) | `Gource`, `SceneBuilder` | S / R / U |
+| src/main.cpp | program flow (SET sec. 1) | `gnarl/main.rs` | `fn main`, `run()` | I |
+| src/gource_shell.cpp | `GourceShell : SDLApp`, multi-section state machine (SET T2.1) | `gource-sim/shell.rs` (state machine) + `gnarl/shell_loop.rs` (frame loop, transition texture) | `Shell` | S + R |
+| src/gource.cpp / .h | `Gource` (logic, commit ingestion, camera drive, processCommit, writeCustomLog, draw) | `gource-sim/gource.rs` (logic) + `gource-render/scene.rs` (draw) + `gnarl/input.rs` (key/mouse map, APP T2.2) | `Gource`, `SceneBuilder` | S / R / U |
 | src/gource_settings.cpp / .h | `GourceSettings`, help text, `commandLineOption`, import | `gource-conf/settings_gource.rs`, `help.rs` | `GourceSettings` | S (values) |
 | src/core/settings.cpp / .h | `SDLAppSettings` display half, `parseArgs`, `parseDateTime` | `gource-conf/{args,settings_display}.rs`, `gource-util/timeparse.rs` | `DisplaySettings`, `parse_args` | I |
 | src/core/conffile.cpp / .h | `ConfFile`, `ConfSection`, `ConfEntry` | `gource-conf/conffile.rs` | `ConfFile` | I |
@@ -67,7 +67,7 @@ Class column: S = sim-state (parity-gated), R = render, U = UI/input only, I = I
 | src/textbox.cpp / .h | `TextBox` | `gource-render/textbox.rs` | `TextBox` | U |
 | src/caption.cpp / .h | `RCaption`, caption-file load | `gource-render/caption.rs` (loader in `gource-formats` or conf) | `Caption` | U |
 | src/core/display.cpp | `SDLAppDisplay`, GL context, projection, unproject | `gource-gl/context.rs` (winit window plus glutin context behind the `GlContext` trait) | `GlContext` | R |
-| src/core/sdlapp.cpp | `SDLApp` frame loop, errors, resource dirs | `burl/shell_loop.rs` (event pump is a winit 0.30 `ApplicationHandler`, not a poll loop: inversion of control changes the loop structure), `gource-util` (err format) | `run_loop` | I |
+| src/core/sdlapp.cpp | `SDLApp` frame loop, errors, resource dirs | `gnarl/shell_loop.rs` (event pump is a winit 0.30 `ApplicationHandler`, not a poll loop: inversion of control changes the loop structure), `gource-util` (err format) | `run_loop` | I |
 | src/core/fxfont.cpp | `FXFont`, `FXFontManager` | `gource-gl/font.rs` | `FontAtlas` | R |
 | src/core/shader.cpp, shader_common.cpp | `Shader`, preprocessor | `gource-gl/shader.rs` (preprocessor dropped, COR sec. 17) | `ShaderProgram` | R |
 | src/core/texture.cpp, vbo.cpp | `TextureResource`, VBO helpers | `gource-gl/{texture,vbo}.rs` | `Texture`, `Vbo` | R |
@@ -249,7 +249,7 @@ Files: `data/shaders/{shadow.vert, text.vert, shadow.frag, text.frag, bloom.vert
 Reasons:
 - `parseArgs` does not behave like a normal CLI: all leading `-` stripped (`-x`, `--x`, `---x` identical), a lone `-` is positional, `--` is "unknown option -", no `--opt=value`, a value-taking option consumes the next token even if it starts with `-`, and a `-WxH` token (regex `^([0-9.]+)x([0-9.]+)(!)?$`, both ints >0) is a magic viewport (SET sec. 3 items 1-6). clap would reject or reinterpret most of these.
 - Help output must match the Gource goldens (`golden/help-short.txt`, `help-long.txt`) byte for byte except the recorded D5 help-text diff (user-friction default 1.0; dir-name-position range starts at 0.1), which will live as a unified diff under `golden/expected-diffs/` (does not exist yet); the goldens themselves are never edited. Exit 0 to stdout; clap-generated help cannot do this. Embed the corrected text with `include_str!`; no Windows `cfg` branches are needed (no native Windows build).
-- Errors are `<program>: <msg>\nTry '<program> --help' for more information.\n\n` on stderr, exit 1 (the C++ prints `gource`; Burl prints `burl`, and the golden harness normalises the program name only at six anchored phrases, see `crates/burl/tests/golden.rs`) (SET sec. 1 error format). Messages come from ConfFile and import validation, not from the arg library.
+- Errors are `<program>: <msg>\nTry '<program> --help' for more information.\n\n` on stderr, exit 1 (the C++ prints `gource`; Gnarl prints `gnarl`, and the golden harness normalises the program name only at six anchored phrases, see `crates/gnarl/tests/golden.rs`) (SET sec. 1 error format). Messages come from ConfFile and import validation, not from the arg library.
 - Behaviours like "CLI scalars applied to every `[gource]` section" need direct access to the ConfFile structure (below), which a derive-based parser would obscure.
 
 clap may still be used in tests only to cross-check the option index; do not ship it. The option table (`arg_types`, `arg_aliases`, section routing) comes from SET sec. 8; make it one `static` table `(name, type: Bool|Int|Float|String|Multi, section: Display|Gource|CommandLine)` and generate parse/help-index tests from it.
@@ -355,7 +355,7 @@ Gate tools exist in the repo: `docs/rust-rewrite/discovery/golden/` (help, versi
 |---|---|---|---|
 | 0 | workspace skeleton, CI, `gource-util` (strhash, utf8, bounds, math, regex wrapper, prng, timeparse) | `cargo test`: port `src/test/{datetime,regex}` cases; stringHash/colourHash vectors; glibc-mode PRNG first outputs `1804289383, 846930886, 1681692777, 1714636915` (once confirmed against a real libc, sec. 7.1) and the macOS compatibility mode against a recorded macOS libc sequence plus a determinism test of the default Rust PRNG; `replace_invalid` cases | TST sec. 1; DEP T2.1; COR T2 (d)(e) |
 | 1 | `gource-conf`: ConfFile, parse_args, settings import, help text, error strings, `--save-config`, `--log-command` | byte-exact diff of `-h`, `-H`, `--version`, exit codes against the oracle goldens `golden/help-short.txt`, `help-long.txt`, `version.stderr.txt`, modulo the recorded D5 help diff (`golden/expected-diffs/`, does not exist yet) (there is no `--version` option: `gource --version` exits 1 with `unknown option version` on stderr; version.txt is empty), `exit-codes.txt`; round-trip `--save-config` vs C++ on a matrix of args (multi-section included) | SET sec. 7, 3; BLD |
-| 2 | `gource-formats`: SeekLog/StreamLog, nine parsers, logmill detect order, filters, `--output-custom-log` | `burl --output-custom-log - tests/logs/*.log` equals `golden/custom-log/*` exactly; plus captured git/svn/hg/bzr samples through `--log-format`; edge inputs (empty, CRLF, BOM, out-of-order, `|` in names, stdin unterminated line) | TST sec. 6 (1); LOG sec. 9 |
+| 2 | `gource-formats`: SeekLog/StreamLog, nine parsers, logmill detect order, filters, `--output-custom-log` | `gnarl --output-custom-log - tests/logs/*.log` equals `golden/custom-log/*` exactly; plus captured git/svn/hg/bzr samples through `--log-format`; edge inputs (empty, CRLF, BOM, out-of-order, `|` in names, stdin unterminated line) | TST sec. 6 (1); LOG sec. 9 |
 | 3 | `gource-sim` headless: DirTree, File, User, Action, QuadTree, Gource::logic, fixed-dt `step`, `--debug-dump-state` (added to the C++ fork at `reference/gource-cpp-dump/` (does not exist yet; it must first reproduce the oracle's help and custom-log goldens, and the untouched original build stays the oracle) and to Rust, JSONL as in TST sec. 6 (2)) | Exact tier: topology, add/remove/idle-expire frames, user set, colours. Position tier: exact when the glibc RNG is selected and sim built with matching f32 op order, else 1e-3 relative. Run `file-removal.log` etc. with `--hash-seed 31 --disable-auto-rotate --stop-at-time 10` | TST sec. 6 (2); SCN sec. 10 |
 | 4 | Camera, auto-rotate, selection, captions timeline, multi-section shell (still headless) | camera pos/zoom fields in the dump; multi-section run of `tests/test.conf` matches section-by-section counts | APP; SET T2.1 |
 | 5 | `gource-gl` renderer: window, shaders (sec. 4.4), passes (sec. 4.3), font atlas, textures, screenshot, PPM writer thread | `-o` stream is valid P6 with the per-frame header and correct frame count (`ffmpeg` decode); frame cadence from sec. 7.2 (frames dumped per runtime second for F=25/30/60); SSIM >= ~0.9 vs C++ reference frames under Xvfb/llvmpipe on every 30th frame; structure checks with bloom and shadows off | TST sec. 6 (3); OUT sec. 1, 8 |
@@ -398,6 +398,6 @@ Corrections made (each marked "corrected tick 4" in place):
 - Makefile.am coverage: every built .cpp has a row; tinyxml is conditional (USE_BUNDLED_TINYXML); utf8/ftgl are header-only; ui/, tga.cpp, timer.cpp unbuilt.
 - Smaller: uninitialised-field wording (GLM_FORCE_CTOR_INIT), `toa` 1.99999988, PCRE2 `$` vs Rust `$`, `--output-custom-log` needs non-empty path, shell no-update iteration, worker also does the `--start-date` scan.
 
-Confirmed unchanged: min delta 16 ms (gource_shell.cpp:29), mapped `rand()` sites (4 plus `--start-position random`), regex wrapper semantics (regex.cpp matchOffset: offset>=size returns -1, trailing non-participating groups dropped, middle become empty), C++ `cvs-exp` unmatched by logmill (`"cvs"` only; fixed in Burl, sec. 10), conffile grammar regexes, parseArgs hyphen stripping, window height 640 on macOS.
+Confirmed unchanged: min delta 16 ms (gource_shell.cpp:29), mapped `rand()` sites (4 plus `--start-position random`), regex wrapper semantics (regex.cpp matchOffset: offset>=size returns -1, trailing non-participating groups dropped, middle become empty), C++ `cvs-exp` unmatched by logmill (`"cvs"` only; fixed in Gnarl, sec. 10), conffile grammar regexes, parseArgs hyphen stripping, window height 640 on macOS.
 
 Open: glibc/macOS `rand()` values unverified against a real libc; timing.md sec. 2 last paragraph ("only options present") and deps sec. 1 ("--version") are wrong in their own docs and were not edited.

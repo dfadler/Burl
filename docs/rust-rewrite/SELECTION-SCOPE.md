@@ -1,8 +1,8 @@
 # Selection and pointer picking: scope decision
 
-Decision paper for [#92](https://github.com/dfadler/Burl/issues/92) (`OPTION-COVERAGE.md` Gap 9). It writes no feature code. The user picks an option; the chosen one becomes a ticket and, unless it is full parity, a row in `DEVIATIONS.md` (policy: #10). All C++ references are to `src/` at 0.57.
+Decision paper for [#92](https://github.com/dfadler/Gnarl/issues/92) (`OPTION-COVERAGE.md` Gap 9). It writes no feature code. The user picks an option; the chosen one becomes a ticket and, unless it is full parity, a row in `DEVIATIONS.md` (policy: #10). All C++ references are to `src/` at 0.57.
 
-**Status: historical.** Option B2 was chosen and has landed (#119-#124). Sections 2 to 7 describe `master` as it was before that stack; in particular `--selection-colour` is no longer unused (see `crates/burl/src/frame.rs` and `crates/burl-render/src/labels.rs`).
+**Status: historical.** Option B2 was chosen and has landed (#119-#124). Sections 2 to 7 describe `master` as it was before that stack; in particular `--selection-colour` is no longer unused (see `crates/gnarl/src/frame.rs` and `crates/gnarl-render/src/labels.rs`).
 
 ## 1. What Gource does
 
@@ -47,13 +47,13 @@ Runs once per frame at the top of `draw` (2415-2427), only when `!hide_mouse && 
 
 Drawn after the slider. A file that is hovered and not selected shows two lines: the name, then the path with the leading `/` removed (if any is left). A hovered, unselected user shows its name. Colour is the pawn's `getColour()`; brightness 0.5. Font is 18 pt times `font_scale` (gource.cpp:142). `setPos(mousepos, true)` puts the corner above-left of the cursor and flips to stay in the window (textbox.cpp:`setPos`). Drawing: a black quad at alpha/3 offset (3,3), the coloured quad, then white text rows spaced `font size + 4` (textbox.cpp:`draw`). It is the only hover feature.
 
-## 2. What Burl had before #119-#124 (historical)
+## 2. What Gnarl had before #119-#124 (historical)
 
-- `selected_user` lives in `burl-sim` (`sim.rs:300`). `select_user` ports only the camera lock-on (`sim.rs:1216`); fade-deselect and follow-select are ported (`1165-1207`, golden `small-repo-follow`). There is no `selected_file` and no `selectedUser` in `SceneView`/`UserView`.
-- `Command::DragStart` ports `selectBackground` (`command.rs:195`). `Pointer::button` (`interactive/input.rs:173`) sends it for **every** left press. Burl therefore deselects and drags even when the press is on a user or file: there is no picking, and the checklist line "clicking a user selects it" cannot pass (`INTERACTIVE-CHECKLIST.md:35`). `Pointer` has no position at all: `CursorMoved` is not handled, only relative `DeviceEvent::MouseMotion` (`interactive.rs:459`).
+- `selected_user` lives in `gnarl-sim` (`sim.rs:300`). `select_user` ports only the camera lock-on (`sim.rs:1216`); fade-deselect and follow-select are ported (`1165-1207`, golden `small-repo-follow`). There is no `selected_file` and no `selectedUser` in `SceneView`/`UserView`.
+- `Command::DragStart` ports `selectBackground` (`command.rs:195`). `Pointer::button` (`interactive/input.rs:173`) sends it for **every** left press. Gnarl therefore deselects and drags even when the press is on a user or file: there is no picking, and the checklist line "clicking a user selects it" cannot pass (`INTERACTIVE-CHECKLIST.md:35`). `Pointer` has no position at all: `CursorMoved` is not handled, only relative `DeviceEvent::MouseMotion` (`interactive.rs:459`).
 - Not ported: Tab / `selectNextUser` (no Tab key row in `input.rs`), middle-click camera toggle, `SelectedFile`, the text box (`overlays.rs:5`, `labels.rs:5` say so), the selected label pass.
-- Before #119-#124, `--selection-colour` was parsed into `Settings::selection_colour` (`burl-conf/src/settings.rs:212`) and used nowhere else. It is now read in `crates/burl/src/frame.rs` and `crates/burl-render/src/labels.rs`. `--follow-user` and `--camera-mode track` were refused by the CLI at the time; both are wired now (OPTION-COVERAGE Gap 3).
-- Building blocks that exist: `QuadTree::visit_items_at` (`burl-util/src/quadtree.rs:168`), which has the same whole-leaf semantics as C++; the per-frame user tree (`sim.rs:1015`) and dir tree (`interact_dirs`, `sim.rs:2127`), both local to a step and not retained; `Font`/`FontManager::draw` and batches for quads (`burl-render`).
+- Before #119-#124, `--selection-colour` was parsed into `Settings::selection_colour` (`gnarl-conf/src/settings.rs:212`) and used nowhere else. It is now read in `crates/gnarl/src/frame.rs` and `crates/gnarl-render/src/labels.rs`. `--follow-user` and `--camera-mode track` were refused by the CLI at the time; both are wired now (OPTION-COVERAGE Gap 3).
+- Building blocks that exist: `QuadTree::visit_items_at` (`gnarl-util/src/quadtree.rs:168`), which has the same whole-leaf semantics as C++; the per-frame user tree (`sim.rs:1015`) and dir tree (`interact_dirs`, `sim.rs:2127`), both local to a step and not retained; `Font`/`FontManager::draw` and batches for quads (`gnarl-render`).
 
 **Important:** the selected *rendering* is not windowed-only. Once `--follow-user` lands in `-o` export, `selectUser` runs in the export path and the oracle draws the selected user white with a 18 pt label in `selection_colour` (1.3). So the "selected pawn look" has to exist for export parity regardless of the pointer. Picking, hover and the text box are windowed-only.
 
@@ -70,18 +70,18 @@ P6 hover text box  (quads+text near cursor)             needs: P3, quad renderin
 
 | Piece | Files | Size | Notes |
 |---|---|---|---|
-| P1 | `burl-sim/src/view.rs` (`selected` on `UserView`/`FileView`), `sim.rs` (fill), `burl-render` `scene.rs` (sprite white), `labels.rs` (18 pt, colour, always-on, drawn last, y offset), `NameSettings` gets `selection_colour`, `burl/src/export.rs` + `frame.rs` plumb the setting | ~150 LOC | Golden-testable once follow-user exists. A second font size (18) must be grabbed. |
+| P1 | `gnarl-sim/src/view.rs` (`selected` on `UserView`/`FileView`), `sim.rs` (fill), `gnarl-render` `scene.rs` (sprite white), `labels.rs` (18 pt, colour, always-on, drawn last, y offset), `NameSettings` gets `selection_colour`, `gnarl/src/export.rs` + `frame.rs` plumb the setting | ~150 LOC | Golden-testable once follow-user exists. A second font size (18) must be grabbed. |
 | P2 | `sim.rs` (`selected_file`, `select_file`, clear-on-removal, section reset, camera focus bounds incl. file), `command.rs` (`SelectUser`, `SelectFile`, `NextUser`) | ~120 LOC | Tab needs `tagusermap` order (tag id), which `UserId` may not preserve; check. |
-| P3 | new pure `pick(view, camera, mouse, W, H, settings) -> Option<Pick>` in `burl-render` or `burl-sim` | ~80 LOC | Linear scan of `SceneView` is enough for a window (hundreds of pawns). Using the real quadtrees would mean retaining them in `Sim` and `Sim` owning the mouse. See 4 on tie-break. |
+| P3 | new pure `pick(view, camera, mouse, W, H, settings) -> Option<Pick>` in `gnarl-render` or `gnarl-sim` | ~80 LOC | Linear scan of `SceneView` is enough for a window (hundreds of pawns). Using the real quadtrees would mean retaining them in `Sim` and `Sim` owning the mouse. See 4 on tie-break. |
 | P4 | `command.rs`, `input.rs` (`Pointer::button` stops sending `DragStart` unconditionally), `interactive.rs` | ~60 LOC | Must move the decision from event time to frame time (see 1.2 `selectBackground` quirk) or accept a deviation. |
 | P5 | `interactive.rs`, `input.rs` | ~50 LOC | `CursorMoved` carries physical pixels; C++ scales SDL window coordinates by `viewport_dpi_ratio` into drawable pixels (`sdlapp.cpp` lines 352-355 and 387-388), so both are drawable pixels; only sub-pixel truncation differs. Not run on a Retina display (G3, `--high-dpi`). Ignored while grabbed/hidden/disabled. |
-| P6 | new `burl-render` `textbox.rs`, hook in `frame.rs` | ~120 LOC | Needs an untextured alpha quad batch (the key legend already draws them), text at 18 pt x `font_scale`. **Touches `frame.rs`**, which other sessions are changing now. |
+| P6 | new `gnarl-render` `textbox.rs`, hook in `frame.rs` | ~120 LOC | Needs an untextured alpha quad batch (the key legend already draws them), text at 18 pt x `font_scale`. **Touches `frame.rs`**, which other sessions are changing now. |
 
 Total for everything: roughly 600 LOC in 8 or 9 files and 3 crates, mostly new code with little to rewrite.
 
 ## 4. Deviations that are hard to avoid
 
-- **Overlap tie-break.** C++ picks by `std::set<QuadItem*>` order, i.e. heap addresses. It is not reproducible even between two Gource runs. Burl must define an order (proposed: user list order, then for files, dirs and files in sim creation order). This is a Change whatever option is chosen, and cannot be golden-compared on overlaps.
+- **Overlap tie-break.** C++ picks by `std::set<QuadItem*>` order, i.e. heap addresses. It is not reproducible even between two Gource runs. Gnarl must define an order (proposed: user list order, then for files, dirs and files in sim creation order). This is a Change whatever option is chosen, and cannot be golden-compared on overlaps.
 - **Dir culling.** C++ file picking only finds files whose *dir quad bounds* contain the point. A linear scan over files finds more. Matching it needs the dir tree. Proposed: scan dirs by their bounds first, same as C++.
 - **Event time versus frame time.** If P4 is done as `mouseclicked` (frame time), a very quick click is missed exactly as in Gource; if done at event time it is not. Proposed: event time for the *selection* (the visible result is the same) and note it.
 
@@ -93,8 +93,8 @@ Total for everything: roughly 600 LOC in 8 or 9 files and 3 crates, mostly new c
 
 - **Size:** ~20 lines of docs and one test. No code.
 - **Risk:** none technically. Visible gap: the Gource windowed UX of hover names and click-select is missing, and the checklist (#94) cannot be signed as written. Once `--follow-user` lands, `selection_colour` is silently ignored on a selected user, which makes that flag *wrong* instead of just unfinished unless P1 is added.
-- **Tests:** one Burl-only test `deviation_g10_selection_not_ported` (e.g. a left press never produces a command other than `DragStart`; `selection_colour` parses). Manual: nothing new.
-- **Register rows:** `G10` Gap: *Gource selects the hovered user or file on click and shows a hover text box; Burl treats every left press as a background drag and draws no text box.* Fix trigger: first user report, or the parity release decides pointer selection is required. `G11` Gap: `--selection-colour` stored, no effect (drop it if A+ is chosen). Plus a note under Gap 3 about follow-user labels.
+- **Tests:** one Gnarl-only test `deviation_g10_selection_not_ported` (e.g. a left press never produces a command other than `DragStart`; `selection_colour` parses). Manual: nothing new.
+- **Register rows:** `G10` Gap: *Gource selects the hovered user or file on click and shows a hover text box; Gnarl treats every left press as a background drag and draws no text box.* Fix trigger: first user report, or the parity release decides pointer selection is required. `G11` Gap: `--selection-colour` stored, no effect (drop it if A+ is chosen). Plus a note under Gap 3 about follow-user labels.
 
 ### Option A+: Option A plus the selected look (P1 and P2 minus the file)
 
@@ -109,9 +109,9 @@ Renders `selectedUser` the way Gource does (white sprite, 18 pt label in `select
 
 B1 = A+ plus pointer selection of users and files and Tab (P1-P5). B2 = B1 plus the hover text box (P6).
 
-- **Size:** B1 ~450 LOC, 8 files, 3 crates (`burl-sim`, `burl-render`, `burl`). B2 adds ~120 LOC and a `frame.rs` change.
+- **Size:** B1 ~450 LOC, 8 files, 3 crates (`gnarl-sim`, `gnarl-render`, `gnarl`). B2 adds ~120 LOC and a `frame.rs` change.
 - **Risk:** medium. Touches `interactive.rs`, `input.rs`, `frame.rs`, all being changed now by other sessions (avatars, windowed fixes, slider) so it conflicts unless it waits for them. The pointer needs HiDPI coordinate handling that can only be checked by hand. Camera lock-on in track mode interacts with picking.
-- **Tests:** the pure pieces are Burl-only unit tests: mouse-to-world formula (compare numbers computed from the C++ formula), hit tests on constructed `SceneView`s (user wins over file, fading users skipped, hidden files skipped), `Pointer` behaviour. The oracle cannot be compared on picking today: the dump fork is headless and takes no pointer. A real oracle test needs a fork patch that injects scripted `(frame, x, y, button)` events into `mouseMove`/`mouseClick` and dumps `hoverUser`, `selectedUser`, `selectedFile` (about a day of work, medium risk, but then sim-state *and* visual gates cover clicks). The alternative, `xdotool` against Xvfb, is not deterministic about which frame an event lands in. The text box and everything about real cursor feel (cursor hiding, grab, HiDPI, flipping at the window edge) are **manual-only**: add rows to `INTERACTIVE-CHECKLIST.md` for macOS Retina, non-Retina and Linux X11.
+- **Tests:** the pure pieces are Gnarl-only unit tests: mouse-to-world formula (compare numbers computed from the C++ formula), hit tests on constructed `SceneView`s (user wins over file, fading users skipped, hidden files skipped), `Pointer` behaviour. The oracle cannot be compared on picking today: the dump fork is headless and takes no pointer. A real oracle test needs a fork patch that injects scripted `(frame, x, y, button)` events into `mouseMove`/`mouseClick` and dumps `hoverUser`, `selectedUser`, `selectedFile` (about a day of work, medium risk, but then sim-state *and* visual gates cover clicks). The alternative, `xdotool` against Xvfb, is not deterministic about which frame an event lands in. The text box and everything about real cursor feel (cursor hiding, grab, HiDPI, flipping at the window edge) are **manual-only**: add rows to `INTERACTIVE-CHECKLIST.md` for macOS Retina, non-Retina and Linux X11.
 - **Register rows:** `D13` Change: overlap tie-break is deterministic (Gource: pointer order). `D14` Change or Gap: click selects at event time, not frame time. Optional `G11` Gap if B1 only: no hover text box (`P6` deferred). `G10` is not needed.
 
 ## 6. Comparison

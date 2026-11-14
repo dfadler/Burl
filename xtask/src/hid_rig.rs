@@ -5,7 +5,7 @@
 //! [`RelativeMouse`] and one line protocol (see `tools/hid-rig/README.md`):
 //! - **serial rig**: a Pico acting as a USB HID mouse, driven over a serial port (any machine);
 //! - **Karabiner helper**: a root helper built on Karabiner-DriverKit-VirtualHIDDevice, run through
-//!   `BURL_VHID_HELPER` (a local Mac only: one-time system-extension approval, root daemon).
+//!   `GNARL_VHID_HELPER` (a local Mac only: one-time system-extension approval, root daemon).
 //!
 //! Everything here is std only. The protocol and the verdict are pure and unit-tested; the device
 //! I/O is UNRUN until the rig exists.
@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 /// The largest `rel` component: one signed HID byte, what the firmware's `Mouse.move` takes.
 pub const MAX_STEP: i32 = 127;
 /// Env var naming the Karabiner helper executable (speaks the same protocol on stdin/stdout).
-pub const HELPER_ENV: &str = "BURL_VHID_HELPER";
+pub const HELPER_ENV: &str = "GNARL_VHID_HELPER";
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Cmd {
@@ -159,11 +159,11 @@ impl<R: Read, W: Write> RelativeMouse for Line<R, W> {
     }
     fn available(&mut self) -> Result<(), String> {
         let id = self.send(Cmd::Ping)?;
-        if id.starts_with("burl-hid-rig") {
+        if id.starts_with("gnarl-hid-rig") {
             Ok(())
         } else {
             Err(format!(
-                "{}: answered ping with {id:?}, not `burl-hid-rig ..`",
+                "{}: answered ping with {id:?}, not `gnarl-hid-rig ..`",
                 self.name
             ))
         }
@@ -205,7 +205,7 @@ pub fn serial(path: &str) -> Result<Box<dyn RelativeMouse>, String> {
     }))
 }
 
-/// The Karabiner backend: runs the helper named by `BURL_VHID_HELPER`, which must speak the line
+/// The Karabiner backend: runs the helper named by `GNARL_VHID_HELPER`, which must speak the line
 /// protocol on stdin/stdout and run as root (the virtual devices accept root clients only).
 pub fn helper(path: &str) -> Result<Box<dyn RelativeMouse>, String> {
     helper_cmd(Command::new(path), path, HELPER_REPLY_TIMEOUT)
@@ -401,8 +401,8 @@ mod tests {
     #[test]
     fn replies_split_into_ok_and_err() {
         assert_eq!(
-            parse_reply("ok burl-hid-rig 1\r"),
-            Ok("burl-hid-rig 1".into())
+            parse_reply("ok gnarl-hid-rig 1\r"),
+            Ok("gnarl-hid-rig 1".into())
         );
         assert_eq!(parse_reply("ok"), Ok(String::new()));
         assert!(parse_reply("err bad range")
@@ -423,7 +423,7 @@ mod tests {
 
     #[test]
     fn the_line_backend_writes_the_wire_form_and_reads_replies() {
-        let mut l = line("ok burl-hid-rig 1\nok\nok\nok\n");
+        let mut l = line("ok gnarl-hid-rig 1\nok\nok\nok\n");
         l.available().unwrap();
         l.rel(3, -4).unwrap();
         l.down().unwrap();

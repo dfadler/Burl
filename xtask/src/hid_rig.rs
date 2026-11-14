@@ -14,7 +14,8 @@ use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{channel, Receiver};
-use std::time::Duration;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 /// The largest `rel` component: one signed HID byte, what the firmware's `Mouse.move` takes.
 pub const MAX_STEP: i32 = 127;
@@ -100,6 +101,10 @@ pub struct Line<R: Read, W: Write> {
     rx: R,
     tx: W,
     child: Option<Child>,
+    /// One deadline for a whole command exchange (the write and every byte of the reply): `send`
+    /// moves the shared instant to now + the window, and the reader gives up when it passes. `None`
+    /// for the serial port, whose `stty` read timeout does that job.
+    deadline: Option<(Arc<Mutex<Instant>>, Duration)>,
 }
 
 impl<R: Read, W: Write> Drop for Line<R, W> {
@@ -134,6 +139,12 @@ fn read_line(rx: &mut impl Read) -> Result<String, String> {
 
 impl<R: Read, W: Write> Line<R, W> {
     fn send(&mut self, c: Cmd) -> Result<String, String> {
+        if let Some((at, window)) = &self.deadline {
+            *at.lock().unwrap() = Instant::now() + *window;
+        }
+        // A command is a few bytes and every one is answered before the next is sent, so the helper's
+        // stdin pipe (64 KiB) cannot fill: this write cannot block on a helper that stopped reading,
+        // the missing reply is what times out (and the failed backend is dropped, which kills it).
         self.tx
             .write_all(encode(c)?.as_bytes())
             .and_then(|()| self.tx.flush())
@@ -190,6 +201,7 @@ pub fn serial(path: &str) -> Result<Box<dyn RelativeMouse>, String> {
         rx: f,
         tx,
         child: None,
+        deadline: None,
     }))
 }
 
@@ -202,20 +214,26 @@ pub fn helper(path: &str) -> Result<Box<dyn RelativeMouse>, String> {
 /// How long to wait for one helper reply before giving up on it.
 const HELPER_REPLY_TIMEOUT: Duration = Duration::from_secs(2);
 
-/// A helper's stdout with a deadline per read. A pipe from a live but silent process never reaches
-/// EOF, so a plain `read` would hang forever; this reads on a thread and returns `Ok(0)` (the same
-/// "no reply" the serial port's `time` timeout gives) when nothing arrives in `timeout`. When the
+/// A helper's stdout read against the exchange's shared deadline. A pipe from a live but silent
+/// process never reaches EOF, so a plain `read` would hang forever, and a per-read timeout lets a
+/// trickle of bytes stretch one reply without end; this reads on a thread and returns `Ok(0)` (the
+/// same "no reply" the serial port's `time` timeout gives) once the deadline passes. When the
 /// `Line` is dropped its child is killed and reaped, which also ends the thread.
 struct TimedReader {
     rx: Receiver<Vec<u8>>,
     pending: Vec<u8>,
-    timeout: Duration,
+    deadline: Arc<Mutex<Instant>>,
 }
 
 impl Read for TimedReader {
     fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
         if self.pending.is_empty() {
-            match self.rx.recv_timeout(self.timeout) {
+            let left = self
+                .deadline
+                .lock()
+                .unwrap()
+                .saturating_duration_since(Instant::now());
+            match self.rx.recv_timeout(left) {
                 Ok(chunk) => self.pending = chunk,
                 Err(_) => return Ok(0), // timed out, or the helper closed its stdout
             }
@@ -250,15 +268,17 @@ fn helper_cmd(
             }
         }
     });
+    let at = Arc::new(Mutex::new(Instant::now()));
     Ok(Box::new(Line {
         name: format!("karabiner helper {label}"),
         rx: TimedReader {
             rx,
             pending: Vec::new(),
-            timeout,
+            deadline: Arc::clone(&at),
         },
         tx,
         child: Some(child),
+        deadline: Some((at, timeout)),
     }))
 }
 
@@ -397,6 +417,7 @@ mod tests {
             rx: reply.as_bytes(),
             tx: Vec::new(),
             child: None,
+            deadline: None,
         }
     }
 
@@ -469,6 +490,19 @@ mod tests {
         let e = dev.available().unwrap_err();
         assert!(e.contains("no reply"), "{e}");
         assert!(t.elapsed() < Duration::from_secs(5), "{:?}", t.elapsed());
+    }
+
+    #[test]
+    fn a_helper_that_trickles_bytes_still_hits_the_exchange_deadline() {
+        // One byte every 100 ms and never a newline: a per-read timeout of 400 ms would be reset by
+        // every byte and the 200-byte reply cap would take ~20 s; one deadline per exchange stops it.
+        let mut cmd = Command::new("sh");
+        cmd.args(["-c", "while true; do printf x; sleep 0.1; done"]);
+        let mut dev = helper_cmd(cmd, "trickle", Duration::from_millis(400)).unwrap();
+        let t = Instant::now();
+        let e = dev.available().unwrap_err();
+        assert!(e.contains("no reply"), "{e}");
+        assert!(t.elapsed() < Duration::from_secs(3), "{:?}", t.elapsed());
     }
 
     #[test]

@@ -372,6 +372,117 @@ pub fn check_scene_fills_window(img: &Image, scale: f64) -> Result<String, Strin
     Ok(nums)
 }
 
+// ---- is the cursor hidden? (`--grab`, from full-screen captures) ----
+//
+// Measured on hosted macos-15 and macos-26 (cursor lab, Burl #205): a full-screen `screencapture -C`
+// shows the cursor sprite before the press and not while burl holds its grab. `CGCursorIsVisible`
+// reads "visible" throughout (winit hides the cursor with an invisible cursor rect), so only the
+// pixels can say.
+
+/// Side of the square crop around the cursor's hot spot, in capture pixels.
+pub const CURSOR_CROP: usize = 48;
+/// How far up and left of the hot spot the crop starts: the arrow hangs down and to the right.
+const CURSOR_MARGIN: usize = 8;
+
+/// Luma of a `CURSOR_CROP` square whose top-left is `CURSOR_MARGIN` px up-left of `hot` (the cursor
+/// position in capture pixels). `None` when the square leaves the image.
+pub fn cursor_crop(img: &Image, hot: (f64, f64)) -> Option<Vec<f64>> {
+    let x0 = hot.0.round() as i64 - CURSOR_MARGIN as i64;
+    let y0 = hot.1.round() as i64 - CURSOR_MARGIN as i64;
+    let side = CURSOR_CROP as i64;
+    if x0 < 0 || y0 < 0 || x0 + side > img.w as i64 || y0 + side > img.h as i64 {
+        return None;
+    }
+    let mut v = Vec::with_capacity(CURSOR_CROP * CURSOR_CROP);
+    for y in y0..y0 + side {
+        for x in x0..x0 + side {
+            v.push(luma(&img.rgb[(y as usize * img.w + x as usize) * 3..][..3]));
+        }
+    }
+    Some(v)
+}
+
+/// Mean absolute difference of two equal-length crops, in 0..255 levels.
+pub fn crop_diff(a: &[f64], b: &[f64]) -> f64 {
+    a.iter().zip(b).map(|(x, y)| (x - y).abs()).sum::<f64>() / a.len().max(1) as f64
+}
+
+/// The five full-screen captures one press needs, all with the cursor parked at the same point.
+pub struct CursorShots<'a> {
+    /// With the cursor drawn (`screencapture -C`), before the press.
+    pub before: &'a Image,
+    /// The same again: its difference from `before` is the capture noise.
+    pub before_again: &'a Image,
+    /// Without the cursor (no `-C`), before the press: `before` minus this is the sprite.
+    pub before_no_cursor: &'a Image,
+    /// With the cursor drawn, while the grab is held.
+    pub held: &'a Image,
+    /// Without the cursor, while the grab is held.
+    pub held_no_cursor: &'a Image,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CursorScores {
+    /// Cursor drawn versus not, before the press: how much the sprite shows.
+    pub sprite: f64,
+    /// Two identical captures: how much the capture itself varies.
+    pub noise: f64,
+    /// Before the press versus held, both with the cursor drawn: how much the crop changed.
+    pub hide: f64,
+    /// Cursor drawn versus not, while held: how much of a sprite is still there.
+    pub held_sprite: f64,
+}
+
+pub fn cursor_scores(s: &CursorShots, hot: (f64, f64)) -> Result<CursorScores, String> {
+    let c = |img: &Image| {
+        cursor_crop(img, hot).ok_or(format!(
+            "the {CURSOR_CROP} px crop at {hot:?} leaves the {}x{} capture",
+            img.w, img.h
+        ))
+    };
+    let (a, b, n, h, hn) = (
+        c(s.before)?,
+        c(s.before_again)?,
+        c(s.before_no_cursor)?,
+        c(s.held)?,
+        c(s.held_no_cursor)?,
+    );
+    Ok(CursorScores {
+        sprite: crop_diff(&a, &n),
+        noise: crop_diff(&a, &b),
+        hide: crop_diff(&a, &h),
+        held_sprite: crop_diff(&h, &hn),
+    })
+}
+
+/// The cursor must show before the press and be gone while the grab is held. The held capture is
+/// judged by its OWN cursor-versus-no-cursor comparison, not by the change from `before` alone: that
+/// also moves when the background under the crop changes. A result that cannot be told from "the
+/// capture does not show the cursor at all" is an error, never a pass: a vacuous pass would look
+/// exactly like a working check.
+pub fn check_cursor_hidden(s: &CursorScores) -> Result<String, String> {
+    let significant = |v: f64| v > 3.0 * s.noise.max(0.5);
+    let nums = format!(
+        "sprite before the press {:.2}, capture noise {:.2}, crop change before to held {:.2}, sprite still present while held {:.2}",
+        s.sprite, s.noise, s.hide, s.held_sprite
+    );
+    if !significant(s.sprite) {
+        Err(format!(
+            "the cursor sprite is not visible in the capture before the press, so a hidden cursor cannot be judged: {nums}"
+        ))
+    } else if significant(s.held_sprite) {
+        Err(format!(
+            "the cursor sprite is still present in the held capture (or the background moved under it): {nums}"
+        ))
+    } else if s.hide <= 0.5 * s.sprite {
+        Err(format!(
+            "inconclusive: no sprite while held, yet the crop did not change from before the press: {nums}"
+        ))
+    } else {
+        Ok(nums)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -665,5 +776,104 @@ mod tests {
         assert!(sharpness(&img).unwrap() > 0.0);
         assert_eq!(sharpness(&blurred(&img)).unwrap(), 0.0);
         assert!(check_crisp(&img).is_err());
+    }
+
+    /// A 200x200 capture of flat `bg` luma, with a bright 20x20 "cursor sprite" whose hot spot is at
+    /// (100, 100) when `sprite` is set.
+    fn screen(bg: u8, sprite: bool) -> Image {
+        let (w, h) = (200, 200);
+        let mut rgb = vec![bg; w * h * 3];
+        if sprite {
+            for y in 100..120 {
+                for x in 100..120 {
+                    rgb[(y * w + x) * 3..][..3].fill(255);
+                }
+            }
+        }
+        Image { w, h, rgb }
+    }
+
+    const HOT: (f64, f64) = (100.0, 100.0);
+
+    fn scores(
+        before: &Image,
+        again: &Image,
+        none: &Image,
+        held: &Image,
+        held_none: &Image,
+    ) -> CursorScores {
+        cursor_scores(
+            &CursorShots {
+                before,
+                before_again: again,
+                before_no_cursor: none,
+                held,
+                held_no_cursor: held_none,
+            },
+            HOT,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn a_cursor_that_shows_before_and_is_gone_while_held_passes() {
+        let (with, without) = (screen(100, true), screen(100, false));
+        let s = scores(&with, &with, &without, &without, &without);
+        assert_eq!(s.noise, 0.0);
+        assert!(
+            s.sprite > 10.0 && s.hide > 10.0 && s.held_sprite == 0.0,
+            "{s:?}"
+        );
+        assert!(check_cursor_hidden(&s).is_ok());
+    }
+
+    #[test]
+    fn a_cursor_still_drawn_while_held_fails() {
+        let (with, without) = (screen(100, true), screen(100, false));
+        let s = scores(&with, &with, &without, &with, &without);
+        let e = check_cursor_hidden(&s).unwrap_err();
+        assert!(e.contains("still present in the held capture"), "{e}");
+    }
+
+    #[test]
+    fn a_capture_that_never_shows_the_cursor_is_an_error_not_a_pass() {
+        let without = screen(100, false);
+        let s = scores(&without, &without, &without, &without, &without);
+        let e = check_cursor_hidden(&s).unwrap_err();
+        assert!(e.contains("not visible"), "{e}");
+    }
+
+    #[test]
+    fn a_changed_background_under_a_retained_sprite_is_not_reported_as_hidden() {
+        // The crop differs a lot from before the press, but the held cursor-versus-no-cursor
+        // comparison still shows the sprite: the cursor did not go away.
+        let (with, without) = (screen(100, true), screen(100, false));
+        let (held, held_none) = (screen(160, true), screen(160, false));
+        let s = scores(&with, &with, &without, &held, &held_none);
+        assert!(s.hide > 0.5 * s.sprite && s.held_sprite > 10.0, "{s:?}");
+        let e = check_cursor_hidden(&s).unwrap_err();
+        assert!(e.contains("still present in the held capture"), "{e}");
+    }
+
+    #[test]
+    fn capture_noise_as_large_as_the_sprite_cannot_prove_it_was_visible() {
+        let (with, without) = (screen(100, true), screen(100, false));
+        // two "identical" captures that differ as much as the sprite does
+        let s = scores(&with, &without, &without, &without, &without);
+        assert!(check_cursor_hidden(&s).is_err());
+    }
+
+    #[test]
+    fn a_crop_that_leaves_the_capture_is_reported() {
+        let with = screen(100, true);
+        let near_edge = CursorShots {
+            before: &with,
+            before_again: &with,
+            before_no_cursor: &with,
+            held: &with,
+            held_no_cursor: &with,
+        };
+        let e = cursor_scores(&near_edge, (190.0, 100.0)).unwrap_err();
+        assert!(e.contains("leaves"), "{e}");
     }
 }

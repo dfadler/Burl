@@ -105,14 +105,21 @@ lands on the background, which grabs) and **without** `--hide mouse` (that drops
 1. **Control:** motion with no button down logs no grab, so the `on` below is the press's.
 2. **Press:** burl logs `grab: event=on mode=locked` and keeps it through drag motion. winit's macOS
    `Locked` is `CGAssociateMouseAndMouseCursorPosition(false)` and `Confined` is unsupported there,
-   so `locked` also means the OS call returned `Ok`.
-3. **Release:** burl logs `grab: event=off`; the whole cycle must be on, locked, off.
+   so `locked` also means the OS call returned `Ok`. **The cursor must be hidden:** full-screen
+   `screencapture -C` shots (`target/display-harness-grab/cursor-*.png`) are taken with the cursor
+   parked on the window before the press and again once the grab is on, each paired with a no-`-C`
+   shot. The cursor-sized crop's difference between the pair is the sprite's score: it must be
+   clearly above the repeat-capture noise before the press and gone while held
+   (`pixels::check_cursor_hidden`). A sprite that is still there, or one that never showed, fails.
+3. **Release:** burl logs `grab: event=off`; the whole cycle must be on, locked, off. The sprite's
+   score after the release is printed as `info`, not asserted (it may only return on the next mouse
+   move; the first hosted runs calibrate it).
 
 **Not asserted: where the cursor goes.** The first hosted runs (`macos-15`, `macos-26`) showed the
 cursor following 50 points of synthetic drag while burl held the lock (`(412, 390) -> (462, 390)`),
 so `CGEventPost` bypasses the detach and a position check cannot tell a lock from none. Also not
-covered: that the cursor is hidden (`set_cursor_visible(false)` has no getter) and a real device's
-relative motion, so the checklist's cursor-grab box stays manual.
+covered: that the cursor is detached from the device (a real device's relative motion; no HID route
+exists on hosted runners), so the checklist's cursor-grab box stays manual for that part.
 
 ## Real window drag, `--drag`
 

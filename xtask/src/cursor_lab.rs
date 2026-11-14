@@ -249,6 +249,14 @@ pub fn format_row(r: &Row) -> String {
     )
 }
 
+/// The log line for a row whose injection failed: the measurement is invalid, not "cursor held".
+pub fn format_invalid_row(r: &Row, why: &str) -> String {
+    format!(
+        "{}  INVALID: injection failed ({why}); left out of the table and the verdicts",
+        format_row(r)
+    )
+}
+
 /// Per variant: the verdict from the `no-grab/moved` row against each held-grab row.
 pub fn summary(rows: &[Row]) -> Vec<String> {
     let posted = STEP * EVENTS;
@@ -633,8 +641,16 @@ impl Ctx {
             tap,
             locked: !is_grab_phase(phase) || self.locked.get(),
         };
-        self.log.line(&format_row(&row));
-        self.rows.borrow_mut().push(row);
+        // A row measured after a FAILED injection says nothing about the cursor (it "held still"
+        // because nothing was posted): log it marked invalid and keep it out of the table and the
+        // verdicts, so it can never read as a held cursor.
+        match &posted {
+            Ok(()) => {
+                self.log.line(&format_row(&row));
+                self.rows.borrow_mut().push(row);
+            }
+            Err(why) => self.log.line(&format_invalid_row(&row, why)),
+        }
         posted
     }
 
@@ -1161,6 +1177,17 @@ mod tests {
             tap: None,
             locked: true,
         }
+    }
+
+    #[test]
+    fn a_failed_injection_row_is_marked_invalid() {
+        let r = row("grab/moved", "V6 hid rel", 0);
+        let line = format_invalid_row(&r, "report failed");
+        assert!(
+            line.contains("INVALID") && line.contains("report failed"),
+            "{line}"
+        );
+        assert!(line.contains("left out of the table"), "{line}");
     }
 
     #[test]

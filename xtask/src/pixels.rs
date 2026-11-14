@@ -264,6 +264,9 @@ pub const FILL_LUMA_TOLERANCE: f64 = 24.0;
 /// Inset of the probe points from the content edges, in 1x pixels (scaled by the capture scale):
 /// keeps rounded window corners out of the sample.
 const FILL_INSET: usize = 12;
+/// Patches sampled along each edge; the edge's luma is their median, so up to three can land on
+/// scene content (an edge needs four to move the median). Odd, so the median is a real sample.
+const EDGE_SAMPLES: usize = 7;
 /// Caption band: the top 15% of the content.
 const CAPTION_BAND: f64 = 0.15;
 /// Near-white pixels (all channels above this) in the band are caption text; the dimmer coloured
@@ -283,7 +286,11 @@ pub const CAPTION_CENTRE_TOL: f64 = 0.05;
 pub fn check_scene_fills_window(img: &Image, scale: f64) -> Result<String, String> {
     let (w, h) = (img.w, img.h);
     let inset = (FILL_INSET as f64 * scale).round() as usize;
-    if w < 2 * inset + 8 || h < 2 * inset + 8 {
+    // Mean luma of a (2r+1)^2 patch, r = 2 px at 1x, so one noisy pixel does not decide.
+    let r = (2.0 * scale).round() as usize;
+    // Also keeps the right/bottom sample lines at or after the left/top ones (no usize underflow).
+    let min_side = (2 * (inset + r) + 1).max(2 * inset + 8);
+    if w < min_side || h < min_side {
         return Err(format!("content {w}x{h} too small to judge"));
     }
     let mut hist = [0usize; 256];
@@ -299,8 +306,6 @@ pub fn check_scene_fills_window(img: &Image, scale: f64) -> Result<String, Strin
         }
     }
     let median = median as f64;
-    // Mean luma of a (2r+1)^2 patch, r = 2 px at 1x, so one noisy pixel does not decide.
-    let r = (2.0 * scale).round() as usize;
     let patch = |cx: usize, cy: usize| {
         let (mut s, mut n) = (0.0, 0.0);
         for y in cy - r..=cy + r {
@@ -312,20 +317,44 @@ pub fn check_scene_fills_window(img: &Image, scale: f64) -> Result<String, Strin
         s / n
     };
     let (l, rt, t, b) = (inset + r, w - 1 - inset - r, inset + r, h - 1 - inset - r);
-    let (mx, my) = (w / 2, h / 2);
-    // No top-centre probe: the date caption lives there, and at 2x the inset row lands inside the
-    // text (hosted macos-15 and macos-26 read luma 99.7 there, every other probe 26.0). The
-    // caption check below covers that band, and the top corners still probe the top edge.
-    let probes = [
+    // The four corners are single probes. An edge is judged by the MEDIAN of EDGE_SAMPLES patches
+    // along it, not by one midpoint: the scene is not an empty field, and a single point can land
+    // on its content (the date caption at top-centre read luma 99.7 at 2x; a tree node at
+    // bottom-centre read 51.0 on a hosted macos-26 paused frame, 20.5 on macos-15). An unfilled
+    // bar or a clear-colour block covers the whole edge, so it still moves the median.
+    let frac = |lo: usize, hi: usize, k: usize| lo + (hi - lo) * k / (EDGE_SAMPLES + 1);
+    let edge = |at: &dyn Fn(usize) -> (usize, usize)| -> (f64, f64) {
+        let mut v: Vec<f64> = (1..=EDGE_SAMPLES)
+            .map(|k| {
+                let (x, y) = at(k);
+                patch(x, y)
+            })
+            .collect();
+        v.sort_by(f64::total_cmp);
+        let worst = v.iter().map(|x| (x - median).abs()).fold(0.0, f64::max);
+        (v[EDGE_SAMPLES / 2], worst)
+    };
+    let edges = [
+        ("top", edge(&|k| (frac(l, rt, k), t))),
+        ("bottom", edge(&|k| (frac(l, rt, k), b))),
+        ("left", edge(&|k| (l, frac(t, b, k)))),
+        ("right", edge(&|k| (rt, frac(t, b, k)))),
+    ];
+    let mut lumas: Vec<(&str, f64)> = [
         ("top-left", l, t),
         ("top-right", rt, t),
-        ("left", l, my),
-        ("right", rt, my),
         ("bottom-left", l, b),
-        ("bottom", mx, b),
         ("bottom-right", rt, b),
-    ];
-    let lumas: Vec<(&str, f64)> = probes.iter().map(|&(n, x, y)| (n, patch(x, y))).collect();
+    ]
+    .iter()
+    .map(|&(n, x, y)| (n, patch(x, y)))
+    .collect();
+    lumas.extend(edges.iter().map(|&(n, (med, _))| (n, med)));
+    // Calibration aid: the worst single sample on any edge, which the median hides.
+    let (worst_edge, worst_dev) = edges
+        .iter()
+        .map(|&(n, (_, w))| (n, w))
+        .fold(("", 0.0), |a, c| if c.1 > a.1 { c } else { a });
     let band_h = (h as f64 * CAPTION_BAND) as usize;
     let (mut count, mut sum_x) = (0usize, 0usize);
     for y in 0..band_h {
@@ -346,7 +375,7 @@ pub fn check_scene_fills_window(img: &Image, scale: f64) -> Result<String, Strin
         f64::NAN
     };
     let nums = format!(
-        "median luma {median}, probes [{}], caption {count} px (min {min_px}), centroid x {centroid:.1} of width {w} (centre {:.1} +-{:.1})",
+        "median luma {median}, probes [{}] (edges are medians of {EDGE_SAMPLES} samples; worst single sample {worst_edge} {worst_dev:.1} from the median), caption {count} px (min {min_px}), centroid x {centroid:.1} of width {w} (centre {:.1} +-{:.1})",
         lumas
             .iter()
             .map(|(n, v)| format!("{n} {v:.1}"))
@@ -579,6 +608,55 @@ mod tests {
         }
         let r = check_scene_fills_window(&img, 2.0);
         assert!(r.is_ok(), "{r:?}");
+    }
+
+    /// The hosted macos-26 roundtrip run failed on a bottom-centre probe that landed on scene content
+    /// (luma 51.0 against a median of 26, other probes 26.0). Content under one or a few samples of
+    /// an edge must not read as an unfilled bar, at either scale.
+    #[test]
+    fn scene_content_at_an_edge_midpoint_is_not_an_unfilled_edge() {
+        for k in [1usize, 2] {
+            let mut img = fill_scene(k, 320, true);
+            let (w, h) = (img.w, img.h);
+            // A bright blob across the bottom centre and the left-edge midpoint, a few samples wide.
+            for (cx, cy) in [(w / 2, h - 14 * k), (14 * k, h / 2)] {
+                for y in cy - 6 * k..cy + 6 * k {
+                    for x in cx.saturating_sub(30 * k)..(cx + 30 * k).min(w) {
+                        if y < h {
+                            img.rgb[(y * w + x) * 3..][..3].fill(255);
+                        }
+                    }
+                }
+            }
+            let r = check_scene_fills_window(&img, k as f64);
+            assert!(r.is_ok(), "{k}x: {r:?}");
+        }
+    }
+
+    #[test]
+    fn a_window_too_small_for_the_sample_lines_is_an_error_not_a_panic() {
+        // 56x56 at 2x: inset 24, r 4, so the right/bottom lines (27) would precede left/top (28).
+        for (side, k) in [(56usize, 2usize), (80, 3), (84, 3)] {
+            let img = Image {
+                w: side,
+                h: side,
+                rgb: vec![128; side * side * 3],
+            };
+            let e = check_scene_fills_window(&img, k as f64).unwrap_err();
+            assert!(e.contains("too small to judge"), "{side}@{k}x: {e}");
+        }
+    }
+
+    #[test]
+    fn a_white_bar_along_the_bottom_edge_fails() {
+        let mut img = fill_scene(1, 320, true);
+        for y in img.h - 40..img.h {
+            for x in 0..img.w {
+                img.rgb[(y * img.w + x) * 3..][..3].fill(255);
+            }
+        }
+        let e = check_scene_fills_window(&img, 1.0).unwrap_err();
+        assert!(e.contains("does not fill"), "{e}");
     }
 
     #[test]

@@ -3,6 +3,7 @@
 pub mod crisp_control;
 pub mod cursor_lab;
 pub mod display_harness;
+pub mod hid_rig;
 pub mod pixels;
 pub mod roundtrip;
 pub mod simcmp;

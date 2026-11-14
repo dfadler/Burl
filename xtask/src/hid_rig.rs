@@ -13,6 +13,8 @@
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::process::{Child, Command, Stdio};
+use std::sync::mpsc::{channel, Receiver};
+use std::time::Duration;
 
 /// The largest `rel` component: one signed HID byte, what the firmware's `Mouse.move` takes.
 pub const MAX_STEP: i32 = 127;
@@ -194,18 +196,67 @@ pub fn serial(path: &str) -> Result<Box<dyn RelativeMouse>, String> {
 /// The Karabiner backend: runs the helper named by `BURL_VHID_HELPER`, which must speak the line
 /// protocol on stdin/stdout and run as root (the virtual devices accept root clients only).
 pub fn helper(path: &str) -> Result<Box<dyn RelativeMouse>, String> {
-    let mut child = Command::new(path)
+    helper_cmd(Command::new(path), path, HELPER_REPLY_TIMEOUT)
+}
+
+/// How long to wait for one helper reply before giving up on it.
+const HELPER_REPLY_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// A helper's stdout with a deadline per read. A pipe from a live but silent process never reaches
+/// EOF, so a plain `read` would hang forever; this reads on a thread and returns `Ok(0)` (the same
+/// "no reply" the serial port's `time` timeout gives) when nothing arrives in `timeout`. When the
+/// `Line` is dropped its child is killed and reaped, which also ends the thread.
+struct TimedReader {
+    rx: Receiver<Vec<u8>>,
+    pending: Vec<u8>,
+    timeout: Duration,
+}
+
+impl Read for TimedReader {
+    fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
+        if self.pending.is_empty() {
+            match self.rx.recv_timeout(self.timeout) {
+                Ok(chunk) => self.pending = chunk,
+                Err(_) => return Ok(0), // timed out, or the helper closed its stdout
+            }
+        }
+        let n = out.len().min(self.pending.len());
+        out[..n].copy_from_slice(&self.pending[..n]);
+        self.pending.drain(..n);
+        Ok(n)
+    }
+}
+
+fn helper_cmd(
+    mut cmd: Command,
+    label: &str,
+    timeout: Duration,
+) -> Result<Box<dyn RelativeMouse>, String> {
+    let mut child = cmd
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("{path}: {e}"))?;
-    let (tx, rx) = (
+        .map_err(|e| format!("{label}: {e}"))?;
+    let (tx, mut stdout) = (
         child.stdin.take().ok_or("no stdin")?,
         child.stdout.take().ok_or("no stdout")?,
     );
+    let (chunks, rx) = channel();
+    std::thread::spawn(move || {
+        let mut buf = [0u8; 256];
+        while let Ok(n) = stdout.read(&mut buf) {
+            if n == 0 || chunks.send(buf[..n].to_vec()).is_err() {
+                break;
+            }
+        }
+    });
     Ok(Box::new(Line {
-        name: format!("karabiner helper {path}"),
-        rx,
+        name: format!("karabiner helper {label}"),
+        rx: TimedReader {
+            rx,
+            pending: Vec::new(),
+            timeout,
+        },
         tx,
         child: Some(child),
     }))
@@ -257,13 +308,16 @@ pub const MIN_CONTROL_PT: i32 = 20;
 /// Under the lock the cursor may drift at most this many points (rounding, a stray sub-pixel).
 pub const LOCK_TOLERANCE_PT: i32 = 3;
 
-/// The verdict. `control` and `locked` are the cursor's displacement in points over each phase;
-/// `sent` is the device counts sent in each. The control must move the cursor with the right sign
-/// (acceleration scales the distance, so only a floor is checked); only then does a still cursor
-/// under the lock mean anything.
+/// The verdict. `control`, `locked` and `released` are the cursor's displacement in points over
+/// each phase (no grab; button held; button up again); `sent` is the device counts sent in each.
+/// The control must move the cursor with the right sign (acceleration scales the distance, so only
+/// a floor is checked); only then does a still cursor under the lock mean anything. After the
+/// release the cursor must follow the device again by the same floor: a log line saying the grab
+/// is off does not prove the cursor was freed.
 pub fn check_device_motion(
     control: (i32, i32),
     locked: (i32, i32),
+    released: (i32, i32),
     sent: (i32, i32),
 ) -> Result<(), String> {
     let along = |d: (i32, i32)| d.0 * sent.0.signum() + d.1 * sent.1.signum();
@@ -277,6 +331,11 @@ pub fn check_device_motion(
     if drift > LOCK_TOLERANCE_PT {
         return Err(format!(
             "the cursor moved {locked:?} pt under the Locked grab (tolerance {LOCK_TOLERANCE_PT}) while the device sent {sent:?} counts"
+        ));
+    }
+    if along(released) < MIN_CONTROL_PT {
+        return Err(format!(
+            "the cursor stayed detached after the release: the device sent {sent:?} counts with the button up and the cursor moved {released:?} pt (floor {MIN_CONTROL_PT})"
         ));
     }
     Ok(())
@@ -375,22 +434,48 @@ mod tests {
 
     #[test]
     fn a_free_cursor_that_moves_with_a_still_one_under_the_lock_passes() {
-        assert_eq!(check_device_motion((60, 0), (0, 0), (100, 0)), Ok(()));
-        assert_eq!(check_device_motion((-60, 1), (-2, 3), (-100, 0)), Ok(()));
+        assert_eq!(
+            check_device_motion((60, 0), (0, 0), (50, 0), (100, 0)),
+            Ok(())
+        );
+        assert_eq!(
+            check_device_motion((-60, 1), (-2, 3), (-40, 0), (-100, 0)),
+            Ok(())
+        );
     }
 
     #[test]
     fn a_cursor_that_follows_the_device_under_the_lock_fails() {
-        let e = check_device_motion((60, 0), (55, 0), (100, 0)).unwrap_err();
+        let e = check_device_motion((60, 0), (55, 0), (50, 0), (100, 0)).unwrap_err();
         assert!(e.contains("under the Locked grab"), "{e}");
-        assert!(check_device_motion((60, 0), (0, -4), (100, 0)).is_err());
+        assert!(check_device_motion((60, 0), (0, -4), (50, 0), (100, 0)).is_err());
     }
 
     #[test]
     fn a_control_that_does_not_move_proves_nothing() {
-        let e = check_device_motion((2, 0), (0, 0), (100, 0)).unwrap_err();
+        let e = check_device_motion((2, 0), (0, 0), (50, 0), (100, 0)).unwrap_err();
         assert!(e.contains("control failed"), "{e}");
         // wrong direction is no control either
-        assert!(check_device_motion((-60, 0), (0, 0), (100, 0)).is_err());
+        assert!(check_device_motion((-60, 0), (0, 0), (50, 0), (100, 0)).is_err());
+    }
+
+    #[test]
+    fn a_silent_helper_times_out_instead_of_hanging() {
+        // `sleep` stays alive and never writes: a plain pipe read would block for the full 30 s.
+        let mut cmd = Command::new("sleep");
+        cmd.arg("30");
+        let mut dev = helper_cmd(cmd, "sleep", Duration::from_millis(150)).unwrap();
+        let t = std::time::Instant::now();
+        let e = dev.available().unwrap_err();
+        assert!(e.contains("no reply"), "{e}");
+        assert!(t.elapsed() < Duration::from_secs(5), "{:?}", t.elapsed());
+    }
+
+    #[test]
+    fn a_cursor_that_stays_detached_after_the_release_fails() {
+        let e = check_device_motion((60, 0), (0, 0), (1, 0), (100, 0)).unwrap_err();
+        assert!(e.contains("stayed detached after the release"), "{e}");
+        // moving the wrong way after the release is no proof either
+        assert!(check_device_motion((60, 0), (0, 0), (-50, 0), (100, 0)).is_err());
     }
 }

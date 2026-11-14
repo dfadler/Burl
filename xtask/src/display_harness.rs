@@ -942,17 +942,22 @@ pub fn run_grab_device_check(
     place()?;
     dev.down()?;
     let held = (|| -> Result<(i32, i32), String> {
+        // The firmware releases a held button after 5 s without serial traffic, so every poll
+        // sends a ping: the wait can be long and the button still stays down until `dev.up()`.
         poll(
             "burl's `grab: event=on` line after the device press",
             15,
             || {
+                if let Err(e) = dev.available() {
+                    return Some(Err(format!("the device stopped answering while held: {e}")));
+                }
                 parse_grab_events(&read(&burl_out))
                     .get(before..)?
                     .iter()
                     .any(|(on, _)| *on)
-                    .then_some(())
+                    .then_some(Ok(()))
             },
-        )?;
+        )??;
         std::thread::sleep(Duration::from_millis(500));
         let at = cursor(&mouse_bin)?;
         device_push(dev)?;
@@ -974,9 +979,15 @@ pub fn run_grab_device_check(
         },
     )?;
     check_grab_cycle(&parse_grab_events(&read(&burl_out))[before..])?;
-    crate::hid_rig::check_device_motion(control, locked, sent)?;
+    // The grab is off: the same motion must move the cursor again (the log line alone does not
+    // prove the cursor was freed).
+    let freed_at = cursor(&mouse_bin)?;
+    device_push(dev)?;
+    let released = delta(freed_at, cursor(&mouse_bin)?);
+    eprintln!("info released: sent {sent:?} counts, cursor moved {released:?} pt");
+    crate::hid_rig::check_device_motion(control, locked, released, sent)?;
     eprintln!(
-        "ok   {}: relative motion moves the cursor with no grab and not under the Locked grab",
+        "ok   {}: relative motion moves the cursor with no grab, not under the Locked grab, and again after the release",
         dev.name()
     );
     Ok(())

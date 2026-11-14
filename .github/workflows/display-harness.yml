@@ -11,6 +11,7 @@ on:
       - "tools/display-harness/**"
       - "xtask/src/display_harness.rs"
       - "xtask/src/crisp_control.rs"
+      - "xtask/src/cursor_lab.rs"
       - "xtask/src/main.rs"
       - "xtask/src/pixels.rs"
       - "xtask/src/ssim.rs"
@@ -92,6 +93,26 @@ jobs:
       # compositor on the 2x display (lowres.m). Experiment: prints both scores and capture sizes.
       - run: cargo xtask crisp-control
         if: ${{ !cancelled() }}
+      # Cursor lab (experiment): measures what the cursor does under a held grab, what an event tap
+      # sees, whether the sprite shows in captures, and whether a virtual HID mouse can exist. It
+      # prints a table and fails only on an infrastructure error; continue-on-error keeps this
+      # experimental step from turning the whole job red. Remove it once the answers are in.
+      - name: Cursor lab (experiment)
+        id: cursor-lab
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: cargo xtask cursor-lab
+      - name: Keep the cursor lab log
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cursor-lab-${{ matrix.os }}
+          path: |
+            target/cursor-lab/*.log
+            target/cursor-lab/*.out
+            target/cursor-lab/*.png
+          if-no-files-found: ignore
+          retention-days: 7
       # Always kept: a passing run's captures are what the regression baselines are taken from.
       - name: Keep the captures
         if: ${{ !cancelled() }}

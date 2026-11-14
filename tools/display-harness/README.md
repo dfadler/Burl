@@ -112,8 +112,9 @@ lands on the background, which grabs) and **without** `--hide mouse` (that drops
    clearly above the repeat-capture noise before the press and gone while held
    (`pixels::check_cursor_hidden`). A sprite that is still there, or one that never showed, fails.
 3. **Release:** burl logs `grab: event=off`; the whole cycle must be on, locked, off. The sprite's
-   score after the release is printed as `info`, not asserted (it may only return on the next mouse
-   move; the first hosted runs calibrate it).
+   score after the release must be significant against the same noise and within 30% of the
+   pre-press score, with no mouse move (`pixels::check_cursor_returned`; measured on hosted
+   `macos-15` and `macos-26`: equal to before the press).
 
 **Not asserted: where the cursor goes.** The first hosted runs (`macos-15`, `macos-26`) showed the
 cursor following 50 points of synthetic drag while burl held the lock (`(412, 390) -> (462, 390)`),
@@ -262,6 +263,38 @@ on the same display at the same point size. Own file (`xtask/src/roundtrip.rs`),
 - **Unverified until a hosted run:** that a paused burl redraws the identical frame after two
   scale changes (camera or font state could shift), that the cursor on the title bar does not alter
   the drawing, and that the real MAE is near 0 rather than near the limit.
+
+## Findings and decisions
+
+Folded in from the original handoff (#215). The `CGVirtualDisplay` gotchas and the cursor-lab
+numbers are above (Caveats, Cursor lab); this adds what they leave out.
+
+**Hosted runners (`macos-15`, `macos-26`).** The window server and `screencapture` work, Screen
+Recording and Accessibility are already granted, SIP is disabled and `boot-args` is empty, so no
+self-hosted Mac or VM was needed. The labels are moving, so the image cannot be pinned to a build;
+the "Record macOS build and runner image" step logs `sw_vers`, `ImageOS` and `ImageVersion` instead.
+`CGVirtualDisplay` is private, so a runner update can break the harness with no Burl change; the
+workflow is not a required check and the weekly-failure canary reports it.
+
+**Cursor, in one place.** Hidden is assertable (full-screen `screencapture -C`). `CGCursorIsVisible`
+is useless (winit hides with a cursor rect). Synthetic absolute events bypass a `Locked` grab, and
+delta-only events do not move the cursor even with no grab. No virtual HID device on hosted runners
+(AMFI kills the entitled ad-hoc binary), so "detached from a real device" stays manual.
+
+**Decided not to build.**
+
+- **Reusable action or separate repository:** no second consumer (the other CI users of
+  `CGVirtualDisplay` keep private copies). If one appears, a composite action under
+  `.github/actions/` is the cheap route.
+- **F12/framebuffer readback:** it would change G10 and the DEVIATIONS register hash.
+- **Real-compositor crispness control inside burl:** burl has no way to get a 1x surface on the 2x
+  display without a test-only hook and a new dependency in production code. `crisp-control` above is
+  the standalone substitute.
+- **Pinning the runner image:** not possible, see above.
+
+**Still undone** (tracked, not restated): #210 real-panel Retina crispness, #211 real-device
+relative motion under a `Locked` grab, #212 X11 `Confined` with a real evdev device, #213 assert
+the cursor sprite returns after release, #214 dispatch-test the weekly-failure canary.
 
 ## Needs
 

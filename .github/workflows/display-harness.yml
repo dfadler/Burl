@@ -83,6 +83,10 @@ jobs:
       # experiment: whether the synthetic drag moves the window across the virtual displays.
       - run: cargo xtask display-harness --drag
         if: ${{ !cancelled() }}
+      # Paused 1x -> 2x -> 1x drag round trip: the window must show the same frame afterwards.
+      # First hosted run is the experiment (see tools/display-harness/README.md).
+      - run: cargo xtask display-harness --roundtrip
+        if: ${{ !cancelled() }}
       # Always kept: a passing run's captures are what the regression baselines are taken from.
       - name: Keep the captures
         if: ${{ !cancelled() }}
@@ -97,6 +101,9 @@ jobs:
             target/display-harness-grab/burl.out
             target/display-harness-drag/burl.out
             target/display-harness-drag/vd.out
+            target/display-harness-roundtrip/*.png
+            target/display-harness-roundtrip/burl.out
+            target/display-harness-roundtrip/vd.out
           if-no-files-found: ignore
           retention-days: 7
 

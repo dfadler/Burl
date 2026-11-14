@@ -11,7 +11,7 @@ use glam::{Vec2, Vec4};
 use std::collections::HashMap;
 
 /// The font Gource ships (`data/fonts/FreeSans.ttf`), the `--font-file` default.
-pub const FREE_SANS: &[u8] = include_bytes!("../../../data/fonts/FreeSans.ttf");
+pub const FREE_SANS: &[u8] = include_bytes!("../assets/FreeSans.ttf");
 
 /// The `--font-file` default as `GourceSettings` stores it; any other value is a canonical path.
 pub const DEFAULT_FONT_FILE: &str = "FreeSans.ttf";

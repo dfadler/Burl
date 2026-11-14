@@ -3,7 +3,14 @@ name = "gnarl-gl"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Gnarl: GL context trait, headless EGL context and the glow renderer (the only crate allowed unsafe)"
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+description = "Gnarl: GL context trait, headless EGL context and the glow renderer"
+readme = "README.md"
+keywords = ["gource", "opengl", "egl", "glow", "gnarl"]
+categories = ["rendering", "graphics"]
+include = ["LICENSE", "src/**", "shaders/**", "examples/**", "README.md"]
 
 [dependencies]
 gnarl-render.workspace = true

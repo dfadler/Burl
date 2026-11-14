@@ -3,7 +3,14 @@ name = "gnarl"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Gnarl: the application binary (build session 1: --output-custom-log only)"
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+description = "Gnarl: a Rust port of Gource, the software version control visualization (windowed and headless frame export)"
+readme = "README.md"
+keywords = ["gource", "visualization", "git", "opengl", "version-control"]
+categories = ["visualization", "command-line-utilities"]
+include = ["LICENSE", "src/**", "README.md"]
 
 [[bin]]
 name = "gnarl"

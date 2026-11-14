@@ -7,14 +7,19 @@ version = "0.57.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/dfadler/Gnarl"
+homepage = "https://github.com/dfadler/Gnarl"
+# Floor set by the dependency tree (wayland-protocols 0.32 needs 1.86), checked in a rust:1.86 container.
+rust-version = "1.86"
 
 [workspace.dependencies]
-gnarl-util = { path = "crates/gnarl-util" }
-gnarl-conf = { path = "crates/gnarl-conf" }
-gnarl-formats = { path = "crates/gnarl-formats" }
-gnarl-sim = { path = "crates/gnarl-sim" }
-gnarl-render = { path = "crates/gnarl-render" }
-gnarl-gl = { path = "crates/gnarl-gl" }
+# Path + version: the path is used in the workspace, the version when published. The release PR
+# bumps these with [workspace.package] version (`cargo build --locked` fails loudly if they differ).
+gnarl-util = { path = "crates/gnarl-util", version = "=0.57.0" }
+gnarl-conf = { path = "crates/gnarl-conf", version = "=0.57.0" }
+gnarl-formats = { path = "crates/gnarl-formats", version = "=0.57.0" }
+gnarl-sim = { path = "crates/gnarl-sim", version = "=0.57.0" }
+gnarl-render = { path = "crates/gnarl-render", version = "=0.57.0" }
+gnarl-gl = { path = "crates/gnarl-gl", version = "=0.57.0" }
 # One glam for the whole workspace (the sim pins the same version).
 glam = "=0.34.2"
 regex = "1"

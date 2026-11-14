@@ -48,11 +48,25 @@ fn gif_decodes_first_frame_exactly() {
 
 #[test]
 fn png_still_decodes() {
-    let img = decode_image(include_bytes!("../../../data/user.png")).unwrap();
+    let img = decode_image(gnarl_render::USER_PNG).unwrap();
     assert_eq!(img.rgba.len(), (img.width * img.height * 4) as usize);
 }
 
 #[test]
 fn unknown_format_is_an_error() {
     assert!(decode_image(b"BM not a supported image").is_err());
+}
+
+/// The embedded copies under `assets/` (shipped in the crates.io package) are the `data/` files.
+#[test]
+fn assets_match_data() {
+    let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    for (name, embedded) in [
+        ("beam.png", gnarl_render::BEAM_PNG),
+        ("file.png", gnarl_render::FILE_PNG),
+        ("user.png", gnarl_render::USER_PNG),
+        ("fonts/FreeSans.ttf", gnarl_render::FREE_SANS),
+    ] {
+        assert_eq!(std::fs::read(data.join(name)).unwrap(), embedded, "{name}");
+    }
 }

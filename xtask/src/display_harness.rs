@@ -202,7 +202,7 @@ pub fn check_high_dpi(
 // ---- process plumbing ----
 
 /// Kills and reaps its child on drop, so a failure or panic never leaves gnarl or the helper behind.
-struct Proc(Child);
+pub(crate) struct Proc(pub(crate) Child);
 impl Drop for Proc {
     fn drop(&mut self) {
         let _ = self.0.kill();
@@ -210,7 +210,11 @@ impl Drop for Proc {
     }
 }
 
-fn poll<T>(what: &str, secs: u64, mut f: impl FnMut() -> Option<T>) -> Result<T, String> {
+pub(crate) fn poll<T>(
+    what: &str,
+    secs: u64,
+    mut f: impl FnMut() -> Option<T>,
+) -> Result<T, String> {
     let end = Instant::now() + Duration::from_secs(secs);
     loop {
         if let Some(v) = f() {
@@ -223,7 +227,7 @@ fn poll<T>(what: &str, secs: u64, mut f: impl FnMut() -> Option<T>) -> Result<T,
     }
 }
 
-fn run(cmd: &mut Command) -> Result<String, String> {
+pub(crate) fn run(cmd: &mut Command) -> Result<String, String> {
     let out = cmd.output().map_err(|e| format!("{cmd:?}: {e}"))?;
     if !out.status.success() {
         return Err(format!(
@@ -235,7 +239,7 @@ fn run(cmd: &mut Command) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
-fn read(p: &Path) -> String {
+pub(crate) fn read(p: &Path) -> String {
     std::fs::read_to_string(p).unwrap_or_default()
 }
 

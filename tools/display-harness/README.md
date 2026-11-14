@@ -258,6 +258,50 @@ on the same display at the same point size. Own file (`xtask/src/roundtrip.rs`),
   scale changes (camera or font state could shift), that the cursor on the title bar does not alter
   the drawing, and that the real MAE is near 0 rather than near the limit.
 
+## Real Retina panel, `--real-panel` (#210)
+
+```
+cargo xtask display-harness --real-panel
+```
+
+Checklist box 79 on real hardware. No virtual display and nothing is moved or pressed: it reads
+the main display with `panel.m` (`NSScreen` `backingScaleFactor`, bounds, pixels, name), **refuses**
+unless that is 2 (a 1x or scaled-to-1x main display, or no window-server session at all, as over
+SSH or on a headless runner, exits 1 with the reason before building anything), opens gnarl with
+`-640x360` on it, requires gnarl's own `display:` line to say scale 2 and 640x360 px, waits 8 s,
+captures the window with `screencapture -x -o -l`, checks the capture is 2x the window's points, and
+judges the content with two pure checks. It prints the macOS version and build, the CPU, the
+display name and the numbers, and keeps `window.png`, `window-content.png`, `report.txt`, `gnarl.out`
+in `target/display-harness-real-panel/`.
+
+- **Crispness** (`pixels::check_crisp`, limit 1.8, see `--high-dpi`): detail finer than 2 px exists.
+- **Edge width** (`edges::check_edges`): for every luma edge of at least 80 levels along rows and
+  columns, the 10-90% rise distance in physical pixels. Median must be at most 2.0 px and at least
+  20% of edges within 1.25 px. Calibrated on the four `baselines/` captures (640x360 physical
+  pixels, both runner images, both displays), which are native renders, plus copies built from
+  them:
+
+  | frame | median rise | edges within 1.25 px |
+  |---|---|---|
+  | native (4 baselines) | 1.55 to 1.56 px | 29% to 31% |
+  | 1x frame bilinear-stretched to 2x | 2.83 to 2.87 | 0.04% to 0.15% |
+  | blurred (box down, bilinear up) | 2.92 to 2.96 | 1.3% to 1.9% |
+  | doubled (each pixel averaged with its left neighbour) | 1.60 | 13.5% to 16.4% |
+  | nearest-stretched | 0.80 | 100% (steep, blocky: left to `check_crisp`, which scores it 0) |
+
+  The median alone cannot see a doubled line (1.60), the sharp share does; both are asserted.
+  Not detected: a stroke that is uniformly too thick (both edges stay steep).
+- **Not verified:** any real Retina panel. The thresholds come from hosted virtual-display
+  captures plus synthetic degradations; a real panel's capture (different filter, subpixel
+  layout, the 8 s frame instead of a paused one) may sit elsewhere. The first real run should be
+  attached to the checklist and, if it fails while looking fine, the numbers say which limit to
+  move.
+- **Two ways to run it:** by the owner once per release on a real Mac (box 79), or on a
+  self-hosted Mac runner with a Retina panel and a logged-in session (not a hosted runner: they have no
+  Retina main display, so `--real-panel` refuses there). No workflow runs it; the pure detector
+  tests (`edges::tests`) do run on the hosted macOS leg of `cargo test`.
+- It steals focus like any window opening; do not run it from an agent session on a desktop in use.
+
 ## Findings and decisions
 
 Folded in from the original handoff (#215). The `CGVirtualDisplay` gotchas and the cursor-lab
@@ -303,6 +347,7 @@ the cursor sprite returns after release, #214 dispatch-test the weekly-failure c
   and pixels, then `ready`; runs until SIGTERM/SIGINT or its parent exits.
 - `lowres.m`: the test-card window for `crisp-control`, `lowres YES|NO`; runs until killed or its
   parent exits.
+- `panel.m`: prints the main display's scale, bounds, pixels and name for `--real-panel`.
 - `wid.m`: prints `id x y w h` of gnarl's on-screen windows taller than 100 points.
 - `mouse.m`, `tapwatch.m`, `hid.m`: synthetic mouse input, an event-tap observer and a virtual HID
   mouse (the last two only for the cursor lab).

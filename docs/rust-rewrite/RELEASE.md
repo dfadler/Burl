@@ -42,5 +42,5 @@ required reviewer. Nothing is public until the user also publishes the draft.
 ## Artifacts per release
 
 - `gnarl-vX.Y.Z-linux-amd64.tar.gz`, `gnarl-vX.Y.Z-macos-arm64.tar.gz`, each with a `.sha256`: `gnarl`, `COPYING`, `NOTICE.md` (Gource attribution), `THIRD-PARTY-LICENSES.txt`.
-- `ghcr.io/dfadler/burl:X.Y.Z` (the path comes from the repository name, still `Burl`, not the crate name) (and `latest` for non-rc): headless, no ffmpeg; pipe the PPM stream to ffmpeg on the host.
+- `ghcr.io/dfadler/gnarl:X.Y.Z` (the path comes from the repository name) (and `latest` for non-rc): headless, no ffmpeg; pipe the PPM stream to ffmpeg on the host.
 - No crates.io publish (`gnarl` is taken there).

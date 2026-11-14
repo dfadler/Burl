@@ -647,11 +647,27 @@ fn push_right(bin: &Path, kind: &str, p: (i32, i32), steps: i32, step: i32) -> R
     Ok(())
 }
 
+/// A full-screen capture of the main display (`screencapture -x`), with the cursor drawn when
+/// `cursor` is set (`-C`). Saved as `<name>.png` in `dir`, so a run can be looked at afterwards.
+fn screen_shot(dir: &Path, name: &str, cursor: bool) -> Result<crate::ssim::Image, String> {
+    let png = dir.join(format!("{name}.png"));
+    let mut cmd = Command::new("screencapture");
+    cmd.arg("-x");
+    if cursor {
+        cmd.arg("-C");
+    }
+    run(cmd.arg(&png))?;
+    crate::ssim::decode(&std::fs::read(&png).map_err(|e| format!("{}: {e}", png.display()))?)
+}
+
 /// `cargo xtask display-harness --grab`: a left press on burl's background grabs the cursor
 /// (`Gource::grabMouse`) and the release lets go. A real press reaches the real window through the
 /// window server, and burl's `grab:` line says what it asked winit for (on macOS `Locked`, which is
 /// `CGAssociateMouseAndMouseCursorPosition(false)`; the call's `Ok` is what makes the mode `locked`).
 /// Phases: no grab without a press, one grab on the press (kept through drag motion), one release.
+/// While the grab is held the cursor must be HIDDEN: a full-screen `screencapture -C` shows its
+/// sprite before the press and must not show it while held (measured on hosted `macos-15` and
+/// `macos-26`; `CGCursorIsVisible` cannot say, see `pixels::check_cursor_hidden`).
 ///
 /// It does NOT assert where the cursor goes: on hosted `macos-15` and `macos-26` the cursor followed
 /// 50 points of synthetic `CGEventPost` drag while burl held a locked grab (`(412, 390) -> (462, 390)`),
@@ -757,10 +773,20 @@ pub fn run_grab_check(root: &Path) -> Result<(), String> {
     }
     eprintln!("ok   control: motion alone does not grab");
 
-    // Phase B, press on the background: one grab, locked, kept through drag motion.
+    // Phase B, press on the background: one grab, locked, the cursor hidden, kept through drag
+    // motion. The captures are full-screen (the main display) with the cursor parked at `p`, so its
+    // hot spot is `p` in points times burl's scale in capture pixels.
     place()?;
+    let scale = parse_display_events(&read(&burl_out))
+        .first()
+        .map(|e| e.scale)
+        .ok_or("burl printed no `display: event=start` line, so the capture scale is unknown")?;
+    let hot = (f64::from(p.0) * scale, f64::from(p.1) * scale);
+    let shot_before = screen_shot(&dir, "cursor-before", true)?;
+    let shot_again = screen_shot(&dir, "cursor-before-again", true)?;
+    let shot_none = screen_shot(&dir, "cursor-before-none", false)?;
     mouse(&mouse_bin, &["down".into(), s(p.0), s(p.1)])?;
-    let held = (|| -> Result<(), String> {
+    let held = (|| -> Result<f64, String> {
         poll("burl's `grab: event=on` line after the press", 15, || {
             parse_grab_events(&read(&burl_out))
                 .get(before..)?
@@ -769,17 +795,37 @@ pub fn run_grab_check(root: &Path) -> Result<(), String> {
                 .then_some(())
         })?;
         eprintln!("ok   burl reports grab on");
+        // winit hides the cursor with a cursor rect; give the window server a moment to apply it.
+        std::thread::sleep(Duration::from_millis(500));
+        let held_shot = screen_shot(&dir, "cursor-held", true)?;
+        let held_none = screen_shot(&dir, "cursor-held-none", false)?;
+        let scores = pixels::cursor_scores(
+            &pixels::CursorShots {
+                before: &shot_before,
+                before_again: &shot_again,
+                before_no_cursor: &shot_none,
+                held: &held_shot,
+                held_no_cursor: &held_none,
+            },
+            hot,
+        )
+        .map_err(|e| format!("cursor visibility: {e}"))?;
+        let nums =
+            pixels::check_cursor_hidden(&scores).map_err(|e| format!("cursor visibility: {e}"))?;
+        eprintln!(
+            "ok   the cursor is visible before the press and hidden while the grab is held: {nums}"
+        );
         push_right(&mouse_bin, "drag", p, 5, 10)?;
         let now = &parse_grab_events(&read(&burl_out))[before..];
         if now.len() != 1 {
             return Err(format!("the grab changed during the drag: {now:?}"));
         }
         eprintln!("ok   the grab holds through drag motion");
-        Ok(())
+        Ok(scores.sprite)
     })();
     // Release whatever happened, so a failure above cannot leave the button down.
     mouse(&mouse_bin, &["up".into(), s(p.0), s(p.1)])?;
-    held?;
+    let sprite_before = held?;
 
     // Phase C, release: burl lets go, and the whole cycle is on, locked, off.
     poll(
@@ -795,6 +841,23 @@ pub fn run_grab_check(root: &Path) -> Result<(), String> {
     )?;
     check_grab_cycle(&parse_grab_events(&read(&burl_out))[before..])?;
     eprintln!("ok   burl reports grab off: one press, one locked grab, one release");
+
+    // NOT asserted, printed so the first hosted runs can calibrate it: is the cursor drawn again
+    // after the release? winit calls `set_cursor_visible(true)`, but the window server may only
+    // apply the cursor rect on the next mouse move, and the lab never measured this.
+    std::thread::sleep(Duration::from_millis(500));
+    let after = screen_shot(&dir, "cursor-after", true)?;
+    let after_none = screen_shot(&dir, "cursor-after-none", false)?;
+    match (
+        pixels::cursor_crop(&after, hot),
+        pixels::cursor_crop(&after_none, hot),
+    ) {
+        (Some(a), Some(n)) => eprintln!(
+            "info the cursor after the release: sprite {:.2} (before the press {sprite_before:.2}); not asserted",
+            pixels::crop_diff(&a, &n)
+        ),
+        _ => eprintln!("info the cursor after the release: the crop leaves the capture; not asserted"),
+    }
     Ok(())
 }
 

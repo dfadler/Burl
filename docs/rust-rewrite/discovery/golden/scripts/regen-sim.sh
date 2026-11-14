@@ -6,7 +6,7 @@
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../../../../.." && pwd)
 FX=$ROOT/tests/golden/sim
-IMG=burl-gource-dump:amd64
+IMG=gnarl-gource-dump:amd64
 docker build --platform linux/amd64 -t "$IMG" "$ROOT/reference/gource-cpp-dump"
 names=("$@")
 [ ${#names[@]} -gt 0 ] || { for a in "$FX"/*.args; do names+=("$(basename "$a" .args)"); done; }

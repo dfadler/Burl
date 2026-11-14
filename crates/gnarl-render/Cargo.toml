@@ -1,0 +1,23 @@
+[package]
+name = "gnarl-render"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+description = "Gnarl: CPU-side render batches in Gource's fixed pass order (no GL)"
+readme = "README.md"
+keywords = ["gource", "rendering", "visualization", "gnarl"]
+categories = ["rendering", "visualization"]
+include = ["LICENSE", "src/**", "assets/**", "README.md"]
+
+[dependencies]
+glam.workspace = true
+gnarl-util.workspace = true
+gnarl-sim.workspace = true
+fontdue = "0.9.5"
+jpeg-decoder = { version = "0.3.2", default-features = false }
+gif = { version = "0.14", default-features = false, features = ["std"] }
+png = "0.18"
+unicode-normalization = { version = "0.1", default-features = false, features = ["std"] }

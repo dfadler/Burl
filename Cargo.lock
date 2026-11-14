@@ -116,82 +116,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
 
 [[package]]
-name = "burl"
-version = "0.58.0"
-dependencies = [
- "burl-conf",
- "burl-formats",
- "burl-gl",
- "burl-render",
- "burl-sim",
- "burl-util",
- "xtask",
-]
-
-[[package]]
-name = "burl-conf"
-version = "0.58.0"
-dependencies = [
- "burl-util",
- "chrono",
-]
-
-[[package]]
-name = "burl-formats"
-version = "0.58.0"
-dependencies = [
- "burl-util",
- "roxmltree",
-]
-
-[[package]]
-name = "burl-gl"
-version = "0.58.0"
-dependencies = [
- "burl-render",
- "glam",
- "glow",
- "glutin",
- "glutin-winit",
- "png",
- "raw-window-handle",
- "winit",
-]
-
-[[package]]
-name = "burl-render"
-version = "0.58.0"
-dependencies = [
- "burl-sim",
- "burl-util",
- "fontdue",
- "gif",
- "glam",
- "jpeg-decoder",
- "png",
- "unicode-normalization",
-]
-
-[[package]]
-name = "burl-sim"
-version = "0.58.0"
-dependencies = [
- "burl-formats",
- "burl-util",
- "glam",
-]
-
-[[package]]
-name = "burl-util"
-version = "0.58.0"
-dependencies = [
- "chrono",
- "glam",
- "pcre2",
- "regex",
-]
-
-[[package]]
 name = "bytemuck"
 version = "1.25.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -627,6 +551,82 @@ checksum = "4c4680ba6195f424febdc3ba46e7a42a0e58743f2edb115297b86d7f8ecc02d2"
 dependencies = [
  "gl_generator",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "gnarl"
+version = "0.58.0"
+dependencies = [
+ "gnarl-conf",
+ "gnarl-formats",
+ "gnarl-gl",
+ "gnarl-render",
+ "gnarl-sim",
+ "gnarl-util",
+ "xtask",
+]
+
+[[package]]
+name = "gnarl-conf"
+version = "0.58.0"
+dependencies = [
+ "chrono",
+ "gnarl-util",
+]
+
+[[package]]
+name = "gnarl-formats"
+version = "0.58.0"
+dependencies = [
+ "gnarl-util",
+ "roxmltree",
+]
+
+[[package]]
+name = "gnarl-gl"
+version = "0.58.0"
+dependencies = [
+ "glam",
+ "glow",
+ "glutin",
+ "glutin-winit",
+ "gnarl-render",
+ "png",
+ "raw-window-handle",
+ "winit",
+]
+
+[[package]]
+name = "gnarl-render"
+version = "0.58.0"
+dependencies = [
+ "fontdue",
+ "gif",
+ "glam",
+ "gnarl-sim",
+ "gnarl-util",
+ "jpeg-decoder",
+ "png",
+ "unicode-normalization",
+]
+
+[[package]]
+name = "gnarl-sim"
+version = "0.58.0"
+dependencies = [
+ "glam",
+ "gnarl-formats",
+ "gnarl-util",
+]
+
+[[package]]
+name = "gnarl-util"
+version = "0.58.0"
+dependencies = [
+ "chrono",
+ "glam",
+ "pcre2",
+ "regex",
 ]
 
 [[package]]
@@ -2234,7 +2234,7 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 name = "xtask"
 version = "0.58.0"
 dependencies = [
- "burl-sim",
+ "gnarl-sim",
  "png",
  "serde_json",
 ]

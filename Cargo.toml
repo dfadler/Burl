@@ -6,15 +6,20 @@ members = ["crates/*", "xtask"]
 version = "0.58.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
-repository = "https://github.com/dfadler/Burl"
+repository = "https://github.com/dfadler/Gnarl"
+homepage = "https://github.com/dfadler/Gnarl"
+# Floor: the code uses slice::as_chunks (1.88; clippy incompatible_msrv enforces this in CI) and fontdue needs 1.87.
+rust-version = "1.88"
 
 [workspace.dependencies]
-burl-util = { path = "crates/burl-util" }
-burl-conf = { path = "crates/burl-conf" }
-burl-formats = { path = "crates/burl-formats" }
-burl-sim = { path = "crates/burl-sim" }
-burl-render = { path = "crates/burl-render" }
-burl-gl = { path = "crates/burl-gl" }
+# Path + version: the path is used in the workspace, the version when published. The release PR
+# bumps these with [workspace.package] version (`cargo build --locked` fails loudly if they differ).
+gnarl-util = { path = "crates/gnarl-util", version = "=0.58.0" }
+gnarl-conf = { path = "crates/gnarl-conf", version = "=0.58.0" }
+gnarl-formats = { path = "crates/gnarl-formats", version = "=0.58.0" }
+gnarl-sim = { path = "crates/gnarl-sim", version = "=0.58.0" }
+gnarl-render = { path = "crates/gnarl-render", version = "=0.58.0" }
+gnarl-gl = { path = "crates/gnarl-gl", version = "=0.58.0" }
 # One glam for the whole workspace (the sim pins the same version).
 glam = "=0.34.2"
 regex = "1"

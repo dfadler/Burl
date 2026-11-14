@@ -1,0 +1,29 @@
+[package]
+name = "gnarl-gl"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+description = "Gnarl: GL context trait, headless EGL context and the glow renderer"
+readme = "README.md"
+keywords = ["gource", "opengl", "egl", "glow", "gnarl"]
+categories = ["rendering", "graphics"]
+include = ["LICENSE", "src/**", "shaders/**", "examples/**", "README.md"]
+
+[dependencies]
+gnarl-render.workspace = true
+glam.workspace = true
+# Pins and features from the headless spike (#15); glow bumped to 0.18.0 by #19 and re-verified.
+glow = "=0.18.0"
+glutin = { version = "=0.32.3", default-features = false, features = ["egl", "x11", "wayland"] }
+glutin-winit = { version = "=0.5.0", default-features = false, features = ["egl", "x11", "wayland"] }
+winit.workspace = true
+raw-window-handle = "=0.6.2"
+
+[dev-dependencies]
+png = "0.18"
+
+[[example]]
+name = "smoke"

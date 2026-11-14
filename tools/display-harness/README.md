@@ -1,7 +1,7 @@
 # display-harness
 
-Checks Burl's scale-factor handling on macOS: it creates a 2x and a 1x virtual display, runs the
-real `burl` with `--log-level debug`, moves its window onto each display and asserts the
+Checks Gnarl's scale-factor handling on macOS: it creates a 2x and a 1x virtual display, runs the
+real `gnarl` with `--log-level debug`, moves its window onto each display and asserts the
 `display:` log lines and the captured pixel sizes, then compares the captured pixels. Part of map
 #147.
 
@@ -9,8 +9,8 @@ real `burl` with `--log-level debug`, moves its window onto each display and ass
 cargo xtask display-harness
 ```
 
-It builds the release `burl`, compiles `vd.m` and `wid.m` into `target/display-harness/`, and
-leaves the logs and captures (`vd.out`, `burl.out`, `1x.png`, `2x.png`) there. Exit 1 with one
+It builds the release `gnarl`, compiles `vd.m` and `wid.m` into `target/display-harness/`, and
+leaves the logs and captures (`vd.out`, `gnarl.out`, `1x.png`, `2x.png`) there. Exit 1 with one
 message per failed step or assertion. Not part of `cargo xtask ci`; other OSes print a message
 and exit 1.
 
@@ -20,10 +20,10 @@ logical = physical / scale, and a scale change shows `scale-changed` then `resiz
 
 ## Pixel comparison (#155)
 
-- **Same frame:** burl's sim is time dependent, so the harness presses Space once (System Events
+- **Same frame:** gnarl's sim is time dependent, so the harness presses Space once (System Events
   key, read back from the pixels: the camera keeps settling for 10 to 45 s, then the frame stops
   changing) and every capture after that, on either display, is the same frame.
-- **Same physical size, not same point size:** Burl lays out in physical pixels (fixed pixel font
+- **Same physical size, not same point size:** Gnarl lays out in physical pixels (fixed pixel font
   size, camera zoom), so a 320x180 pt window on the 2x display and a 640x360 pt window on the 1x
   display both show 640x360 px of the same frame, while a 320x180 pt window on 1x is framed
   differently. The harness resizes to exactly those, crops the title bar, and compares.
@@ -41,7 +41,7 @@ logical = physical / scale, and a scale change shows `scale-changed` then `resiz
 cargo xtask display-harness --high-dpi
 ```
 
-Same flow, but burl gets `--high-dpi`, so `-640x360` is a logical-size window and font scale
+Same flow, but gnarl gets `--high-dpi`, so `-640x360` is a logical-size window and font scale
 follows the DPI ratio; artifacts go to `target/display-harness-high-dpi/`. Measured on macOS 26
 (Apple Silicon): the window is 640x360 pt on both displays; physical 640x360 on 1x and 1280x720 on
 2x; `display:` lines say logical 640x360 on both; the 2x capture is 1280x784 (title bar included).
@@ -60,28 +60,67 @@ follows the DPI ratio; artifacts go to `target/display-harness-high-dpi/`. Measu
   filter may differ from bilinear), and doubled lines.
 
 
+## Real upscale control, `cargo xtask crisp-control`
+
+```
+cargo xtask crisp-control
+```
+
+The blurred copy above is synthetic. This builds a real negative control with the actual
+compositor, without touching gnarl (gnarl cannot be made non-hi-res: glutin 0.32.3 forces
+`setWantsBestResolutionOpenGLSurface(true)`). `lowres.m` is a standalone window with an
+`NSOpenGLView` (deprecated since macOS 10.14, still shipped; I could not confirm the status on
+macOS 15 or 26 from Apple's docs, the pages did not render, so it is **unverified** until a hosted
+run) whose `wantsBestResolutionOpenGLSurface` is set from `YES|NO` before the view is first
+displayed. It draws one fixed card (1 and 2 px lines at three orientations, 1 px diagonals, a fine
+checker) in drawable pixels with immediate-mode GL, no shaders. The xtask starts `vd`, runs
+`lowres YES` then `lowres NO`, moves each onto the 2x display, captures with
+`screencapture -x -o -l`, crops the title bar and runs `pixels::crispness` / `check_crisp`.
+Artifacts in `target/crisp-control/` (`native.png`, `lowres.png`, `*-content.png`, `*.out` with the
+drawable size `lowres` itself reported).
+
+- **Asserted:** the native capture is 2x its window's points and passes `check_crisp`.
+- **Printed, not asserted:** both crispness scores and both capture sizes, plus one of three
+  findings: the upscale scored below `MIN_CRISPNESS` (the control works); it scored at or above
+  it (the check would not reject a real upscale, nothing is weakened); or `screencapture` returned
+  the 1x backing (no upscale in the capture at all).
+- **Open until the first hosted run:** what `screencapture -l` returns for a non-hi-res window on
+  a 2x display (2x upscaled pixels, or the 1x backing) and with what filter; whether the real
+  upscale scores below 1.8; that `wantsBestResolutionOpenGLSurface` set before display takes
+  effect for a bare executable with no Info.plist (`NSHighResolutionCapable`); that the window of
+  an unbundled, non-activated app is listed by `wid` and System Events. Record the measured
+  numbers here after the run.
+
 ## Cursor grab, `--grab`
 
 ```
 cargo xtask display-harness --grab
 ```
 
-No virtual display needed. Opens burl with the tree, files, users and slider hidden (so a click
+No virtual display needed. Opens gnarl with the tree, files, users and slider hidden (so a click
 lands on the background, which grabs) and **without** `--hide mouse` (that drops button presses).
-`mouse.m` posts a real left press and release with `CGEventPost`, and the check reads burl's
+`mouse.m` posts a real left press and release with `CGEventPost`, and the check reads gnarl's
 `grab:` debug lines. Three phases:
 
 1. **Control:** motion with no button down logs no grab, so the `on` below is the press's.
-2. **Press:** burl logs `grab: event=on mode=locked` and keeps it through drag motion. winit's macOS
+2. **Press:** gnarl logs `grab: event=on mode=locked` and keeps it through drag motion. winit's macOS
    `Locked` is `CGAssociateMouseAndMouseCursorPosition(false)` and `Confined` is unsupported there,
-   so `locked` also means the OS call returned `Ok`.
-3. **Release:** burl logs `grab: event=off`; the whole cycle must be on, locked, off.
+   so `locked` also means the OS call returned `Ok`. **The cursor must be hidden:** full-screen
+   `screencapture -C` shots (`target/display-harness-grab/cursor-*.png`) are taken with the cursor
+   parked on the window before the press and again once the grab is on, each paired with a no-`-C`
+   shot. The cursor-sized crop's difference between the pair is the sprite's score: it must be
+   clearly above the repeat-capture noise before the press and gone while held
+   (`pixels::check_cursor_hidden`). A sprite that is still there, or one that never showed, fails.
+3. **Release:** gnarl logs `grab: event=off`; the whole cycle must be on, locked, off. The sprite's
+   score after the release must be significant against the same noise and within 30% of the
+   pre-press score, with no mouse move (`pixels::check_cursor_returned`; measured on hosted
+   `macos-15` and `macos-26`: equal to before the press).
 
 **Not asserted: where the cursor goes.** The first hosted runs (`macos-15`, `macos-26`) showed the
-cursor following 50 points of synthetic drag while burl held the lock (`(412, 390) -> (462, 390)`),
+cursor following 50 points of synthetic drag while gnarl held the lock (`(412, 390) -> (462, 390)`),
 so `CGEventPost` bypasses the detach and a position check cannot tell a lock from none. Also not
-covered: that the cursor is hidden (`set_cursor_visible(false)` has no getter) and a real device's
-relative motion, so the checklist's cursor-grab box stays manual.
+covered: that the cursor is detached from the device (a real device's relative motion; no HID route
+exists on hosted runners), so the checklist's cursor-grab box stays manual for that part.
 
 ## Real window drag, `--drag`
 
@@ -90,37 +129,235 @@ cargo xtask display-harness --drag
 ```
 
 The real cross-display drag the earlier text said stayed manual. Needs the virtual displays.
-Burl is moved to the 1x display with System Events once, then `mouse.m` does what a user does:
+Gnarl is moved to the 1x display with System Events once, then `mouse.m` does what a user does:
 `warp` to the title bar (window origin + half the width across, 12 pt down), `down`, 40 `drag`
 events stepping in a straight line to the centre of the other display (global bounds from `vd`,
 so a negative x is fine), `up`. Then 2x back to 1x. Artifacts in `target/display-harness-drag/`.
 
-- **Asserted, per crossing:** burl's `display:` lines after the drag pass `check_move` (target
+- **Asserted, per crossing:** gnarl's `display:` lines after the drag pass `check_move` (target
   scale, logical = physical / scale, `scale-changed` then `resized`), and `wid` shows the window's
   origin on the target display.
+- **Asserted, per crossing, once the window has settled on the target display** (`check_size_kept`,
+  `check_capture`): the window's point size (`wid` frame) is the same as before the drag; gnarl's last
+  `display:` logical size is the same as before the drag; a `screencapture -o -l` of the window is
+  scale x its point size and has several distinct colours (not blank). This is gnarl without
+  `--high-dpi` (exact-pixel `-640x360`); the logical-size-kept assertion is the expected winit
+  behaviour, not a measurement: if a hosted run shows gnarl's logical size changing on the 2x display
+  (deviation G3), record the measured numbers here and relax the assertion.
+- **Asserted, per crossing, coarse scene placement** (`check_scene_fills_window`, on the capture
+  with the title bar cropped): the four corners (single patches) and each edge (the median of 7
+  patches along it, inset 12 px x scale) are within 24 levels of the median luma of the whole
+  content, so an unfilled bar, a clear-colour block or a scene drawn in a corner fails. An edge is a
+  median, not one midpoint, because the scene has content: on the hosted runs a top-centre probe
+  read luma 99.7 at 2x (inside the date caption) and a bottom-centre probe read 51.0 on a paused
+  macos-26 frame (20.5 on macos-15), while every other probe read about 26. Up to three of an edge's
+  seven samples can land on content; a bar or block covers the whole edge. The near-white pixels (all
+  channels > 200) in the top 15% number at least 40 x scale^2 with their centroid x within +-5% of
+  the content centre, so the date caption is present and centred. The dark field makes the median
+  a robust reference; the tolerances are deliberately generous (baselines measure 0 off the median,
+  caption 492 px, centroid 325.8 of 640). Failures and the `ok` line print the measured numbers so
+  a hosted run can be recalibrated. This catches a GL surface that did not follow the move; it is
+  not a layout review.
 - **Not asserted:** the cursor position (synthetic events carry absolute locations, see `--grab`),
-  layout, crispness, pixels.
+  layout by eye (overlap, clipping of small labels, text size, anything subtle; that stays a manual
+  checklist box), crispness, doubled lines, and pixel equality
+  between a dragged capture and a `set position` one (the sim is not paused in `--drag`, so frames
+  differ; reusing the Space-pause loop would mean refactoring `run_harness`).
 - **Unverified until a hosted run:** that a `CGEventPost` title-bar drag across the virtual display
   boundary moves the window and makes winit fire `ScaleFactorChanged`. The path is a straight line
   between display centres, so it assumes the displays touch; a gap or offset may clamp the pointer.
+
+## Cursor lab (experiment)
+
+```
+cargo xtask cursor-lab
+```
+
+A measurement lab, not a check: it prints a table to `target/cursor-lab/lab.log` and fails only on
+an infrastructure error (a helper will not build, no window, a helper cannot post). The workflow
+runs it with `continue-on-error` and uploads the log. It runs gnarl as `--grab` does, then measures
+each variant with no grab (`moved` events) and under a held grab (`dragged`, then `moved` events),
+5 events of 10 points. Never run it on a machine somebody is using: it posts events and moves the
+cursor. First lines of the log: `sw_vers`, `csrutil status`, `nvram boot-args`.
+
+| Variant | What it does | Trustworthy lock assertion if |
+| --- | --- | --- |
+| V1 | `mouse drag/move X Y DX DY`, absolute location (control) | never; it moved 50 pt under a lock |
+| V2 | `mouse rel DX DY`: location left at the current cursor, only the delta fields set | the cursor moves ~50 pt with no grab and stays within 5 pt under the grab, on both runners and on repeat |
+| V3 | V2 at `session` / `annotated` taps, and with a `CGEventSourceCreate(HIDSystemState)` source (also an absolute one with that source) | same, for any one row: that row is the injection path to assert with |
+| V4 | `tapwatch`: a listen-only `CGEventTapCreate` at the session tap during each row | not an assertion itself: tells whether deltas are delivered while detached (`n`, sum dx) and whether the location field moves. Delta delivered with a still cursor is what a locked game sees |
+| V5 | `screencapture -C -x` (screen and `-l` window) before the press and during the hold; 48x48 px crop mean luma, `sprite` (with `-C` vs without), `noise` (two `-C` in a row), `hide` (before vs held) | `sprite` well above `noise` (the sprite is in captures at all) AND `hide` at least half of `sprite`: verdict `GoneWhileHeld`. `NoSpriteInCaptures` means no assertion is possible this way |
+| V6 | `hid.m`: `IOHIDUserDeviceCreateWithProperties` for a relative mouse, plain, then ad-hoc signed with `com.apple.developer.hid.virtual.device`; if created, relative reports with and without a grab | `create=ok` and the cursor moves with no grab and not under the grab: a real device path. `create=fail`, or the process killed by a signal (reported), closes it |
+
+`CGCursorIsVisible` (deprecated) is printed per row. winit hides the cursor with an invisible cursor
+rect, not `NSCursor.hide`, so expect `1` regardless; only a change to `0` under the grab would
+mean something. Each row also notes whether a `warp` right before a variant changes it (`V2 rel
+@hid after warp`): a warp may re-associate the cursor.
+
+Reading the `== per variant ==` lines: `Detached` (cursor followed with no grab, stayed still under
+the grab) is an assertable lock; `IgnoresLock` means that injection bypasses the detach;
+`Uninformative` means it did not move the cursor even with no grab. `tapwatch` needs Input
+Monitoring or Accessibility; if `CGEventTapCreate` fails the log says so with the access flags and
+the tap column reads `tap unavailable`. A held-grab row is only given a lock verdict when gnarl's
+`grab: event=on` line reported `mode=locked`; otherwise the verdict is `Inconclusive`.
+
+### Measured on hosted `macos-15` and `macos-26` (2026-11-14, first run)
+
+Both images agree on every row below. SIP is disabled on the runners (`csrutil status`) and
+`boot-args` is empty; the event tap could be created (it observed the posted events).
+
+- **Lock effect: no injection route works.** Absolute-location events (V1, and V3 absolute with the
+  HID source) move the cursor the full 50 pt with no grab and under the held grab: `IgnoresLock`.
+  Relative-only events (V2, V3 at the HID, session and annotated taps, with and without the HID
+  source, and right after a `warp`) do not move the cursor even with no grab: `Uninformative`, so
+  they cannot tell a lock from none. The tap saw the five posted events (none at the annotated
+  tap), so the events are delivered; the cursor just follows the location, not the delta.
+- **Real HID device: closed on hosted runners.** `IOHIDUserDeviceCreateWithProperties` fails
+  (`create=fail`, exit 3). Ad-hoc signed with `com.apple.developer.hid.virtual.device` the helper is
+  killed by signal 9 even with SIP disabled, so the entitlement is enforced.
+- **Cursor hidden: assertable with a full-screen `screencapture -C`.** The sprite shows before the
+  press (crop difference 4.98 on macos-26, 5.26 on macos-15, against 0.00 between two identical
+  captures) and is gone while the grab is held (held cursor-versus-no-cursor difference 0.00):
+  `GoneWhileHeld` on both. The per-window `screencapture -C -l` works on macos-26 but sees no sprite
+  on macos-15 (`NoSpriteInCaptures`), so use the full screen. `CGCursorIsVisible` reads 1 the whole
+  time (winit hides the cursor with an invisible cursor rect, not `NSCursor.hide`), so it is useless.
+- Consequence: on hosted runners the cursor-grab box can be split. "Hidden while grabbed" can be
+  asserted from the screen capture; "detached from the device" cannot, by any route tried here, and
+  stays a manual check on a real mouse.
+
+## Drag round trip, `--roundtrip`
+
+```
+cargo xtask display-harness --roundtrip
+```
+
+Automates "moving the window between displays of different scale does not break layout" with an
+objective reference: after 1x -> 2x -> 1x the window must show the **same frame** as before it left,
+on the same display at the same point size. Own file (`xtask/src/roundtrip.rs`), so `--drag` and
+`run_harness` are untouched. Needs the virtual displays; artifacts in
+`target/display-harness-roundtrip/`.
+
+1. Window to the 1x display, 6 s of scene, then the Space pause as in the default scenario (press
+   once, wait for two identical consecutive captures, frame-to-frame MAE 0).
+2. Cursor parked on the title bar, capture **A** (settled: two identical captures, `check_capture`,
+   `check_scene_fills_window`).
+3. Real drag to 2x, then back to 1x (as `--drag`): per crossing `check_move`, window on the target
+   display, `check_size_kept`; the 2x leg also gets a settled capture with the fill and caption check.
+4. Capture **B**, same settle. Then: window point size and logical size equal to A's, capture size
+   equal (checked before any pixel compare), and `MAE(A content, B content) <= 0.25`.
+
+- **Threshold:** `MAX_ROUNDTRIP_MAE` = `MAX_NATIVE_MAE` 0.25. The 1x vs 2x pair of the default
+  scenario measures 0.04 to 0.05, residue from rounded window corners; the same window on the same
+  display has none, so 0.25 (5x the worst measured) is generous.
+- **Negative control:** B shifted by 4 px and B blurred (downscale 2, upscale) are compared with A;
+  the worse of the two must be at least 2x the limit (0.5) or the check fails as vacuous. Unit tests
+  also require a shifted or blurred B to fail the check itself.
+- **Not compared:** the 2x capture with A. Its physical size doubles, so gnarl frames it differently
+  (see Pixel comparison); no valid reference exists, so the 2x leg only gets the structural checks.
+- **Unverified until a hosted run:** that a paused gnarl redraws the identical frame after two
+  scale changes (camera or font state could shift), that the cursor on the title bar does not alter
+  the drawing, and that the real MAE is near 0 rather than near the limit.
+
+## Real Retina panel, `--real-panel` (#210)
+
+```
+cargo xtask display-harness --real-panel
+```
+
+Checklist box 79 on real hardware. No virtual display and nothing is moved or pressed: it reads
+the main display with `panel.m` (`NSScreen` `backingScaleFactor`, bounds, pixels, name), **refuses**
+unless that is 2 (a 1x or scaled-to-1x main display, or no window-server session at all, as over
+SSH or on a headless runner, exits 1 with the reason before building anything), opens gnarl with
+`-640x360` on it, requires gnarl's own `display:` line to say scale 2 and 640x360 px, waits 8 s,
+captures the window with `screencapture -x -o -l`, checks the capture is 2x the window's points, and
+judges the content with two pure checks. It prints the macOS version and build, the CPU, the
+display name and the numbers, and keeps `window.png`, `window-content.png`, `report.txt`, `gnarl.out`
+in `target/display-harness-real-panel/`.
+
+- **Crispness** (`pixels::check_crisp`, limit 1.8, see `--high-dpi`): detail finer than 2 px exists.
+- **Edge width** (`edges::check_edges`): for every luma edge of at least 80 levels along rows and
+  columns, the 10-90% rise distance in physical pixels. Median must be at most 2.0 px and at least
+  20% of edges within 1.25 px. Calibrated on the four `baselines/` captures (640x360 physical
+  pixels, both runner images, both displays), which are native renders, plus copies built from
+  them:
+
+  | frame | median rise | edges within 1.25 px |
+  |---|---|---|
+  | native (4 baselines) | 1.55 to 1.56 px | 29% to 31% |
+  | 1x frame bilinear-stretched to 2x | 2.83 to 2.87 | 0.04% to 0.15% |
+  | blurred (box down, bilinear up) | 2.92 to 2.96 | 1.3% to 1.9% |
+  | doubled (each pixel averaged with its left neighbour) | 1.60 | 13.5% to 16.4% |
+  | nearest-stretched | 0.80 | 100% (steep, blocky: left to `check_crisp`, which scores it 0) |
+
+  The median alone cannot see a doubled line (1.60), the sharp share does; both are asserted.
+  Not detected: a stroke that is uniformly too thick (both edges stay steep).
+- **Not verified:** any real Retina panel. The thresholds come from hosted virtual-display
+  captures plus synthetic degradations; a real panel's capture (different filter, subpixel
+  layout, the 8 s frame instead of a paused one) may sit elsewhere. The first real run should be
+  attached to the checklist and, if it fails while looking fine, the numbers say which limit to
+  move.
+- **Two ways to run it:** by the owner once per release on a real Mac (box 79), or on a
+  self-hosted Mac runner with a Retina panel and a logged-in session (not a hosted runner: they have no
+  Retina main display, so `--real-panel` refuses there). No workflow runs it; the pure detector
+  tests (`edges::tests`) do run on the hosted macOS leg of `cargo test`.
+- It steals focus like any window opening; do not run it from an agent session on a desktop in use.
+
+## Findings and decisions
+
+Folded in from the original handoff (#215). The `CGVirtualDisplay` gotchas and the cursor-lab
+numbers are above (Caveats, Cursor lab); this adds what they leave out.
+
+**Hosted runners (`macos-15`, `macos-26`).** The window server and `screencapture` work, Screen
+Recording and Accessibility are already granted, SIP is disabled and `boot-args` is empty, so no
+self-hosted Mac or VM was needed. The labels are moving, so the image cannot be pinned to a build;
+the "Record macOS build and runner image" step logs `sw_vers`, `ImageOS` and `ImageVersion` instead.
+`CGVirtualDisplay` is private, so a runner update can break the harness with no Gnarl change; the
+workflow is not a required check and the weekly-failure canary reports it.
+
+**Cursor, in one place.** Hidden is assertable (full-screen `screencapture -C`). `CGCursorIsVisible`
+is useless (winit hides with a cursor rect). Synthetic absolute events bypass a `Locked` grab, and
+delta-only events do not move the cursor even with no grab. No virtual HID device on hosted runners
+(AMFI kills the entitled ad-hoc binary), so "detached from a real device" stays manual.
+
+**Decided not to build.**
+
+- **Reusable action or separate repository:** no second consumer (the other CI users of
+  `CGVirtualDisplay` keep private copies). If one appears, a composite action under
+  `.github/actions/` is the cheap route.
+- **F12/framebuffer readback:** it would change G10 and the DEVIATIONS register hash.
+- **Real-compositor crispness control inside gnarl:** gnarl has no way to get a 1x surface on the 2x
+  display without a test-only hook and a new dependency in production code. `crisp-control` above is
+  the standalone substitute.
+- **Pinning the runner image:** not possible, see above.
+
+**Still undone** (tracked, not restated): #210 real-panel Retina crispness, #211 real-device
+relative motion under a `Locked` grab, #212 X11 `Confined` with a real evdev device, #213 assert
+the cursor sprite returns after release, #214 dispatch-test the weekly-failure canary.
 
 ## Needs
 
 - macOS with a logged-in GUI session, `clang`, and a Rust toolchain.
 - Screen Recording and Accessibility granted to the terminal/app that runs it (`screencapture`,
   `osascript` System Events). Hosted `macos-15` / `macos-26` runners already have both.
-- It briefly adds two displays and opens and moves a burl window on your desktop.
+- It briefly adds two displays and opens and moves a gnarl window on your desktop.
 
 ## Files
 
 - `vd.m`: creates the displays, pumps AppKit events, prints each display's global bounds, scale
   and pixels, then `ready`; runs until SIGTERM/SIGINT or its parent exits.
-- `wid.m`: prints `id x y w h` of burl's on-screen windows taller than 100 points.
+- `lowres.m`: the test-card window for `crisp-control`, `lowres YES|NO`; runs until killed or its
+  parent exits.
+- `panel.m`: prints the main display's scale, bounds, pixels and name for `--real-panel`.
+- `wid.m`: prints `id x y w h` of gnarl's on-screen windows taller than 100 points.
+- `mouse.m`, `tapwatch.m`, `hid.m`: synthetic mouse input, an event-tap observer and a virtual HID
+  mouse (the last two only for the cursor lab).
 
 ## Caveats
 
 - `CGVirtualDisplay` is private API, declared by hand in `vd.m`; a macOS update can break it.
-  macOS 14+ needs a unique non-zero vendor/serial per display.
+  macOS 14+ needs a unique non-zero vendor/serial per display. The CI run log and job summary
+  record the macOS build and runner image (`sw_vers`, `ImageOS`, `ImageVersion`), so a failed
+  weekly run can be matched to a runner-image update.
 - NSScreen never lists the displays unless AppKit events are pumped (`nextEventMatchingMask`).
 - `hiDPI` advertises the 2x mode; `vd.m` still switches into 1920x1080 pt / 3840x2160 px with
   `CGConfigureDisplayWithDisplayMode`. The 1x display otherwise defaults to 1024x576, so it is

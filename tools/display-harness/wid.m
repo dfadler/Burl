@@ -1,5 +1,5 @@
 // Prints `<windowID> <x> <y> <w> <h>` (points, global top-left) for each on-screen window of the
-// given owner name taller than 100 points (burl opens a small stray extra window).
+// given owner name taller than 100 points (gnarl opens a small stray extra window).
 #import <Cocoa/Cocoa.h>
 int main(int argc, char **argv) {
   if (argc < 2) return 2;

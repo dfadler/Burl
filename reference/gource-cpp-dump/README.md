@@ -2,7 +2,7 @@
 
 A copy of the Gource 0.57 C++ sources (`src/`, with the `Core` submodule vendored at
 `src/core`, pinned upstream commit `d8d880fd`) plus **only** dump hooks. It is the reference
-side of the Burl simulation parity gate (issues #11, #18, #22). It is not the Oracle: byte-exact
+side of the Gnarl simulation parity gate (issues #11, #18, #22). It is not the Oracle: byte-exact
 goldens (help, exit codes, custom logs) still come from the untouched `src/` at the repo root.
 
 The fork keeps Gource's behaviour, including its bugs, except:
@@ -67,7 +67,7 @@ FRAME key tab         # Tab key down -> Gource::keyPress (selectNextUser)
 Events for frame N are applied **after the dump of frame N and before `draw()`**. So `mousetrace` and the
 click it makes run in frame N, and the result first shows in the dump of frame N+1. A `down` and `up` on the same
 frame therefore leave the left button released at `draw` time: `selectBackground` does nothing (Gource's
-frame-time quirk, scope paper 1.2). Burl's `D13` row decides selection at event time instead.
+frame-time quirk, scope paper 1.2). Gnarl's `D13` row decides selection at event time instead.
 
 What differs from a real run, and why:
 
@@ -93,8 +93,8 @@ Overlaps are not reproducible: Gource picks the first of a `std::set<QuadItem*>`
 ## Build and run
 
 ```bash
-docker build --platform linux/amd64 -t burl-gource-dump reference/gource-cpp-dump
-docker run --rm --platform linux/amd64 -v "$PWD/out:/out" burl-gource-dump \
+docker build --platform linux/amd64 -t gnarl-gource-dump reference/gource-cpp-dump
+docker run --rm --platform linux/amd64 -v "$PWD/out:/out" gnarl-gource-dump \
   /src/scripts/dump-run.sh /src/tests/logs/file-removal.log /out/run.jsonl
 ```
 

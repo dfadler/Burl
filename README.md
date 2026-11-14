@@ -1,3 +1,30 @@
+Installing Gnarl
+================
+
+This repository is Gnarl, a Rust port of Gource; the text below this section is still
+Gource's own README. Gnarl installs as the command `gnarl`.
+
+* **crates.io:** `cargo install gnarl --locked`. Needs Rust 1.88 or newer and a C linker
+  (`build-essential` on Debian and Ubuntu, Xcode command line tools on macOS). The `gnarl-*`
+  crates it depends on are its internal libraries, published so the install works.
+* **Release tarballs:** `gnarl-vX.Y.Z-linux-amd64.tar.gz` and `gnarl-vX.Y.Z-macos-arm64.tar.gz`
+  (each with a `.sha256`) on the GitHub releases page. Unpack and run `gnarl`.
+* **Container image:** `ghcr.io/dfadler/gnarl:X.Y.Z`, headless only (no window, no ffmpeg):
+  `docker run --rm -v "$PWD:/repo" ghcr.io/dfadler/gnarl:X.Y.Z -1280x720 -o - /repo | ffmpeg ...`.
+
+At run time Gnarl loads the system's GL and window libraries; it does not link them at build
+time. A windowed run needs OpenGL and X11 or Wayland. On Debian/Ubuntu the packages the
+repository's own window test image installs are `libegl1 libegl-mesa0 libgl1-mesa-dri libx11-6
+libxcursor1 libxfixes3 libxi6 libxrandr2 libxkbcommon-x11-0` (`docker/window.Dockerfile`); headless
+`-o` export needs only the first three (`docker/release.Dockerfile`). macOS needs nothing extra.
+
+**Filters and `pcre2`.** By default the four user filters (`--file-filter`, `--file-show-filter`,
+`--user-filter`, `--user-show-filter`) use Rust's `regex` crate: look-around and backreferences
+are rejected at start-up with an error. `cargo install gnarl --locked --features pcre2` builds
+real PCRE2 as Gource does; that compiles bundled C sources, so it needs a C compiler, and links
+a system `libpcre2-8` if `pkg-config` finds one (set `PCRE2_SYS_STATIC=1` to avoid that).
+Whether `pcre2` ships by default is undecided: [G4-PCRE2-DECISION.md](docs/rust-rewrite/G4-PCRE2-DECISION.md).
+
 Gource
 ======
 

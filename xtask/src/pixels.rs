@@ -6,7 +6,7 @@
 //! Downscale-and-compare is not used: it passes a window that was rendered at 1x and upscaled.
 //!
 //! Secondary: [`check_baseline`] compares a capture to a stored "regression baseline" taken from
-//! Burl itself on the hosted runner. It says "Burl still looks like it did", never "matches Gource".
+//! Gnarl itself on the hosted runner. It says "Gnarl still looks like it did", never "matches Gource".
 
 use crate::ssim::{ssim, Image};
 
@@ -93,7 +93,7 @@ pub fn downscale(img: &Image, k: usize) -> Image {
     Image { w, h, rgb }
 }
 
-/// Why this compares equal *physical* sizes: Burl lays the scene out in physical pixels (a fixed
+/// Why this compares equal *physical* sizes: Gnarl lays the scene out in physical pixels (a fixed
 /// pixel font size and camera zoom), so a 320x180 pt window on a 2x display (640x360 px) and a
 /// 640x360 pt window on a 1x display show the same 640x360 px frame, while a 320x180 px frame
 /// (what a 1x window of 320x180 pt shows) is framed differently. A native render therefore
@@ -241,7 +241,7 @@ pub fn check_native_2x(p: &Pair) -> Result<(), String> {
 /// Lowest SSIM against a regression baseline that still passes (see tools/display-harness/baselines/README.md).
 pub const MIN_BASELINE_SSIM: f64 = 0.85;
 
-/// Regression baseline, not parity: SSIM of `got` against a stored capture of Burl itself.
+/// Regression baseline, not parity: SSIM of `got` against a stored capture of Gnarl itself.
 pub fn check_baseline(got: &Image, baseline: &Image, min_ssim: f64) -> Result<f64, String> {
     let s = ssim(got, baseline)?;
     if s < min_ssim {
@@ -252,9 +252,312 @@ pub fn check_baseline(got: &Image, baseline: &Image, min_ssim: f64) -> Result<f6
     Ok(s)
 }
 
+fn luma(px: &[u8]) -> f64 {
+    0.299 * f64::from(px[0]) + 0.587 * f64::from(px[1]) + 0.114 * f64::from(px[2])
+}
+
+/// Allowed distance of a probe's luma from the median luma of the whole content, in 0..255 levels.
+/// The scene is a dark, mostly empty field (~28) with soft glows; measured baseline probes sit
+/// within a few levels of the median. 24 is generous on purpose: this catches an unfilled bar or a
+/// clear-colour block (black ~0 or white ~255 against a ~28 field), not subtle shading.
+pub const FILL_LUMA_TOLERANCE: f64 = 24.0;
+/// Inset of the probe points from the content edges, in 1x pixels (scaled by the capture scale):
+/// keeps rounded window corners out of the sample.
+const FILL_INSET: usize = 12;
+/// Patches sampled along each edge; the edge's luma is their median, so up to three can land on
+/// scene content (an edge needs four to move the median). Odd, so the median is a real sample.
+const EDGE_SAMPLES: usize = 7;
+/// Caption band: the top 15% of the content.
+const CAPTION_BAND: f64 = 0.15;
+/// Near-white pixels (all channels above this) in the band are caption text; the dimmer coloured
+/// beam is excluded.
+const CAPTION_WHITE: u8 = 200;
+/// Fewest near-white pixels in the band, at 1x; multiplied by scale squared. The date caption
+/// measures several hundred; this is a low floor meaning "some bright text is there".
+pub const CAPTION_MIN_PX_1X: f64 = 40.0;
+/// The caption's centroid x must be within this fraction of the content width from the centre.
+pub const CAPTION_CENTRE_TOL: f64 = 0.05;
+
+/// Coarse structural check on a window's content area (title bar already cropped, see [`content`]):
+/// the scene fills the whole window and the date caption is at top-centre. Catches a GL surface or
+/// viewport that did not follow a display move (scene in a corner, offset, unfilled bars); says
+/// nothing about subtle layout. `Ok` carries the measured numbers for the log, `Err` the same
+/// numbers plus the reason, so a failing run can be calibrated.
+pub fn check_scene_fills_window(img: &Image, scale: f64) -> Result<String, String> {
+    let (w, h) = (img.w, img.h);
+    let inset = (FILL_INSET as f64 * scale).round() as usize;
+    // Mean luma of a (2r+1)^2 patch, r = 2 px at 1x, so one noisy pixel does not decide.
+    let r = (2.0 * scale).round() as usize;
+    // Also keeps the right/bottom sample lines at or after the left/top ones (no usize underflow).
+    let min_side = (2 * (inset + r) + 1).max(2 * inset + 8);
+    if w < min_side || h < min_side {
+        return Err(format!("content {w}x{h} too small to judge"));
+    }
+    let mut hist = [0usize; 256];
+    for px in img.rgb.as_chunks::<3>().0 {
+        hist[luma(px).round() as usize] += 1;
+    }
+    let (mut acc, mut median) = (0, 0);
+    for (v, n) in hist.iter().enumerate() {
+        acc += n;
+        if acc * 2 >= w * h {
+            median = v;
+            break;
+        }
+    }
+    let median = median as f64;
+    let patch = |cx: usize, cy: usize| {
+        let (mut s, mut n) = (0.0, 0.0);
+        for y in cy - r..=cy + r {
+            for x in cx - r..=cx + r {
+                s += luma(&img.rgb[(y * w + x) * 3..][..3]);
+                n += 1.0;
+            }
+        }
+        s / n
+    };
+    let (l, rt, t, b) = (inset + r, w - 1 - inset - r, inset + r, h - 1 - inset - r);
+    // The four corners are single probes. An edge is judged by the MEDIAN of EDGE_SAMPLES patches
+    // along it, not by one midpoint: the scene is not an empty field, and a single point can land
+    // on its content (the date caption at top-centre read luma 99.7 at 2x; a tree node at
+    // bottom-centre read 51.0 on a hosted macos-26 paused frame, 20.5 on macos-15). An unfilled
+    // bar or a clear-colour block covers the whole edge, so it still moves the median.
+    let frac = |lo: usize, hi: usize, k: usize| lo + (hi - lo) * k / (EDGE_SAMPLES + 1);
+    let edge = |at: &dyn Fn(usize) -> (usize, usize)| -> (f64, f64) {
+        let mut v: Vec<f64> = (1..=EDGE_SAMPLES)
+            .map(|k| {
+                let (x, y) = at(k);
+                patch(x, y)
+            })
+            .collect();
+        v.sort_by(f64::total_cmp);
+        let worst = v.iter().map(|x| (x - median).abs()).fold(0.0, f64::max);
+        (v[EDGE_SAMPLES / 2], worst)
+    };
+    let edges = [
+        ("top", edge(&|k| (frac(l, rt, k), t))),
+        ("bottom", edge(&|k| (frac(l, rt, k), b))),
+        ("left", edge(&|k| (l, frac(t, b, k)))),
+        ("right", edge(&|k| (rt, frac(t, b, k)))),
+    ];
+    let mut lumas: Vec<(&str, f64)> = [
+        ("top-left", l, t),
+        ("top-right", rt, t),
+        ("bottom-left", l, b),
+        ("bottom-right", rt, b),
+    ]
+    .iter()
+    .map(|&(n, x, y)| (n, patch(x, y)))
+    .collect();
+    lumas.extend(edges.iter().map(|&(n, (med, _))| (n, med)));
+    // Calibration aid: the worst single sample on any edge, which the median hides.
+    let (worst_edge, worst_dev) = edges
+        .iter()
+        .map(|&(n, (_, w))| (n, w))
+        .fold(("", 0.0), |a, c| if c.1 > a.1 { c } else { a });
+    let band_h = (h as f64 * CAPTION_BAND) as usize;
+    let (mut count, mut sum_x) = (0usize, 0usize);
+    for y in 0..band_h {
+        for x in 0..w {
+            if img.rgb[(y * w + x) * 3..][..3]
+                .iter()
+                .all(|&c| c > CAPTION_WHITE)
+            {
+                count += 1;
+                sum_x += x;
+            }
+        }
+    }
+    let min_px = (CAPTION_MIN_PX_1X * scale * scale).ceil() as usize;
+    let centroid = if count > 0 {
+        sum_x as f64 / count as f64
+    } else {
+        f64::NAN
+    };
+    let nums = format!(
+        "median luma {median}, probes [{}] (edges are medians of {EDGE_SAMPLES} samples; worst single sample {worst_edge} {worst_dev:.1} from the median), caption {count} px (min {min_px}), centroid x {centroid:.1} of width {w} (centre {:.1} +-{:.1})",
+        lumas
+            .iter()
+            .map(|(n, v)| format!("{n} {v:.1}"))
+            .collect::<Vec<_>>()
+            .join(", "),
+        w as f64 / 2.0,
+        w as f64 * CAPTION_CENTRE_TOL
+    );
+    if let Some((n, v)) = lumas
+        .iter()
+        .find(|(_, v)| (v - median).abs() > FILL_LUMA_TOLERANCE)
+    {
+        return Err(format!(
+            "scene does not fill the window: {n} probe luma {v:.1} is more than {FILL_LUMA_TOLERANCE} from the median: {nums}"
+        ));
+    }
+    if count < min_px {
+        return Err(format!("date caption missing at top-centre: {nums}"));
+    }
+    if (centroid - w as f64 / 2.0).abs() > w as f64 * CAPTION_CENTRE_TOL {
+        return Err(format!("date caption is not centred: {nums}"));
+    }
+    Ok(nums)
+}
+
+// ---- is the cursor hidden? (`--grab`, from full-screen captures) ----
+//
+// Measured on hosted macos-15 and macos-26 (cursor lab, Gnarl #205): a full-screen `screencapture -C`
+// shows the cursor sprite before the press and not while gnarl holds its grab. `CGCursorIsVisible`
+// reads "visible" throughout (winit hides the cursor with an invisible cursor rect), so only the
+// pixels can say.
+
+/// Side of the square crop around the cursor's hot spot, in capture pixels.
+pub const CURSOR_CROP: usize = 48;
+/// How far up and left of the hot spot the crop starts: the arrow hangs down and to the right.
+const CURSOR_MARGIN: usize = 8;
+
+/// Luma of a `CURSOR_CROP` square whose top-left is `CURSOR_MARGIN` px up-left of `hot` (the cursor
+/// position in capture pixels). `None` when the square leaves the image.
+pub fn cursor_crop(img: &Image, hot: (f64, f64)) -> Option<Vec<f64>> {
+    let x0 = hot.0.round() as i64 - CURSOR_MARGIN as i64;
+    let y0 = hot.1.round() as i64 - CURSOR_MARGIN as i64;
+    let side = CURSOR_CROP as i64;
+    if x0 < 0 || y0 < 0 || x0 + side > img.w as i64 || y0 + side > img.h as i64 {
+        return None;
+    }
+    let mut v = Vec::with_capacity(CURSOR_CROP * CURSOR_CROP);
+    for y in y0..y0 + side {
+        for x in x0..x0 + side {
+            v.push(luma(&img.rgb[(y as usize * img.w + x as usize) * 3..][..3]));
+        }
+    }
+    Some(v)
+}
+
+/// Mean absolute difference of two equal-length crops, in 0..255 levels.
+pub fn crop_diff(a: &[f64], b: &[f64]) -> f64 {
+    a.iter().zip(b).map(|(x, y)| (x - y).abs()).sum::<f64>() / a.len().max(1) as f64
+}
+
+/// The five full-screen captures one press needs, all with the cursor parked at the same point.
+pub struct CursorShots<'a> {
+    /// With the cursor drawn (`screencapture -C`), before the press.
+    pub before: &'a Image,
+    /// The same again: its difference from `before` is the capture noise.
+    pub before_again: &'a Image,
+    /// Without the cursor (no `-C`), before the press: `before` minus this is the sprite.
+    pub before_no_cursor: &'a Image,
+    /// With the cursor drawn, while the grab is held.
+    pub held: &'a Image,
+    /// Without the cursor, while the grab is held.
+    pub held_no_cursor: &'a Image,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CursorScores {
+    /// Cursor drawn versus not, before the press: how much the sprite shows.
+    pub sprite: f64,
+    /// Two identical captures: how much the capture itself varies.
+    pub noise: f64,
+    /// Before the press versus held, both with the cursor drawn: how much the crop changed.
+    pub hide: f64,
+    /// Cursor drawn versus not, while held: how much of a sprite is still there.
+    pub held_sprite: f64,
+}
+
+pub fn cursor_scores(s: &CursorShots, hot: (f64, f64)) -> Result<CursorScores, String> {
+    let c = |img: &Image| {
+        cursor_crop(img, hot).ok_or(format!(
+            "the {CURSOR_CROP} px crop at {hot:?} leaves the {}x{} capture",
+            img.w, img.h
+        ))
+    };
+    let (a, b, n, h, hn) = (
+        c(s.before)?,
+        c(s.before_again)?,
+        c(s.before_no_cursor)?,
+        c(s.held)?,
+        c(s.held_no_cursor)?,
+    );
+    Ok(CursorScores {
+        sprite: crop_diff(&a, &n),
+        noise: crop_diff(&a, &b),
+        hide: crop_diff(&a, &h),
+        held_sprite: crop_diff(&h, &hn),
+    })
+}
+
+/// The cursor must show before the press and be gone while the grab is held. The held capture is
+/// judged by its OWN cursor-versus-no-cursor comparison, not by the change from `before` alone: that
+/// also moves when the background under the crop changes. A result that cannot be told from "the
+/// capture does not show the cursor at all" is an error, never a pass: a vacuous pass would look
+/// exactly like a working check.
+pub fn check_cursor_hidden(s: &CursorScores) -> Result<String, String> {
+    let significant = |v: f64| v > 3.0 * s.noise.max(0.5);
+    let nums = format!(
+        "sprite before the press {:.2}, capture noise {:.2}, crop change before to held {:.2}, sprite still present while held {:.2}",
+        s.sprite, s.noise, s.hide, s.held_sprite
+    );
+    if !significant(s.sprite) {
+        Err(format!(
+            "the cursor sprite is not visible in the capture before the press, so a hidden cursor cannot be judged: {nums}"
+        ))
+    } else if significant(s.held_sprite) {
+        Err(format!(
+            "the cursor sprite is still present in the held capture (or the background moved under it): {nums}"
+        ))
+    } else if s.hide <= 0.5 * s.sprite {
+        Err(format!(
+            "inconclusive: no sprite while held, yet the crop did not change from before the press: {nums}"
+        ))
+    } else {
+        Ok(nums)
+    }
+}
+
+/// How far the sprite score after the release may drift from the pre-press one, as a fraction of it.
+/// Measured on hosted macos-15 and macos-26: equal (4.98, 5.26) with 0.00 noise.
+const RETURN_TOLERANCE: f64 = 0.3;
+
+/// After the grab is released the sprite must be back: significant against the capture noise (same
+/// threshold as `check_cursor_hidden`) and within `RETURN_TOLERANCE` of the pre-press score. A score
+/// far from the pre-press one means the background moved under the crop, so it is not comparable.
+pub fn check_cursor_returned(after: f64, before: f64, noise: f64) -> Result<String, String> {
+    let nums = format!(
+        "sprite after the release {after:.2}, before the press {before:.2}, capture noise {noise:.2}"
+    );
+    if after <= 3.0 * noise.max(0.5) {
+        Err(format!(
+            "the cursor sprite did not return after the release: {nums}"
+        ))
+    } else if (after - before).abs() > RETURN_TOLERANCE * before {
+        Err(format!(
+            "the sprite after the release differs from before the press (or the background moved under it): {nums}"
+        ))
+    } else {
+        Ok(nums)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cursor_returned_passes_when_the_sprite_matches_before() {
+        assert!(check_cursor_returned(4.98, 4.98, 0.0).is_ok());
+        assert!(check_cursor_returned(5.5, 5.0, 0.2).is_ok());
+    }
+
+    #[test]
+    fn cursor_returned_fails_when_the_sprite_is_still_gone() {
+        assert!(check_cursor_returned(0.1, 5.0, 0.0).is_err());
+        // Close to the pre-press score, but both are within the noise: nothing proves a sprite.
+        assert!(check_cursor_returned(1.4, 1.5, 0.5).is_err());
+    }
+
+    #[test]
+    fn cursor_returned_fails_when_the_background_moved() {
+        assert!(check_cursor_returned(12.0, 5.0, 0.0).is_err());
+        assert!(check_cursor_returned(3.0, 5.0, 0.0).is_err());
+    }
 
     /// Text-like test card: thin 1px lines and a diagonal, so a 1x render and a true 2x render of
     /// it genuinely differ the way glyphs do.
@@ -393,7 +696,7 @@ mod tests {
         assert!(check_crisp(&flat).is_err());
     }
 
-    /// Real Burl captures (the regression baselines): the genuine one passes, the same capture
+    /// Real Gnarl captures (the regression baselines): the genuine one passes, the same capture
     /// downscaled and stretched back, and stretched from half size, fail.
     #[test]
     fn real_capture_passes_and_its_blurred_copies_fail() {
@@ -408,6 +711,174 @@ mod tests {
         );
         assert!(check_crisp(&blurred(&real)).is_err());
         assert!(check_crisp(&upscale(&downscale(&real, 2), 2, Upscale::Nearest)).is_err());
+    }
+
+    /// 640x360 (at k=1) dark field with a white caption block at x offset `cx` (centre), plus a
+    /// dim coloured beam near the top that must not count as caption.
+    fn fill_scene(k: usize, cx: usize, caption: bool) -> Image {
+        let (w, h) = (640 * k, 360 * k);
+        let mut img = Image {
+            w,
+            h,
+            rgb: [28u8, 28, 28].repeat(w * h),
+        };
+        let mut rect = |x0: usize, y0: usize, x1: usize, y1: usize, c: [u8; 3]| {
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    img.rgb[(y * w + x) * 3..][..3].copy_from_slice(&c);
+                }
+            }
+        };
+        rect(460 * k, 0, 480 * k, 20 * k, [200, 120, 120]);
+        if caption {
+            rect(
+                (cx - 100) * k,
+                18 * k,
+                (cx + 100) * k,
+                30 * k,
+                [255, 255, 255],
+            );
+        }
+        img
+    }
+
+    #[test]
+    fn a_filled_scene_with_centred_caption_passes_at_1x_and_2x() {
+        for k in [1, 2] {
+            let r = check_scene_fills_window(&fill_scene(k, 320, true), k as f64);
+            assert!(r.is_ok(), "{k}x: {r:?}");
+        }
+    }
+
+    /// The first hosted run failed on a probe at top-centre that fell inside the caption text at 2x
+    /// (luma 99.7 against a median of 26). A caption covering the inset row must not fail the fill.
+    #[test]
+    fn a_caption_covering_the_top_inset_row_is_not_an_unfilled_edge() {
+        let mut img = fill_scene(2, 320, true);
+        for y in 20..36 {
+            for x in 540..740 {
+                img.rgb[(y * img.w + x) * 3..][..3].fill(255);
+            }
+        }
+        let r = check_scene_fills_window(&img, 2.0);
+        assert!(r.is_ok(), "{r:?}");
+    }
+
+    /// The hosted macos-26 roundtrip run failed on a bottom-centre probe that landed on scene content
+    /// (luma 51.0 against a median of 26, other probes 26.0). Content under one or a few samples of
+    /// an edge must not read as an unfilled bar, at either scale.
+    #[test]
+    fn scene_content_at_an_edge_midpoint_is_not_an_unfilled_edge() {
+        for k in [1usize, 2] {
+            let mut img = fill_scene(k, 320, true);
+            let (w, h) = (img.w, img.h);
+            // A bright blob across the bottom centre and the left-edge midpoint, a few samples wide.
+            for (cx, cy) in [(w / 2, h - 14 * k), (14 * k, h / 2)] {
+                for y in cy - 6 * k..cy + 6 * k {
+                    for x in cx.saturating_sub(30 * k)..(cx + 30 * k).min(w) {
+                        if y < h {
+                            img.rgb[(y * w + x) * 3..][..3].fill(255);
+                        }
+                    }
+                }
+            }
+            let r = check_scene_fills_window(&img, k as f64);
+            assert!(r.is_ok(), "{k}x: {r:?}");
+        }
+    }
+
+    #[test]
+    fn a_window_too_small_for_the_sample_lines_is_an_error_not_a_panic() {
+        // 56x56 at 2x: inset 24, r 4, so the right/bottom lines (27) would precede left/top (28).
+        for (side, k) in [(56usize, 2usize), (80, 3), (84, 3)] {
+            let img = Image {
+                w: side,
+                h: side,
+                rgb: vec![128; side * side * 3],
+            };
+            let e = check_scene_fills_window(&img, k as f64).unwrap_err();
+            assert!(e.contains("too small to judge"), "{side}@{k}x: {e}");
+        }
+    }
+
+    #[test]
+    fn a_white_bar_along_the_bottom_edge_fails() {
+        let mut img = fill_scene(1, 320, true);
+        for y in img.h - 40..img.h {
+            for x in 0..img.w {
+                img.rgb[(y * img.w + x) * 3..][..3].fill(255);
+            }
+        }
+        let e = check_scene_fills_window(&img, 1.0).unwrap_err();
+        assert!(e.contains("does not fill"), "{e}");
+    }
+
+    #[test]
+    fn a_white_bar_on_the_top_edge_fails() {
+        let mut img = fill_scene(1, 320, true);
+        for y in 0..40 {
+            for x in 0..img.w {
+                img.rgb[(y * img.w + x) * 3..][..3].fill(255);
+            }
+        }
+        let e = check_scene_fills_window(&img, 1.0).unwrap_err();
+        assert!(e.contains("does not fill"), "{e}");
+    }
+
+    #[test]
+    fn a_scene_in_the_top_left_quarter_fails() {
+        // Scene drawn at half size in the top-left; the rest is the clear colour (black).
+        let s = fill_scene(1, 160, true);
+        let mut img = Image {
+            w: s.w,
+            h: s.h,
+            rgb: vec![0; s.rgb.len()],
+        };
+        for y in 0..s.h / 2 {
+            for x in 0..s.w / 2 {
+                img.rgb[(y * s.w + x) * 3..][..3]
+                    .copy_from_slice(&s.rgb[(y * 2 * s.w + x * 2) * 3..][..3]);
+            }
+        }
+        // Black bars dominate: the median itself is black, so the lit quarter is what stands out.
+        assert!(check_scene_fills_window(&img, 1.0).is_err());
+    }
+
+    #[test]
+    fn a_white_bar_on_one_edge_fails() {
+        let mut img = fill_scene(1, 320, true);
+        for y in 0..img.h {
+            for x in img.w - 40..img.w {
+                img.rgb[(y * img.w + x) * 3..][..3].fill(255);
+            }
+        }
+        let e = check_scene_fills_window(&img, 1.0).unwrap_err();
+        assert!(e.contains("does not fill"), "{e}");
+    }
+
+    #[test]
+    fn a_missing_caption_fails() {
+        let e = check_scene_fills_window(&fill_scene(1, 320, false), 1.0).unwrap_err();
+        assert!(e.contains("missing"), "{e}");
+    }
+
+    #[test]
+    fn an_off_centre_caption_fails() {
+        let e = check_scene_fills_window(&fill_scene(1, 200, true), 1.0).unwrap_err();
+        assert!(e.contains("not centred"), "{e}");
+    }
+
+    #[test]
+    fn real_captures_fill_the_window_with_a_centred_caption() {
+        for png in [
+            &include_bytes!("../../tools/display-harness/baselines/macos-26/1x.png")[..],
+            &include_bytes!("../../tools/display-harness/baselines/macos-26/2x.png")[..],
+        ] {
+            let img = crate::ssim::decode(png).unwrap();
+            let r = check_scene_fills_window(&img, 1.0);
+            eprintln!("baseline: {r:?}");
+            assert!(r.is_ok(), "{r:?}");
+        }
     }
 
     #[test]
@@ -426,5 +897,115 @@ mod tests {
         assert!(sharpness(&img).unwrap() > 0.0);
         assert_eq!(sharpness(&blurred(&img)).unwrap(), 0.0);
         assert!(check_crisp(&img).is_err());
+    }
+
+    /// A 200x200 capture of flat `bg` luma, with a bright 20x20 "cursor sprite" whose hot spot is at
+    /// (100, 100) when `sprite` is set.
+    fn screen(bg: u8, sprite: bool) -> Image {
+        let (w, h) = (200, 200);
+        let mut rgb = vec![bg; w * h * 3];
+        if sprite {
+            for y in 100..120 {
+                for x in 100..120 {
+                    rgb[(y * w + x) * 3..][..3].fill(255);
+                }
+            }
+        }
+        Image { w, h, rgb }
+    }
+
+    const HOT: (f64, f64) = (100.0, 100.0);
+
+    fn scores(
+        before: &Image,
+        again: &Image,
+        none: &Image,
+        held: &Image,
+        held_none: &Image,
+    ) -> CursorScores {
+        cursor_scores(
+            &CursorShots {
+                before,
+                before_again: again,
+                before_no_cursor: none,
+                held,
+                held_no_cursor: held_none,
+            },
+            HOT,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn a_cursor_that_shows_before_and_is_gone_while_held_passes() {
+        let (with, without) = (screen(100, true), screen(100, false));
+        let s = scores(&with, &with, &without, &without, &without);
+        assert_eq!(s.noise, 0.0);
+        assert!(
+            s.sprite > 10.0 && s.hide > 10.0 && s.held_sprite == 0.0,
+            "{s:?}"
+        );
+        assert!(check_cursor_hidden(&s).is_ok());
+    }
+
+    #[test]
+    fn a_cursor_still_drawn_while_held_fails() {
+        let (with, without) = (screen(100, true), screen(100, false));
+        let s = scores(&with, &with, &without, &with, &without);
+        let e = check_cursor_hidden(&s).unwrap_err();
+        assert!(e.contains("still present in the held capture"), "{e}");
+    }
+
+    #[test]
+    fn a_capture_that_never_shows_the_cursor_is_an_error_not_a_pass() {
+        let without = screen(100, false);
+        let s = scores(&without, &without, &without, &without, &without);
+        let e = check_cursor_hidden(&s).unwrap_err();
+        assert!(e.contains("not visible"), "{e}");
+    }
+
+    #[test]
+    fn a_changed_background_under_a_retained_sprite_is_not_reported_as_hidden() {
+        // The crop differs a lot from before the press, but the held cursor-versus-no-cursor
+        // comparison still shows the sprite: the cursor did not go away.
+        let (with, without) = (screen(100, true), screen(100, false));
+        let (held, held_none) = (screen(160, true), screen(160, false));
+        let s = scores(&with, &with, &without, &held, &held_none);
+        assert!(s.hide > 0.5 * s.sprite && s.held_sprite > 10.0, "{s:?}");
+        let e = check_cursor_hidden(&s).unwrap_err();
+        assert!(e.contains("still present in the held capture"), "{e}");
+    }
+
+    #[test]
+    fn a_background_change_with_no_sprite_drawn_cannot_pass_as_a_visible_cursor() {
+        // No cursor in any capture; the background goes 100 -> 160 after the first shot. The
+        // bracketing repeat shot (taken after the no-cursor one) sees it, so noise matches sprite.
+        let (first, later) = (screen(100, false), screen(160, false));
+        let s = scores(&first, &later, &later, &later, &later);
+        assert!(s.sprite > 10.0 && s.noise > 10.0, "{s:?}");
+        let e = check_cursor_hidden(&s).unwrap_err();
+        assert!(e.contains("not visible"), "{e}");
+    }
+
+    #[test]
+    fn capture_noise_as_large_as_the_sprite_cannot_prove_it_was_visible() {
+        let (with, without) = (screen(100, true), screen(100, false));
+        // two "identical" captures that differ as much as the sprite does
+        let s = scores(&with, &without, &without, &without, &without);
+        assert!(check_cursor_hidden(&s).is_err());
+    }
+
+    #[test]
+    fn a_crop_that_leaves_the_capture_is_reported() {
+        let with = screen(100, true);
+        let near_edge = CursorShots {
+            before: &with,
+            before_again: &with,
+            before_no_cursor: &with,
+            held: &with,
+            held_no_cursor: &with,
+        };
+        let e = cursor_scores(&near_edge, (190.0, 100.0)).unwrap_err();
+        assert!(e.contains("leaves"), "{e}");
     }
 }

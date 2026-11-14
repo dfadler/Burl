@@ -1,0 +1,19 @@
+[package]
+name = "gnarl-sim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+description = "Gnarl: the Gource simulation (scene graph, layout and its state dump)"
+readme = "README.md"
+keywords = ["gource", "simulation", "visualization", "git", "gnarl"]
+categories = ["simulation", "visualization"]
+include = ["LICENSE", "src/**", "README.md"]
+
+[dependencies]
+gnarl-util.workspace = true
+gnarl-formats.workspace = true
+# Same pin as gnarl-util so the lockfile keeps one glam.
+glam = "=0.34.2"

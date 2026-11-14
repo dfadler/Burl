@@ -4,6 +4,8 @@
 # be configured with the user as required reviewer. Artifacts are a DRAFT GitHub release
 # (the user publishes it) and the headless image on ghcr. A tag with a hyphen (v0.58.0-rc.1)
 # is a dry run: no sign-off needed, prerelease draft, image without the `latest` tag.
+# The `crates` job publishes the seven crates to crates.io after the draft exists, for final tags
+# only (never an rc), behind the same `release` environment (a second approval).
 name: release
 on:
   push:
@@ -51,7 +53,7 @@ jobs:
         with:
           persist-credentials: false
       - run: cargo xtask ci
-      - run: cargo build --release --locked -p burl
+      - run: cargo build --release --locked -p gnarl
       - name: Third-party licence list
         # cargo-deny pinned and locked; `list` prints every dependency's licence.
         run: |
@@ -59,16 +61,16 @@ jobs:
           cargo deny list --layout crate --format human > THIRD-PARTY-LICENSES.txt
       - name: Package
         env:
-          NAME: burl-${{ github.ref_name }}-${{ matrix.target }}
+          NAME: gnarl-${{ github.ref_name }}-${{ matrix.target }}
         run: |
           mkdir "$NAME"
-          cp target/release/burl COPYING dist/NOTICE.md THIRD-PARTY-LICENSES.txt "$NAME/"
+          cp target/release/gnarl COPYING dist/NOTICE.md THIRD-PARTY-LICENSES.txt "$NAME/"
           tar -czf "$NAME.tar.gz" "$NAME"
           shasum -a 256 "$NAME.tar.gz" > "$NAME.tar.gz.sha256"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: tarball-${{ matrix.target }}
-          path: burl-*.tar.gz*
+          path: gnarl-*.tar.gz*
           if-no-files-found: error
 
   image:
@@ -80,10 +82,10 @@ jobs:
         with:
           persist-credentials: false
       - name: Build the headless image
-        run: docker build --platform linux/amd64 -t burl:release -f docker/release.Dockerfile .
+        run: docker build --platform linux/amd64 -t gnarl:release -f docker/release.Dockerfile .
       - name: Image exports a valid PPM stream for a fixture
-        run: bash scripts/check-image.sh burl:release
-      - run: docker save burl:release -o image.tar
+        run: bash scripts/check-image.sh gnarl:release
+      - run: docker save gnarl:release -o image.tar
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: image
@@ -115,7 +117,7 @@ jobs:
           tags=("${GITHUB_REF_NAME#v}")
           case "$GITHUB_REF_NAME" in *-*) ;; *) tags+=(latest) ;; esac
           for t in "${tags[@]}"; do
-            docker tag burl:release "$ref:$t"
+            docker tag gnarl:release "$ref:$t"
             docker push "$ref:$t"
           done
       - name: Draft the GitHub release
@@ -126,3 +128,50 @@ jobs:
           flags=(--draft --generate-notes --verify-tag)
           case "$GITHUB_REF_NAME" in *-*) flags+=(--prerelease) ;; esac
           gh release create "$GITHUB_REF_NAME" "${flags[@]}" dl/tarball-*/*
+
+  crates:
+    # crates.io (#21 follow-up). Final tags only: a publish is permanent and an rc must never
+    # reserve a version. Runs after the draft release exists. Needs the `release` environment
+    # secret CARGO_REGISTRY_TOKEN: a first publish cannot use trusted publishing, which needs the
+    # crate to exist already (https://crates.io/docs/trusted-publishing, "Prerequisites").
+    if: ${{ !contains(github.ref_name, '-') }}
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Tag matches the workspace version
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          have=$(cargo metadata --no-deps --locked --format-version 1 | python3 -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "gnarl"))')
+          [ "$want" = "$have" ] || { echo "tag $want != workspace version $have"; exit 1; }
+      - name: Dry run of the whole workspace
+        # Packages and builds every crate against its siblings before anything irreversible.
+        run: cargo publish --workspace --exclude xtask --dry-run --locked
+      - name: Publish in dependency order
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "$CARGO_REGISTRY_TOKEN" ] || { echo "secret CARGO_REGISTRY_TOKEN is not set in the release environment"; exit 1; }
+          version="${GITHUB_REF_NAME#v}"
+          # Leaves first. cargo refuses a crate whose dependency is not on the registry yet, so a
+          # wrong order fails loudly; the check below catches a crate added to the workspace and
+          # forgotten here.
+          order=(gnarl-util gnarl-formats gnarl-conf gnarl-sim gnarl-render gnarl-gl gnarl)
+          members=$(cargo metadata --no-deps --locked --format-version 1 \
+            | python3 -c 'import json,sys; print(*sorted(p["name"] for p in json.load(sys.stdin)["packages"] if p["publish"] != []))')
+          [ "$members" = "$(printf '%s\n' "${order[@]}" | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')" ] \
+            || { echo "publishable crates [$members] differ from the order list"; exit 1; }
+          for c in "${order[@]}"; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -A 'gnarl-release (github.com/dfadler/Gnarl)' \
+              "https://crates.io/api/v1/crates/$c/$version")
+            if [ "$code" = 200 ]; then
+              echo "$c $version already on crates.io, skipping"
+              continue
+            fi
+            cargo publish -p "$c" --locked
+          done

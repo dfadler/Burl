@@ -119,26 +119,45 @@ fn ssim_cmd(cmd: &str, args: &[String]) -> Result<ExitCode, String> {
     }
 }
 
+const HARNESS_USAGE: &str =
+    "usage: cargo xtask display-harness [--high-dpi | --grab | --drag | --roundtrip | --real-panel]";
+
+/// At most one known flag, nothing else.
+fn harness_args_ok(args: &[String]) -> bool {
+    const FLAGS: [&str; 5] = [
+        "--high-dpi",
+        "--grab",
+        "--drag",
+        "--roundtrip",
+        "--real-panel",
+    ];
+    args.len() <= 1 && args.iter().all(|a| FLAGS.contains(&a.as_str()))
+}
+
 /// `display-harness`: macOS only (private CGVirtualDisplay API); exit 1 on a failed step or assertion.
 fn display_harness_cmd(args: &[String]) -> ExitCode {
-    let high_dpi = args.iter().any(|a| a == "--high-dpi");
-    let grab = args.iter().any(|a| a == "--grab");
-    let drag = args.iter().any(|a| a == "--drag");
-    let flags = [high_dpi, grab, drag].iter().filter(|f| **f).count();
-    if args
-        .iter()
-        .any(|a| a != "--high-dpi" && a != "--grab" && a != "--drag")
-        || flags > 1
-    {
-        eprintln!("usage: cargo xtask display-harness [--high-dpi | --grab | --drag]");
+    let has = |f: &str| args.iter().any(|a| a == f);
+    let (high_dpi, grab, drag, roundtrip, real_panel) = (
+        has("--high-dpi"),
+        has("--grab"),
+        has("--drag"),
+        has("--roundtrip"),
+        has("--real-panel"),
+    );
+    if !harness_args_ok(args) {
+        eprintln!("{HARNESS_USAGE}");
         return ExitCode::from(2);
     }
     if !cfg!(target_os = "macos") {
         eprintln!("display-harness: needs macOS (virtual displays, System Events, screencapture)");
         return ExitCode::FAILURE;
     }
-    let result = if grab {
+    let result = if real_panel {
+        xtask::real_panel::run_real_panel(&workspace_root())
+    } else if grab {
         xtask::display_harness::run_grab_check(&workspace_root())
+    } else if roundtrip {
+        xtask::roundtrip::run_roundtrip_check(&workspace_root())
     } else if drag {
         xtask::display_harness::run_drag_check(&workspace_root())
     } else {
@@ -156,8 +175,49 @@ fn display_harness_cmd(args: &[String]) -> ExitCode {
     }
 }
 
+/// `cursor-lab`: an experiment that prints measurements; exit 1 only on an infrastructure error.
+fn cursor_lab_cmd(args: &[String]) -> ExitCode {
+    if !args.is_empty() {
+        eprintln!("usage: cargo xtask cursor-lab");
+        return ExitCode::from(2);
+    }
+    if !cfg!(target_os = "macos") {
+        eprintln!("cursor-lab: needs macOS");
+        return ExitCode::FAILURE;
+    }
+    match xtask::cursor_lab::run_lab(&workspace_root()) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("cursor-lab: infrastructure error: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// `crisp-control`: macOS only; a real compositor upscale as the crispness check's negative control.
+fn crisp_control_cmd(args: &[String]) -> ExitCode {
+    if let Err(e) = xtask::crisp_control::parse_args(args) {
+        eprintln!("{e}");
+        return ExitCode::from(2);
+    }
+    if !cfg!(target_os = "macos") {
+        eprintln!("crisp-control: needs macOS (virtual displays, System Events, screencapture)");
+        return ExitCode::FAILURE;
+    }
+    match xtask::crisp_control::run_crisp_control(&workspace_root()) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("crisp-control: FAIL: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("crisp-control") {
+        return crisp_control_cmd(&args[1..]);
+    }
     if let Some(cmd) = args.first().filter(|c| c.starts_with("ssim")) {
         return ssim_cmd(cmd, &args[1..]).unwrap_or_else(|e| {
             eprintln!("{cmd}: {e}");
@@ -167,11 +227,14 @@ fn main() -> ExitCode {
     if args.first().map(String::as_str) == Some("display-harness") {
         return display_harness_cmd(&args[1..]);
     }
+    if args.first().map(String::as_str) == Some("cursor-lab") {
+        return cursor_lab_cmd(&args[1..]);
+    }
     if args.first().map(String::as_str) == Some("sim-compare") {
         return sim_compare(&args[1..]);
     }
     if args.first().map(String::as_str) != Some("ci") || args[1..].iter().any(|a| a != "--pcre2") {
-        eprintln!("usage: cargo xtask ci [--pcre2] | sim-compare .. | ssim* .. | display-harness [--high-dpi | --grab | --drag]");
+        eprintln!("usage: cargo xtask ci [--pcre2] | sim-compare .. | ssim* .. | display-harness [--high-dpi | --grab | --drag | --roundtrip | --real-panel] | crisp-control | cursor-lab");
         return ExitCode::from(2);
     }
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
@@ -191,7 +254,14 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
-    use super::steps;
+    use super::{harness_args_ok, steps};
+
+    #[test]
+    fn display_harness_takes_no_flag_or_exactly_one_known_flag() {
+        let ok = |a: &[&str]| harness_args_ok(&a.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        assert!(ok(&[]) && ok(&["--real-panel"]) && ok(&["--high-dpi"]));
+        assert!(!ok(&["--real-panel", "--grab"]) && !ok(&["--real-panal"]));
+    }
 
     #[test]
     fn pcre2_leg_adds_the_feature_to_clippy_and_test_only() {

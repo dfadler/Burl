@@ -1,0 +1,26 @@
+[package]
+name = "gnarl-util"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+description = "Gnarl: pure helpers for Gource (regex wrapper, string hash, utf8 filter, date parsing, glibc-compatible prng, quadtree)"
+readme = "README.md"
+keywords = ["gource", "quadtree", "prng", "gnarl"]
+categories = ["algorithms", "data-structures"]
+include = ["LICENSE", "src/**", "tests/fixtures/**", "README.md"]
+
+[features]
+default = []
+# Real PCRE2 for user-supplied patterns (--file-filter, --user-filter, --git-branch) that may
+# use look-around or backreferences. Internal parser patterns never need it.
+pcre2 = ["dep:pcre2"]
+
+[dependencies]
+regex.workspace = true
+chrono.workspace = true
+# Pinned in-crate rather than in [workspace.dependencies] to stay out of the shared root manifest.
+glam = "=0.34.2"
+pcre2 = { workspace = true, optional = true }

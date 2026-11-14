@@ -1,0 +1,22 @@
+[package]
+name = "gnarl-conf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+description = "Gnarl: Gource command-line option tables, config-file model and help text"
+readme = "README.md"
+keywords = ["gource", "cli", "config", "gnarl"]
+categories = ["command-line-interface", "config"]
+include = ["LICENSE", "src/**", "README.md"]
+
+[features]
+default = []
+# Real PCRE2 for the four user filters (look-around, backreferences); forwards to gnarl-util.
+pcre2 = ["gnarl-util/pcre2"]
+
+[dependencies]
+gnarl-util.workspace = true
+chrono.workspace = true

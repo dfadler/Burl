@@ -156,8 +156,30 @@ fn display_harness_cmd(args: &[String]) -> ExitCode {
     }
 }
 
+/// `crisp-control`: macOS only; a real compositor upscale as the crispness check's negative control.
+fn crisp_control_cmd(args: &[String]) -> ExitCode {
+    if let Err(e) = xtask::crisp_control::parse_args(args) {
+        eprintln!("{e}");
+        return ExitCode::from(2);
+    }
+    if !cfg!(target_os = "macos") {
+        eprintln!("crisp-control: needs macOS (virtual displays, System Events, screencapture)");
+        return ExitCode::FAILURE;
+    }
+    match xtask::crisp_control::run_crisp_control(&workspace_root()) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("crisp-control: FAIL: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("crisp-control") {
+        return crisp_control_cmd(&args[1..]);
+    }
     if let Some(cmd) = args.first().filter(|c| c.starts_with("ssim")) {
         return ssim_cmd(cmd, &args[1..]).unwrap_or_else(|e| {
             eprintln!("{cmd}: {e}");
@@ -171,7 +193,7 @@ fn main() -> ExitCode {
         return sim_compare(&args[1..]);
     }
     if args.first().map(String::as_str) != Some("ci") || args[1..].iter().any(|a| a != "--pcre2") {
-        eprintln!("usage: cargo xtask ci [--pcre2] | sim-compare .. | ssim* .. | display-harness [--high-dpi | --grab | --drag]");
+        eprintln!("usage: cargo xtask ci [--pcre2] | sim-compare .. | ssim* .. | display-harness [--high-dpi | --grab | --drag] | crisp-control");
         return ExitCode::from(2);
     }
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());

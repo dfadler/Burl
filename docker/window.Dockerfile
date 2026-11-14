@@ -11,13 +11,21 @@ COPY xtask xtask
 COPY data data
 RUN cargo build --release --locked -p burl
 
+# The cursor-image reader (scripts/cursor-alpha.c) needs libXfixes headers; only the .so goes on.
+FROM rust:1-slim-trixie@sha256:b8e062b1c3a80183df83d9ba187cadd2b5ab84bc78d453dbfeb2fccd5f982247 AS tools
+RUN apt-get update && apt-get install -y --no-install-recommends libx11-dev libxfixes-dev \
+    && rm -rf /var/lib/apt/lists/*
+COPY scripts/cursor-alpha.c /w/cursor-alpha.c
+RUN cc -O1 -o /w/cursor-alpha /w/cursor-alpha.c -lX11 -lXfixes
+
 FROM debian@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libegl1 libegl-mesa0 libgl1-mesa-dri \
     xvfb openbox xdotool x11-utils ffmpeg \
-    libx11-6 libxcursor1 libxi6 libxrandr2 libxkbcommon-x11-0 \
+    libx11-6 libxcursor1 libxfixes3 libxi6 libxrandr2 libxkbcommon-x11-0 \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /w/target/release/burl /usr/local/bin/burl
+COPY --from=tools /w/cursor-alpha /usr/local/bin/cursor-alpha
 COPY scripts/window-in-container.sh /usr/local/bin/window-in-container.sh
 # Software GL, one rasteriser thread: the capture-determinism settings from #12.
 ENV LIBGL_ALWAYS_SOFTWARE=1 LP_NUM_THREADS=1

@@ -219,10 +219,36 @@ if [ -n "$CWID" ]; then
 	xdotool mousemove $((CX + CW / 2)) $((CY + CH / 2))
 	push_until outside && ok "control: an ungrabbed pointer can leave the window" ||
 		bad "control: the pointer cannot leave the window even without a grab"
-	xdotool mousemove $((CX + CW / 2)) $((CY + CH / 2)) mousedown 3
+	# Hidden half: winit hides the cursor with an empty-mask cursor on the window (set_cursor_visible
+	# in x11/window.rs), so the image the server displays (XFixesGetCursorImage, via cursor-alpha) has
+	# max alpha 0 while hidden and more than 0 while shown. It reflects the window's cursor only with
+	# the pointer inside the window, which the mousemove below and the confinement guarantee.
+	# cursor_is visible|hidden: polled for 5 s (the grab and the hide land a frame after the press).
+	cursor_is() {
+		local a=
+		for _ in $(seq 50); do
+			a=$(cursor-alpha 2>&1)
+			if [ "$1" = hidden ]; then
+				[ "$a" = 0 ] && return 0
+			else
+				case "$a" in '' | *[!0-9]* | 0) ;; *) return 0 ;; esac
+			fi
+			sleep 0.1
+		done
+		CURSOR_ALPHA=$a
+		return 1
+	}
+	xdotool mousemove $((CX + CW / 2)) $((CY + CH / 2))
+	cursor_is visible && ok "cursor is visible over the window before a button is pressed" ||
+		bad "cursor is not visible over the window before a press (max alpha: ${CURSOR_ALPHA:-?})"
+	xdotool mousedown 3
 	push_until inside && ok "holding a button confines the pointer to the window (Linux X11 Confined grab)" ||
 		bad "pointer left the window while the right button is held (at $PX,$PY)"
+	cursor_is hidden && ok "cursor is hidden while a button is held (X11 cursor image fully transparent)" ||
+		bad "cursor is not hidden while the right button is held (max alpha: ${CURSOR_ALPHA:-?})"
 	xdotool mouseup 3
+	cursor_is visible && ok "cursor is visible again after the button is released" ||
+		bad "cursor is still hidden after the button went up (max alpha: ${CURSOR_ALPHA:-?})"
 	push_until outside && ok "releasing the button releases the confinement" ||
 		bad "pointer is still confined after the button went up (at $PX,$PY)"
 else

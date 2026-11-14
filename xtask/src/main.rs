@@ -124,13 +124,19 @@ fn display_harness_cmd(args: &[String]) -> ExitCode {
     let high_dpi = args.iter().any(|a| a == "--high-dpi");
     let grab = args.iter().any(|a| a == "--grab");
     let drag = args.iter().any(|a| a == "--drag");
-    let flags = [high_dpi, grab, drag].iter().filter(|f| **f).count();
+    let roundtrip = args.iter().any(|a| a == "--roundtrip");
+    let flags = [high_dpi, grab, drag, roundtrip]
+        .iter()
+        .filter(|f| **f)
+        .count();
     if args
         .iter()
-        .any(|a| a != "--high-dpi" && a != "--grab" && a != "--drag")
+        .any(|a| a != "--high-dpi" && a != "--grab" && a != "--drag" && a != "--roundtrip")
         || flags > 1
     {
-        eprintln!("usage: cargo xtask display-harness [--high-dpi | --grab | --drag]");
+        eprintln!(
+            "usage: cargo xtask display-harness [--high-dpi | --grab | --drag | --roundtrip]"
+        );
         return ExitCode::from(2);
     }
     if !cfg!(target_os = "macos") {
@@ -139,6 +145,8 @@ fn display_harness_cmd(args: &[String]) -> ExitCode {
     }
     let result = if grab {
         xtask::display_harness::run_grab_check(&workspace_root())
+    } else if roundtrip {
+        xtask::roundtrip::run_roundtrip_check(&workspace_root())
     } else if drag {
         xtask::display_harness::run_drag_check(&workspace_root())
     } else {
@@ -193,7 +201,7 @@ fn main() -> ExitCode {
         return sim_compare(&args[1..]);
     }
     if args.first().map(String::as_str) != Some("ci") || args[1..].iter().any(|a| a != "--pcre2") {
-        eprintln!("usage: cargo xtask ci [--pcre2] | sim-compare .. | ssim* .. | display-harness [--high-dpi | --grab | --drag] | cursor-lab");
+        eprintln!("usage: cargo xtask ci [--pcre2] | sim-compare .. | ssim* .. | display-harness [--high-dpi | --grab | --drag | --roundtrip] | cursor-lab");
         return ExitCode::from(2);
     }
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());

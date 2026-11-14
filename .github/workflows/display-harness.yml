@@ -84,6 +84,10 @@ jobs:
       # experiment: whether the synthetic drag moves the window across the virtual displays.
       - run: cargo xtask display-harness --drag
         if: ${{ !cancelled() }}
+      # Paused 1x -> 2x -> 1x drag round trip: the window must show the same frame afterwards.
+      # First hosted run is the experiment (see tools/display-harness/README.md).
+      - run: cargo xtask display-harness --roundtrip
+        if: ${{ !cancelled() }}
       # Cursor lab (experiment): measures what the cursor does under a held grab, what an event tap
       # sees, whether the sprite shows in captures, and whether a virtual HID mouse can exist. It
       # prints a table and fails only on an infrastructure error; continue-on-error keeps this
@@ -118,6 +122,9 @@ jobs:
             target/display-harness-grab/burl.out
             target/display-harness-drag/burl.out
             target/display-harness-drag/vd.out
+            target/display-harness-roundtrip/*.png
+            target/display-harness-roundtrip/burl.out
+            target/display-harness-roundtrip/vd.out
           if-no-files-found: ignore
           retention-days: 7
 

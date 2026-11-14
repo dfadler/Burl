@@ -13,7 +13,7 @@
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::process::{Child, Command, Stdio};
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{sync_channel, Receiver};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -37,7 +37,9 @@ pub fn encode(c: Cmd) -> Result<String, String> {
         Cmd::Ping => "ping\n".into(),
         Cmd::Down => "down\n".into(),
         Cmd::Up => "up\n".into(),
-        Cmd::Rel(dx, dy) if dx.abs() <= MAX_STEP && dy.abs() <= MAX_STEP => {
+        Cmd::Rel(dx, dy)
+            if (-MAX_STEP..=MAX_STEP).contains(&dx) && (-MAX_STEP..=MAX_STEP).contains(&dy) =>
+        {
             format!("rel {dx} {dy}\n")
         }
         Cmd::Rel(dx, dy) => {
@@ -54,7 +56,7 @@ pub fn parse(line: &str) -> Result<Cmd, String> {
     let bad = || format!("bad command {line:?}");
     let num = |t: Option<&str>| {
         t.and_then(|s| s.parse::<i32>().ok())
-            .filter(|n| n.abs() <= MAX_STEP)
+            .filter(|n| (-MAX_STEP..=MAX_STEP).contains(n))
     };
     let c = match t.next() {
         Some("ping") => Cmd::Ping,
@@ -213,6 +215,8 @@ pub fn helper(path: &str) -> Result<Box<dyn RelativeMouse>, String> {
 
 /// How long to wait for one helper reply before giving up on it.
 const HELPER_REPLY_TIMEOUT: Duration = Duration::from_secs(2);
+/// Chunks (up to 256 bytes each) the reader thread may queue ahead of the consumer.
+const READER_QUEUE: usize = 16;
 
 /// A helper's stdout read against the exchange's shared deadline. A pipe from a live but silent
 /// process never reaches EOF, so a plain `read` would hang forever, and a per-read timeout lets a
@@ -255,19 +259,11 @@ fn helper_cmd(
         .stdout(Stdio::piped())
         .spawn()
         .map_err(|e| format!("{label}: {e}"))?;
-    let (tx, mut stdout) = (
+    let (tx, stdout) = (
         child.stdin.take().ok_or("no stdin")?,
         child.stdout.take().ok_or("no stdout")?,
     );
-    let (chunks, rx) = channel();
-    std::thread::spawn(move || {
-        let mut buf = [0u8; 256];
-        while let Ok(n) = stdout.read(&mut buf) {
-            if n == 0 || chunks.send(buf[..n].to_vec()).is_err() {
-                break;
-            }
-        }
-    });
+    let rx = spawn_reader(stdout);
     let at = Arc::new(Mutex::new(Instant::now()));
     Ok(Box::new(Line {
         name: format!("karabiner helper {label}"),
@@ -280,6 +276,23 @@ fn helper_cmd(
         child: Some(child),
         deadline: Some((at, timeout)),
     }))
+}
+
+/// Drains `src` on a thread into a BOUNDED queue ([`READER_QUEUE`] chunks). When nobody consumes,
+/// `send` blocks, the thread stops reading, and the helper blocks on its own write: a chatty helper
+/// cannot grow memory without limit. The thread ends at EOF, on a read error, or when the receiver
+/// is dropped.
+fn spawn_reader(mut src: impl Read + Send + 'static) -> Receiver<Vec<u8>> {
+    let (chunks, rx) = sync_channel(READER_QUEUE);
+    std::thread::spawn(move || {
+        let mut buf = [0u8; 256];
+        while let Ok(n) = src.read(&mut buf) {
+            if n == 0 || chunks.send(buf[..n].to_vec()).is_err() {
+                break;
+            }
+        }
+    });
+    rx
 }
 
 /// Candidate rig ports on macOS: the Pico's CDC serial shows up as `/dev/cu.usbmodem*`.
@@ -384,6 +397,11 @@ mod tests {
     fn out_of_range_and_malformed_lines_are_refused() {
         assert!(encode(Cmd::Rel(128, 0)).is_err());
         assert!(encode(Cmd::Rel(0, -128)).is_err());
+        // the minimum integer has no absolute value: it must be an error, not an overflow
+        assert!(encode(Cmd::Rel(i32::MIN, 0)).is_err());
+        assert!(encode(Cmd::Rel(0, i32::MIN)).is_err());
+        assert!(parse("rel -2147483648 0").is_err());
+        assert!(parse("rel 0 -2147483648").is_err());
         for l in [
             "rel 1",
             "rel 1 2 3",
@@ -490,6 +508,29 @@ mod tests {
         let e = dev.available().unwrap_err();
         assert!(e.contains("no reply"), "{e}");
         assert!(t.elapsed() < Duration::from_secs(5), "{:?}", t.elapsed());
+    }
+
+    #[test]
+    fn a_chatty_source_nobody_reads_is_not_drained_without_limit() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        struct Endless(Arc<AtomicUsize>);
+        impl Read for Endless {
+            fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
+                self.0.fetch_add(out.len(), Ordering::SeqCst);
+                out.fill(b'x');
+                Ok(out.len())
+            }
+        }
+        let read = Arc::new(AtomicUsize::new(0));
+        let _rx = spawn_reader(Endless(Arc::clone(&read)));
+        std::thread::sleep(Duration::from_millis(300));
+        // queue + the chunk in flight + one being read; unbounded would be gigabytes by now
+        let limit = 64 * 1024; // a fixed cap, not derived from READER_QUEUE, so changing it cannot hide a leak
+        assert!(
+            read.load(Ordering::SeqCst) <= limit,
+            "{}",
+            read.load(Ordering::SeqCst)
+        );
     }
 
     #[test]

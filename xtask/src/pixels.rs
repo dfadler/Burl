@@ -549,7 +549,8 @@ mod tests {
     #[test]
     fn cursor_returned_fails_when_the_sprite_is_still_gone() {
         assert!(check_cursor_returned(0.1, 5.0, 0.0).is_err());
-        assert!(check_cursor_returned(1.4, 5.0, 0.5).is_err());
+        // Close to the pre-press score, but both are within the noise: nothing proves a sprite.
+        assert!(check_cursor_returned(1.4, 1.5, 0.5).is_err());
     }
 
     #[test]

@@ -3,7 +3,14 @@ name = "gnarl-formats"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Gource rewrite: commit-log readers and the nine log-format parsers"
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+description = "Gnarl: commit-log readers and the nine Gource log-format parsers (git, svn, hg, bzr, cvs, custom, apache, ...)"
+readme = "README.md"
+keywords = ["gource", "git", "log-parser", "version-control", "gnarl"]
+categories = ["parser-implementations", "parsing"]
+include = ["LICENSE", "src/**", "README.md"]
 
 [dependencies]
 gnarl-util.workspace = true

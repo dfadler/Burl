@@ -3,7 +3,14 @@ name = "gnarl-util"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Gource rewrite: pure helpers (regex wrapper, string hash, utf8 filter, date parsing, prng, bounds, quadtree)"
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+description = "Gnarl: pure helpers for Gource (regex wrapper, string hash, utf8 filter, date parsing, glibc-compatible prng, quadtree)"
+readme = "README.md"
+keywords = ["gource", "quadtree", "prng", "gnarl"]
+categories = ["algorithms", "data-structures"]
+include = ["LICENSE", "src/**", "tests/fixtures/**", "README.md"]
 
 [features]
 default = []

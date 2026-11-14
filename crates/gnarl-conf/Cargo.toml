@@ -3,7 +3,14 @@ name = "gnarl-conf"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Gource rewrite: CLI option tables, config model and help text"
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+description = "Gnarl: Gource command-line option tables, config-file model and help text"
+readme = "README.md"
+keywords = ["gource", "cli", "config", "gnarl"]
+categories = ["command-line-interface", "config"]
+include = ["LICENSE", "src/**", "README.md"]
 
 [features]
 default = []

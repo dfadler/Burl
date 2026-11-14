@@ -17,9 +17,9 @@ use gnarl_util::prng::SimRng;
 use std::io::Write;
 use std::sync::Arc;
 
-const BEAM: &[u8] = include_bytes!("../../../data/beam.png");
-const FILE: &[u8] = include_bytes!("../../../data/file.png");
-const USER: &[u8] = include_bytes!("../../../data/user.png");
+const BEAM: &[u8] = gnarl_render::BEAM_PNG;
+const FILE: &[u8] = gnarl_render::FILE_PNG;
+const USER: &[u8] = gnarl_render::USER_PNG;
 
 /// First texture id of the glyph pages (1-3 are the scene graphics).
 pub(crate) const FIRST_GLYPH_TEXTURE: u32 = 10;

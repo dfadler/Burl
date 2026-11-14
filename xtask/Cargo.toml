@@ -7,7 +7,7 @@ repository.workspace = true
 publish = false
 
 [dependencies]
-burl-sim.workspace = true
+gnarl-sim.workspace = true
 # preserve_order: reports name the first divergent field in file order, not sorted order.
 serde_json = { version = "1", features = ["preserve_order"] }
 png = "0.18"

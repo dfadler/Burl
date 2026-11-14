@@ -1,5 +1,5 @@
 //! `cargo xtask display-harness` (ticket #152): creates a 2x and a 1x virtual display with
-//! `tools/display-harness/vd.m`, runs the real `burl`, moves its window onto each display and
+//! `tools/display-harness/vd.m`, runs the real `gnarl`, moves its window onto each display and
 //! asserts the `display:` debug lines and the captured pixel sizes. macOS only; not part of
 //! `cargo xtask ci`. See `tools/display-harness/README.md`.
 
@@ -12,7 +12,7 @@ use crate::pixels;
 
 // ---- pure parsing and checks (unit-tested below) ----
 
-/// One `display:` debug line from burl (`interactive::display_line`).
+/// One `display:` debug line from gnarl (`interactive::display_line`).
 #[derive(Debug, Clone, PartialEq)]
 pub struct DisplayEvent {
     pub event: String,
@@ -201,7 +201,7 @@ pub fn check_high_dpi(
 
 // ---- process plumbing ----
 
-/// Kills and reaps its child on drop, so a failure or panic never leaves burl or the helper behind.
+/// Kills and reaps its child on drop, so a failure or panic never leaves gnarl or the helper behind.
 pub(crate) struct Proc(pub(crate) Child);
 impl Drop for Proc {
     fn drop(&mut self) {
@@ -276,13 +276,13 @@ pub fn run_harness(root: &Path, high_dpi: bool) -> Result<(), String> {
             .arg(dir.join(bin)))?;
     }
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
-    eprintln!("+ cargo build --release -p burl");
+    eprintln!("+ cargo build --release -p gnarl");
     run(Command::new(&cargo)
-        .args(["build", "--release", "-p", "burl"])
+        .args(["build", "--release", "-p", "gnarl"])
         .current_dir(root))?;
     let target =
         std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), PathBuf::from);
-    let burl_bin = target.join("release/burl");
+    let gnarl_bin = target.join("release/gnarl");
 
     // The helper first: its `ready` line comes after both displays are listed.
     let vd_out = dir.join("vd.out");
@@ -318,11 +318,11 @@ pub fn run_harness(root: &Path, high_dpi: bool) -> Result<(), String> {
     let (d2, d1) = (find("2x")?, find("1x")?);
     eprintln!("displays: {d2:?} {d1:?}");
 
-    let burl_out = dir.join("burl.out");
+    let gnarl_out = dir.join("gnarl.out");
     let log = root.join("tests/golden/sim/small-repo.log");
-    let out = std::fs::File::create(&burl_out).map_err(|e| e.to_string())?;
-    let _burl = Proc(
-        Command::new(&burl_bin)
+    let out = std::fs::File::create(&gnarl_out).map_err(|e| e.to_string())?;
+    let _gnarl = Proc(
+        Command::new(&gnarl_bin)
             .arg(&log)
             .args(if high_dpi { &["--high-dpi"][..] } else { &[] })
             .args([
@@ -353,22 +353,22 @@ pub fn run_harness(root: &Path, high_dpi: bool) -> Result<(), String> {
             .stdout(out.try_clone().map_err(|e| e.to_string())?)
             .stderr(out)
             .spawn()
-            .map_err(|e| format!("{}: {e}", burl_bin.display()))?,
+            .map_err(|e| format!("{}: {e}", gnarl_bin.display()))?,
     );
     let window = || -> Option<Window> {
-        let o = Command::new(dir.join("wid")).arg("burl").output().ok()?;
+        let o = Command::new(dir.join("wid")).arg("gnarl").output().ok()?;
         String::from_utf8_lossy(&o.stdout)
             .lines()
             .find_map(parse_window)
     };
-    poll("burl's window", 60, window)?;
-    let mut scale = poll("burl's `display: event=start` line", 30, || {
-        parse_display_events(&read(&burl_out))
+    poll("gnarl's window", 60, window)?;
+    let mut scale = poll("gnarl's `display: event=start` line", 30, || {
+        parse_display_events(&read(&gnarl_out))
             .first()
             .map(|e| e.scale)
     })?;
 
-    // Freeze the sim so the captures on both displays show the same frame: Space pauses burl's
+    // Freeze the sim so the captures on both displays show the same frame: Space pauses gnarl's
     // clock (it keeps drawing, so every resize still redraws). Let some scene build up first.
     std::thread::sleep(Duration::from_secs(6));
     let probe = dir.join("pause-probe.png");
@@ -388,7 +388,7 @@ pub fn run_harness(root: &Path, high_dpi: bool) -> Result<(), String> {
     // (MAE between frames) is logged: a decay means "settling", a plateau means "still running".
     run(Command::new("osascript").args([
         "-e",
-        "tell application \"System Events\" to set frontmost of (first process whose name is \"burl\") to true",
+        "tell application \"System Events\" to set frontmost of (first process whose name is \"gnarl\") to true",
         "-e",
         "delay 0.5",
         "-e",
@@ -417,12 +417,12 @@ pub fn run_harness(root: &Path, high_dpi: bool) -> Result<(), String> {
     eprintln!("pause: frame-to-frame MAE per second after Space: {series:.3?}");
     if still < 2 {
         let why = if missed > 0 {
-            format!("; burl's window was missing from the on-screen list for {missed} of the polled seconds (minimized, hidden, other Space, locked or asleep display?)")
+            format!("; gnarl's window was missing from the on-screen list for {missed} of the polled seconds (minimized, hidden, other Space, locked or asleep display?)")
         } else {
             String::new()
         };
         return Err(format!(
-            "burl never held still after pressing Space (still running, or still settling){why}"
+            "gnarl never held still after pressing Space (still running, or still settling){why}"
         ));
     }
 
@@ -431,10 +431,10 @@ pub fn run_harness(root: &Path, high_dpi: bool) -> Result<(), String> {
     let mut contents = Vec::new();
     let mut shots = Vec::new();
     for d in [&d1, &d2] {
-        let seen = parse_display_events(&read(&burl_out)).len();
+        let seen = parse_display_events(&read(&gnarl_out)).len();
         let (px, py) = (d.x + 100, d.y + 100);
         let script = format!(
-            "tell application \"System Events\" to tell (first process whose name is \"burl\") to set position of window 1 to {{{px}, {py}}}"
+            "tell application \"System Events\" to tell (first process whose name is \"gnarl\") to set position of window 1 to {{{px}, {py}}}"
         );
         run(Command::new("osascript").args(["-e", &script]))?;
         let w = poll(
@@ -444,10 +444,10 @@ pub fn run_harness(root: &Path, high_dpi: bool) -> Result<(), String> {
         )?;
         let mut why = String::new();
         poll(
-            &format!("burl's `display:` lines after the move to {}", d.name),
+            &format!("gnarl's `display:` lines after the move to {}", d.name),
             20,
             || {
-                let all = parse_display_events(&read(&burl_out));
+                let all = parse_display_events(&read(&gnarl_out));
                 match check_move(&all[seen.min(all.len())..], scale, d.scale) {
                     Ok(()) => Some(()),
                     Err(e) => {
@@ -463,7 +463,7 @@ pub fn run_harness(root: &Path, high_dpi: bool) -> Result<(), String> {
         // Default scenario: resize so both displays show a 640x360 px frame (640x360 pt at 1x,
         // 320x180 pt at 2x). `set size` is the frame, so add the title bar (window height minus
         // content height). `--high-dpi`: the window is a logical size and stays as it is.
-        let bar = parse_display_events(&read(&burl_out))
+        let bar = parse_display_events(&read(&gnarl_out))
             .last()
             .map_or(0, |e| w.h.saturating_sub(e.logical.1));
         let (content_pt, w) = if high_dpi {
@@ -471,7 +471,7 @@ pub fn run_harness(root: &Path, high_dpi: bool) -> Result<(), String> {
         } else {
             let content_pt = (640 / d.scale as u32, 360 / d.scale as u32);
             let script = format!(
-                "tell application \"System Events\" to tell (first process whose name is \"burl\") to set size of window 1 to {{{}, {}}}",
+                "tell application \"System Events\" to tell (first process whose name is \"gnarl\") to set size of window 1 to {{{}, {}}}",
                 content_pt.0,
                 content_pt.1 + bar
             );
@@ -481,7 +481,7 @@ pub fn run_harness(root: &Path, high_dpi: bool) -> Result<(), String> {
             })?;
             (content_pt, w)
         };
-        // Capture, retrying until burl has redrawn at the new size and the paused frame is still.
+        // Capture, retrying until gnarl has redrawn at the new size and the paused frame is still.
         let png = dir.join(format!("{}.png", d.name));
         let mut last = String::new();
         let mut prev: Option<crate::ssim::Image> = None;
@@ -533,7 +533,7 @@ pub fn run_harness(root: &Path, high_dpi: bool) -> Result<(), String> {
             &content.rgb,
         )?;
         contents.push(content);
-        let last = parse_display_events(&read(&burl_out))
+        let last = parse_display_events(&read(&gnarl_out))
             .pop()
             .ok_or("no display: line")?;
         shots.push(HighDpiShot {
@@ -577,7 +577,7 @@ pub fn run_harness(root: &Path, high_dpi: bool) -> Result<(), String> {
     eprintln!("pixels: 2x display vs 1x display, same paused frame at 640x360 px: {pair:?}");
     pixels::check_native_2x(&pair).map_err(|e| format!("Retina render: {e}"))?;
 
-    // Secondary: regression baselines taken from Burl itself on the hosted runner. Opt-in, because
+    // Secondary: regression baselines taken from Gnarl itself on the hosted runner. Opt-in, because
     // they only mean something on the image that produced them; never a claim of parity.
     if let Some(name) = std::env::var_os("DISPLAY_HARNESS_BASELINE") {
         let base = root.join("tools/display-harness/baselines").join(name);
@@ -595,7 +595,7 @@ pub fn run_harness(root: &Path, high_dpi: bool) -> Result<(), String> {
 
 // ---- cursor grab (`--grab`) ----
 
-/// One `grab:` debug line from burl (`interactive::grab_line`): `(on, mode)`.
+/// One `grab:` debug line from gnarl (`interactive::grab_line`): `(on, mode)`.
 pub fn parse_grab_line(line: &str) -> Option<(bool, String)> {
     let rest = &line[line.find("grab: event=")? + "grab: ".len()..];
     let field = |k: &str| rest.split_whitespace().find_map(|t| t.strip_prefix(k));
@@ -664,9 +664,9 @@ fn screen_shot(dir: &Path, name: &str, cursor: bool) -> Result<crate::ssim::Imag
     crate::ssim::decode(&std::fs::read(&png).map_err(|e| format!("{}: {e}", png.display()))?)
 }
 
-/// `cargo xtask display-harness --grab`: a left press on burl's background grabs the cursor
+/// `cargo xtask display-harness --grab`: a left press on gnarl's background grabs the cursor
 /// (`Gource::grabMouse`) and the release lets go. A real press reaches the real window through the
-/// window server, and burl's `grab:` line says what it asked winit for (on macOS `Locked`, which is
+/// window server, and gnarl's `grab:` line says what it asked winit for (on macOS `Locked`, which is
 /// `CGAssociateMouseAndMouseCursorPosition(false)`; the call's `Ok` is what makes the mode `locked`).
 /// Phases: no grab without a press, one grab on the press (kept through drag motion), one release.
 /// While the grab is held the cursor must be HIDDEN: a full-screen `screencapture -C` shows its
@@ -674,7 +674,7 @@ fn screen_shot(dir: &Path, name: &str, cursor: bool) -> Result<crate::ssim::Imag
 /// `macos-26`; `CGCursorIsVisible` cannot say, see `pixels::check_cursor_hidden`).
 ///
 /// It does NOT assert where the cursor goes: on hosted `macos-15` and `macos-26` the cursor followed
-/// 50 points of synthetic `CGEventPost` drag while burl held a locked grab (`(412, 390) -> (462, 390)`),
+/// 50 points of synthetic `CGEventPost` drag while gnarl held a locked grab (`(412, 390) -> (462, 390)`),
 /// so synthetic events bypass the detach and a position check cannot tell a lock from none. It needs
 /// no virtual display.
 pub fn run_grab_check(root: &Path) -> Result<(), String> {
@@ -695,21 +695,21 @@ pub fn run_grab_check(root: &Path) -> Result<(), String> {
             .arg(dir.join(bin)))?;
     }
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
-    eprintln!("+ cargo build --release -p burl");
+    eprintln!("+ cargo build --release -p gnarl");
     run(Command::new(&cargo)
-        .args(["build", "--release", "-p", "burl"])
+        .args(["build", "--release", "-p", "gnarl"])
         .current_dir(root))?;
     let target =
         std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), PathBuf::from);
-    let burl_bin = target.join("release/burl");
+    let gnarl_bin = target.join("release/gnarl");
 
-    // Nothing is hidden but the mouse is NOT: `--hide mouse` makes burl drop button presses. With
+    // Nothing is hidden but the mouse is NOT: `--hide mouse` makes gnarl drop button presses. With
     // the tree, files, users and slider hidden every click lands on the background, which is what
     // grabs.
-    let burl_out = dir.join("burl.out");
-    let out = std::fs::File::create(&burl_out).map_err(|e| e.to_string())?;
-    let _burl = Proc(
-        Command::new(&burl_bin)
+    let gnarl_out = dir.join("gnarl.out");
+    let out = std::fs::File::create(&gnarl_out).map_err(|e| e.to_string())?;
+    let _gnarl = Proc(
+        Command::new(&gnarl_bin)
             .arg(root.join("tests/golden/sim/small-repo.log"))
             .args([
                 "--log-format",
@@ -733,18 +733,18 @@ pub fn run_grab_check(root: &Path) -> Result<(), String> {
             .stdout(out.try_clone().map_err(|e| e.to_string())?)
             .stderr(out)
             .spawn()
-            .map_err(|e| format!("{}: {e}", burl_bin.display()))?,
+            .map_err(|e| format!("{}: {e}", gnarl_bin.display()))?,
     );
     let window = || -> Option<Window> {
-        let o = Command::new(dir.join("wid")).arg("burl").output().ok()?;
+        let o = Command::new(dir.join("wid")).arg("gnarl").output().ok()?;
         String::from_utf8_lossy(&o.stdout)
             .lines()
             .find_map(parse_window)
     };
-    let w = poll("burl's window", 60, window)?;
+    let w = poll("gnarl's window", 60, window)?;
     run(Command::new("osascript").args([
         "-e",
-        "tell application \"System Events\" to set frontmost of (first process whose name is \"burl\") to true",
+        "tell application \"System Events\" to set frontmost of (first process whose name is \"gnarl\") to true",
     ]))?;
     std::thread::sleep(Duration::from_secs(3));
 
@@ -762,7 +762,7 @@ pub fn run_grab_check(root: &Path) -> Result<(), String> {
         }
         Ok(())
     };
-    let seen = || parse_grab_events(&read(&burl_out)).len();
+    let seen = || parse_grab_events(&read(&gnarl_out)).len();
 
     // Phase A, control: motion with no button down grabs nothing, so the `on` below is the press's.
     place()?;
@@ -771,20 +771,20 @@ pub fn run_grab_check(root: &Path) -> Result<(), String> {
     std::thread::sleep(Duration::from_secs(1));
     if seen() != before {
         return Err(format!(
-            "burl logged a grab with no button down: {:?}",
-            parse_grab_events(&read(&burl_out))
+            "gnarl logged a grab with no button down: {:?}",
+            parse_grab_events(&read(&gnarl_out))
         ));
     }
     eprintln!("ok   control: motion alone does not grab");
 
     // Phase B, press on the background: one grab, locked, the cursor hidden, kept through drag
     // motion. The captures are full-screen (the main display) with the cursor parked at `p`, so its
-    // hot spot is `p` in points times burl's scale in capture pixels.
+    // hot spot is `p` in points times gnarl's scale in capture pixels.
     place()?;
-    let scale = parse_display_events(&read(&burl_out))
+    let scale = parse_display_events(&read(&gnarl_out))
         .first()
         .map(|e| e.scale)
-        .ok_or("burl printed no `display: event=start` line, so the capture scale is unknown")?;
+        .ok_or("gnarl printed no `display: event=start` line, so the capture scale is unknown")?;
     let hot = (f64::from(p.0) * scale, f64::from(p.1) * scale);
     let shot_before = screen_shot(&dir, "cursor-before", true)?;
     let shot_none = screen_shot(&dir, "cursor-before-none", false)?;
@@ -793,14 +793,14 @@ pub fn run_grab_check(root: &Path) -> Result<(), String> {
     let shot_again = screen_shot(&dir, "cursor-before-again", true)?;
     mouse(&mouse_bin, &["down".into(), s(p.0), s(p.1)])?;
     let held = (|| -> Result<pixels::CursorScores, String> {
-        poll("burl's `grab: event=on` line after the press", 15, || {
-            parse_grab_events(&read(&burl_out))
+        poll("gnarl's `grab: event=on` line after the press", 15, || {
+            parse_grab_events(&read(&gnarl_out))
                 .get(before..)?
                 .iter()
                 .any(|(on, _)| *on)
                 .then_some(())
         })?;
-        eprintln!("ok   burl reports grab on");
+        eprintln!("ok   gnarl reports grab on");
         // winit hides the cursor with a cursor rect; give the window server a moment to apply it.
         std::thread::sleep(Duration::from_millis(500));
         let held_shot = screen_shot(&dir, "cursor-held", true)?;
@@ -822,7 +822,7 @@ pub fn run_grab_check(root: &Path) -> Result<(), String> {
             "ok   the cursor is visible before the press and hidden while the grab is held: {nums}"
         );
         push_right(&mouse_bin, "drag", p, 5, 10)?;
-        let now = &parse_grab_events(&read(&burl_out))[before..];
+        let now = &parse_grab_events(&read(&gnarl_out))[before..];
         if now.len() != 1 {
             return Err(format!("the grab changed during the drag: {now:?}"));
         }
@@ -833,20 +833,20 @@ pub fn run_grab_check(root: &Path) -> Result<(), String> {
     mouse(&mouse_bin, &["up".into(), s(p.0), s(p.1)])?;
     let before_scores = held?;
 
-    // Phase C, release: burl lets go, and the whole cycle is on, locked, off.
+    // Phase C, release: gnarl lets go, and the whole cycle is on, locked, off.
     poll(
-        "burl's `grab: event=off` line after the release",
+        "gnarl's `grab: event=off` line after the release",
         15,
         || {
-            parse_grab_events(&read(&burl_out))
+            parse_grab_events(&read(&gnarl_out))
                 .get(before..)?
                 .iter()
                 .any(|(on, _)| !*on)
                 .then_some(())
         },
     )?;
-    check_grab_cycle(&parse_grab_events(&read(&burl_out))[before..])?;
-    eprintln!("ok   burl reports grab off: one press, one locked grab, one release");
+    check_grab_cycle(&parse_grab_events(&read(&gnarl_out))[before..])?;
+    eprintln!("ok   gnarl reports grab off: one press, one locked grab, one release");
 
     // The sprite comes back without a mouse move (measured on hosted macos-15 and macos-26).
     std::thread::sleep(Duration::from_millis(500));
@@ -902,7 +902,7 @@ pub fn drag_path(from: (i32, i32), to: (i32, i32), steps: i32) -> Vec<(i32, i32,
 }
 
 /// `cargo xtask display-harness --drag`: the window is dragged by its title bar with real mouse
-/// events (`mouse.m`) from the 1x display to the 2x display and back; each crossing must make burl
+/// events (`mouse.m`) from the 1x display to the 2x display and back; each crossing must make gnarl
 /// log `scale-changed` then `resized` at the target scale (`check_move`) and leave the window on
 /// the target display. Replaces the `set position` move for this one thing: a user drags.
 ///
@@ -926,13 +926,13 @@ pub fn run_drag_check(root: &Path) -> Result<(), String> {
             .arg(dir.join(bin)))?;
     }
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
-    eprintln!("+ cargo build --release -p burl");
+    eprintln!("+ cargo build --release -p gnarl");
     run(Command::new(&cargo)
-        .args(["build", "--release", "-p", "burl"])
+        .args(["build", "--release", "-p", "gnarl"])
         .current_dir(root))?;
     let target =
         std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), PathBuf::from);
-    let burl_bin = target.join("release/burl");
+    let gnarl_bin = target.join("release/gnarl");
 
     let vd_out = dir.join("vd.out");
     let vd_file = std::fs::File::create(&vd_out).map_err(|e| e.to_string())?;
@@ -966,10 +966,10 @@ pub fn run_drag_check(root: &Path) -> Result<(), String> {
     eprintln!("displays: {d2:?} {d1:?}");
 
     // `--hide mouse` is not passed (it drops button presses); the title bar is the OS's anyway.
-    let burl_out = dir.join("burl.out");
-    let out = std::fs::File::create(&burl_out).map_err(|e| e.to_string())?;
-    let _burl = Proc(
-        Command::new(&burl_bin)
+    let gnarl_out = dir.join("gnarl.out");
+    let out = std::fs::File::create(&gnarl_out).map_err(|e| e.to_string())?;
+    let _gnarl = Proc(
+        Command::new(&gnarl_bin)
             .arg(root.join("tests/golden/sim/small-repo.log"))
             .args([
                 "--log-format",
@@ -989,17 +989,17 @@ pub fn run_drag_check(root: &Path) -> Result<(), String> {
             .stdout(out.try_clone().map_err(|e| e.to_string())?)
             .stderr(out)
             .spawn()
-            .map_err(|e| format!("{}: {e}", burl_bin.display()))?,
+            .map_err(|e| format!("{}: {e}", gnarl_bin.display()))?,
     );
     let window = || -> Option<Window> {
-        let o = Command::new(dir.join("wid")).arg("burl").output().ok()?;
+        let o = Command::new(dir.join("wid")).arg("gnarl").output().ok()?;
         String::from_utf8_lossy(&o.stdout)
             .lines()
             .find_map(parse_window)
     };
-    poll("burl's window", 60, window)?;
-    poll("burl's `display: event=start` line", 30, || {
-        parse_display_events(&read(&burl_out)).first().map(|_| ())
+    poll("gnarl's window", 60, window)?;
+    poll("gnarl's `display: event=start` line", 30, || {
+        parse_display_events(&read(&gnarl_out)).first().map(|_| ())
     })?;
     let mouse_bin = dir.join("mouse");
 
@@ -1007,7 +1007,7 @@ pub fn run_drag_check(root: &Path) -> Result<(), String> {
     for (leg, (from, to)) in [(&d1, &d2), (&d2, &d1)].into_iter().enumerate() {
         if leg == 0 {
             let script = format!(
-                "tell application \"System Events\" to tell (first process whose name is \"burl\") to set position of window 1 to {{{}, {}}}",
+                "tell application \"System Events\" to tell (first process whose name is \"gnarl\") to set position of window 1 to {{{}, {}}}",
                 from.x + 100,
                 from.y + 100
             );
@@ -1020,21 +1020,21 @@ pub fn run_drag_check(root: &Path) -> Result<(), String> {
         )?;
         // The resize after the positioning move must have settled so `seen` is a clean baseline.
         poll(
-            &format!("burl at scale {} on the {} display", from.scale, from.name),
+            &format!("gnarl at scale {} on the {} display", from.scale, from.name),
             20,
             || {
-                let last = parse_display_events(&read(&burl_out)).pop()?;
+                let last = parse_display_events(&read(&gnarl_out)).pop()?;
                 (last.scale == from.scale).then_some(())
             },
         )?;
         std::thread::sleep(Duration::from_secs(2));
         run(Command::new("osascript").args([
             "-e",
-            "tell application \"System Events\" to set frontmost of (first process whose name is \"burl\") to true",
+            "tell application \"System Events\" to set frontmost of (first process whose name is \"gnarl\") to true",
         ]))?;
         std::thread::sleep(Duration::from_secs(1));
         let w = window().unwrap_or(w);
-        let before = parse_display_events(&read(&burl_out));
+        let before = parse_display_events(&read(&gnarl_out));
         let seen = before.len();
         let before_logical = before.last().ok_or("no display: line")?.logical;
         let start = title_bar_point(&w);
@@ -1062,10 +1062,10 @@ pub fn run_drag_check(root: &Path) -> Result<(), String> {
 
         let mut why = String::new();
         poll(
-            &format!("burl's `display:` lines after the drag {}", leg_label(leg)),
+            &format!("gnarl's `display:` lines after the drag {}", leg_label(leg)),
             20,
             || {
-                let all = parse_display_events(&read(&burl_out));
+                let all = parse_display_events(&read(&gnarl_out));
                 match check_move(&all[seen.min(all.len())..], from.scale, to.scale) {
                     Ok(()) => Some(()),
                     Err(e) => {
@@ -1094,7 +1094,7 @@ pub fn run_drag_check(root: &Path) -> Result<(), String> {
             to.name
         );
 
-        // Layout judged after the move: the window keeps its point size and burl its logical size,
+        // Layout judged after the move: the window keeps its point size and gnarl its logical size,
         // and a capture of the window is scale x its points and not blank.
         let mut why = String::new();
         let landed = poll(
@@ -1102,7 +1102,7 @@ pub fn run_drag_check(root: &Path) -> Result<(), String> {
             20,
             || {
                 let now = window()?;
-                let logical = parse_display_events(&read(&burl_out)).pop()?.logical;
+                let logical = parse_display_events(&read(&gnarl_out)).pop()?.logical;
                 match check_size_kept((w.w, w.h), (now.w, now.h), before_logical, logical) {
                     Ok(()) => Some((now, logical)),
                     Err(e) => {
@@ -1164,7 +1164,7 @@ pub fn run_drag_check(root: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// A move must not resize the window: its point size (the OS's frame) and burl's logical size
+/// A move must not resize the window: its point size (the OS's frame) and gnarl's logical size
 /// (`display:` line) are the same after the move as before it.
 pub fn check_size_kept(
     points_before: (u32, u32),
@@ -1179,7 +1179,7 @@ pub fn check_size_kept(
     }
     if logical_before != logical_after {
         return Err(format!(
-            "burl's logical size changed from {logical_before:?} to {logical_after:?}"
+            "gnarl's logical size changed from {logical_before:?} to {logical_after:?}"
         ));
     }
     Ok(())
@@ -1234,7 +1234,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_burls_grab_lines_and_ignores_others() {
+    fn parses_gnarls_grab_lines_and_ignores_others() {
         assert_eq!(
             parse_grab_line("  debug: grab: event=on mode=locked"),
             Some((true, "locked".into()))
@@ -1278,7 +1278,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_burls_display_lines_and_ignores_others() {
+    fn parses_gnarls_display_lines_and_ignores_others() {
         let e = ev(&["noise", START, "display: event=bogus"]);
         assert_eq!(e.len(), 1);
         assert_eq!(

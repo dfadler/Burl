@@ -283,7 +283,7 @@ mod tests {
     #[test]
     fn png_round_trips_through_decode() {
         let i = scene(5, 5);
-        let p = std::env::temp_dir().join(format!("burl-ssim-{}.png", std::process::id()));
+        let p = std::env::temp_dir().join(format!("gnarl-ssim-{}.png", std::process::id()));
         write_png(&p, i.w, i.h, &i.rgb).unwrap();
         let back = decode(&std::fs::read(&p).unwrap()).unwrap();
         std::fs::remove_file(&p).ok();

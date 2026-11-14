@@ -1,0 +1,12 @@
+[package]
+name = "gnarl-sim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Gnarl: the simulation (Gource::logic and the scene it drives) and its state dump"
+
+[dependencies]
+gnarl-util.workspace = true
+gnarl-formats.workspace = true
+# Same pin as gnarl-util so the lockfile keeps one glam.
+glam = "=0.34.2"

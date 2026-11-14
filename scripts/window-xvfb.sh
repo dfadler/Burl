@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Linux X11 window checks (interactive checklist, automated part): build docker/window.Dockerfile,
-# open the real `burl` window under Xvfb + openbox, drive it with xdotool (pause, T, resize,
+# open the real `gnarl` window under Xvfb + openbox, drive it with xdotool (pause, T, resize,
 # Alt+Return, Esc) and check the result. Writes PNGs and session.mp4 to OUT.
 #   scripts/window-xvfb.sh [OUT_DIR]     PLATFORM=linux/arm64 for a native run on Apple silicon
 # Exit 1 if any check fails.
@@ -15,13 +15,13 @@ esac
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT=${1:-"$ROOT/target/window-xvfb"}
 PLATFORM=${PLATFORM:-linux/amd64}
-IMG=burl-window:${PLATFORM#linux/}
+IMG=gnarl-window:${PLATFORM#linux/}
 
 mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
 docker build --platform "$PLATFORM" -t "$IMG" -f "$ROOT/docker/window.Dockerfile" "$ROOT"
 # The checks poll with timeouts; the cap here (WINDOW_WATCHDOG_SECS, default 240 s) stops any other hang from running for hours.
-name="burl-window-$$" # the watchdog kills this run only, not another run of the same image
+name="gnarl-window-$$" # the watchdog kills this run only, not another run of the same image
 docker run --rm --name "$name" --platform "$PLATFORM" -v "$ROOT":/repo:ro -v "$OUT":/out "$IMG" &
 pid=$!
 secs=${WINDOW_WATCHDOG_SECS:-240}

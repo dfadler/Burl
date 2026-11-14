@@ -1,4 +1,4 @@
-// State-dump fork additions (Burl). Not part of upstream Gource.
+// State-dump fork additions (Gnarl). Not part of upstream Gource.
 // Hidden CommandLine options: --debug-dump-state FILE, --debug-dump-every N,
 // --debug-dump-max-frames N, --prng default|glibc|park, --rand-script FILE, --prng-seed N.
 // See ../README.md for the JSONL schema.

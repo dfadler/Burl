@@ -128,17 +128,17 @@ fn colours(img: &Image) -> usize {
     seen.len()
 }
 
-const FRONT: &str = "tell application \"System Events\" to set frontmost of (first process whose name is \"burl\") to true";
+const FRONT: &str = "tell application \"System Events\" to set frontmost of (first process whose name is \"gnarl\") to true";
 
 struct Ctx {
     dir: PathBuf,
-    burl_out: PathBuf,
+    gnarl_out: PathBuf,
 }
 
 impl Ctx {
     fn window(&self) -> Option<Window> {
         let o = Command::new(self.dir.join("wid"))
-            .arg("burl")
+            .arg("gnarl")
             .output()
             .ok()?;
         String::from_utf8_lossy(&o.stdout)
@@ -191,12 +191,12 @@ impl Ctx {
         }
         eprintln!("pause: frame-to-frame MAE per second after Space: {series:.3?}");
         if still < 2 {
-            return Err("burl never held still after pressing Space (still running, or still settling, or its window was off the on-screen list)".into());
+            return Err("gnarl never held still after pressing Space (still running, or still settling, or its window was off the on-screen list)".into());
         }
         Ok(())
     }
 
-    /// A capture of burl's window on a display of `scale`, once its size is right, the scene fills
+    /// A capture of gnarl's window on a display of `scale`, once its size is right, the scene fills
     /// it and two consecutive captures are identical. Returns the window, the content (title bar
     /// cropped) and the fill numbers.
     fn settled(
@@ -240,7 +240,7 @@ impl Ctx {
     }
 
     /// One real title-bar drag `from` -> `to`, then the `--drag` assertions on the landing.
-    /// Returns the landed window and burl's logical size.
+    /// Returns the landed window and gnarl's logical size.
     fn drag(
         &self,
         from: &Display,
@@ -252,7 +252,7 @@ impl Ctx {
             20,
             || self.window().filter(|w| window_on(from, w)),
         )?;
-        let before = parse_display_events(&read(&self.burl_out));
+        let before = parse_display_events(&read(&self.gnarl_out));
         let seen = before.len();
         let before_logical = before.last().ok_or("no display: line")?.logical;
         let (start, end) = (title_bar_point(&w), display_centre(to));
@@ -275,10 +275,10 @@ impl Ctx {
         dragged?;
         let mut why = String::new();
         poll(
-            &format!("burl's `display:` lines after the drag {label}"),
+            &format!("gnarl's `display:` lines after the drag {label}"),
             20,
             || {
-                let all = parse_display_events(&read(&self.burl_out));
+                let all = parse_display_events(&read(&self.gnarl_out));
                 match check_move(&all[seen.min(all.len())..], from.scale, to.scale) {
                     Ok(()) => Some(()),
                     Err(e) => {
@@ -300,7 +300,7 @@ impl Ctx {
             20,
             || {
                 let now = self.window()?;
-                let logical = parse_display_events(&read(&self.burl_out)).pop()?.logical;
+                let logical = parse_display_events(&read(&self.gnarl_out)).pop()?.logical;
                 match check_size_kept((w.w, w.h), (now.w, now.h), before_logical, logical) {
                     Ok(()) => Some((now, logical)),
                     Err(e) => {
@@ -314,9 +314,9 @@ impl Ctx {
     }
 }
 
-/// `cargo xtask display-harness --roundtrip`. Unverified until a hosted run: that a paused burl
+/// `cargo xtask display-harness --roundtrip`. Unverified until a hosted run: that a paused gnarl
 /// redraws the same frame after two scale changes, and that the cursor resting on the title bar
-/// does not change burl's drawing.
+/// does not change gnarl's drawing.
 pub fn run_roundtrip_check(root: &Path) -> Result<(), String> {
     let dir = root.join("target/display-harness-roundtrip");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -335,13 +335,13 @@ pub fn run_roundtrip_check(root: &Path) -> Result<(), String> {
             .arg(dir.join(bin)))?;
     }
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
-    eprintln!("+ cargo build --release -p burl");
+    eprintln!("+ cargo build --release -p gnarl");
     run(Command::new(&cargo)
-        .args(["build", "--release", "-p", "burl"])
+        .args(["build", "--release", "-p", "gnarl"])
         .current_dir(root))?;
     let target =
         std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), PathBuf::from);
-    let burl_bin = target.join("release/burl");
+    let gnarl_bin = target.join("release/gnarl");
 
     let vd_out = dir.join("vd.out");
     let vd_file = std::fs::File::create(&vd_out).map_err(|e| e.to_string())?;
@@ -375,10 +375,10 @@ pub fn run_roundtrip_check(root: &Path) -> Result<(), String> {
 
     // The default scenario's flags (a paused, deterministic scene) without `--hide mouse`, which
     // drops the button presses a title-bar drag needs.
-    let burl_out = dir.join("burl.out");
-    let out = std::fs::File::create(&burl_out).map_err(|e| e.to_string())?;
-    let _burl = Proc(
-        Command::new(&burl_bin)
+    let gnarl_out = dir.join("gnarl.out");
+    let out = std::fs::File::create(&gnarl_out).map_err(|e| e.to_string())?;
+    let _gnarl = Proc(
+        Command::new(&gnarl_bin)
             .arg(root.join("tests/golden/sim/small-repo.log"))
             .args([
                 "--log-format",
@@ -405,19 +405,19 @@ pub fn run_roundtrip_check(root: &Path) -> Result<(), String> {
             .stdout(out.try_clone().map_err(|e| e.to_string())?)
             .stderr(out)
             .spawn()
-            .map_err(|e| format!("{}: {e}", burl_bin.display()))?,
+            .map_err(|e| format!("{}: {e}", gnarl_bin.display()))?,
     );
-    let ctx = Ctx { dir, burl_out };
-    poll("burl's window", 60, || ctx.window())?;
-    poll("burl's `display: event=start` line", 30, || {
-        parse_display_events(&read(&ctx.burl_out))
+    let ctx = Ctx { dir, gnarl_out };
+    poll("gnarl's window", 60, || ctx.window())?;
+    poll("gnarl's `display: event=start` line", 30, || {
+        parse_display_events(&read(&ctx.gnarl_out))
             .first()
             .map(|_| ())
     })?;
 
     // Start on the 1x display, let the scene build up, pause.
     let script = format!(
-        "tell application \"System Events\" to tell (first process whose name is \"burl\") to set position of window 1 to {{{}, {}}}",
+        "tell application \"System Events\" to tell (first process whose name is \"gnarl\") to set position of window 1 to {{{}, {}}}",
         d1.x + 100,
         d1.y + 100
     );
@@ -425,19 +425,19 @@ pub fn run_roundtrip_check(root: &Path) -> Result<(), String> {
     poll("the window on the 1x display", 20, || {
         ctx.window().filter(|w| window_on(&d1, w))
     })?;
-    poll("burl at scale 1 on the 1x display", 20, || {
-        let last = parse_display_events(&read(&ctx.burl_out)).pop()?;
+    poll("gnarl at scale 1 on the 1x display", 20, || {
+        let last = parse_display_events(&read(&ctx.gnarl_out)).pop()?;
         (last.scale == d1.scale).then_some(())
     })?;
     std::thread::sleep(Duration::from_secs(6));
     ctx.pause()?;
 
     // Capture A with the cursor where it will be after the drag back: on the title bar.
-    let w0 = ctx.window().ok_or("burl's window vanished")?;
+    let w0 = ctx.window().ok_or("gnarl's window vanished")?;
     let tb = title_bar_point(&w0);
     ctx.mouse(&["warp".into(), tb.0.to_string(), tb.1.to_string()])?;
     std::thread::sleep(Duration::from_millis(500));
-    let logical = parse_display_events(&read(&ctx.burl_out))
+    let logical = parse_display_events(&read(&ctx.gnarl_out))
         .pop()
         .ok_or("no display: line")?
         .logical;

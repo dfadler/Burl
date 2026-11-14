@@ -1,0 +1,26 @@
+[package]
+name = "gnarl"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Gnarl: the application binary (build session 1: --output-custom-log only)"
+
+[[bin]]
+name = "gnarl"
+path = "src/main.rs"
+
+[dependencies]
+gnarl-util.workspace = true
+gnarl-conf.workspace = true
+gnarl-formats.workspace = true
+gnarl-sim.workspace = true
+gnarl-render.workspace = true
+gnarl-gl.workspace = true
+
+[features]
+# PCRE2 for the user filters (look-around, backreferences); the CI pcre2 leg runs the gate with it.
+pcre2 = ["gnarl-conf/pcre2"]
+
+[dev-dependencies]
+# The sim gate test reads the committed fork goldens through the xtask comparator.
+xtask = { path = "../../xtask" }

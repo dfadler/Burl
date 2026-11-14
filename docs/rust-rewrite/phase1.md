@@ -3,7 +3,7 @@
 Status: `cargo build` and `cargo test` pass; every `--output-custom-log` golden in
 `discovery/golden/custom-log/` (five fixtures, the stdin variant and the unterminated-stdin
 case) matches byte for byte, as do `help-short.txt`, `help-long.txt`, the `--version` error
-and every `rc=` row of `golden/exit-codes.txt` except the SDL probe. (True of the code at the time of writing, with the program name normalised for Burl. After the D5 help-text fixes the Rust help output deliberately differs from the Gource goldens on the user-friction and dir-name-position lines; the harness then compares against the golden with the expected diff under `discovery/golden/expected-diffs/` applied, which does not exist yet.) The 28 `parseDateTime`
+and every `rc=` row of `golden/exit-codes.txt` except the SDL probe. (True of the code at the time of writing, with the program name normalised for Gnarl. After the D5 help-text fixes the Rust help output deliberately differs from the Gource goldens on the user-friction and dir-name-position lines; the harness then compares against the golden with the expected diff under `discovery/golden/expected-diffs/` applied, which does not exist yet.) The 28 `parseDateTime`
 vectors pass with the zone pinned, and again through the binary with `TZ=Pacific/Auckland`.
 
 ## What is here
@@ -68,9 +68,9 @@ D1-D4 do not reach the log layer.
   `cargo test -p gource-util --features pcre2` as well, and turn the feature on in phase 2
   when the filters are imported.
 
-## Rename to burl (2026-10-31)
+## Rename to gnarl (2026-10-31)
 
-The binary crate was renamed from `gource` to `burl` (`crates/burl`, binary `burl`) after this
+The binary crate was renamed from `gource` to `gnarl` (`crates/gnarl`, binary `gnarl`) after this
 document was written; the `gource` row in the table above and other references to the `gource` binary mean that crate. The help text now
-says Burl, and `crates/burl/tests/golden.rs` compares output with the Gource goldens through a
+says Gnarl, and `crates/gnarl/tests/golden.rs` compares output with the Gource goldens through a
 narrow program-name normalisation (see `docs/rust-rewrite/discovery/LEDGER.md`, Decisions).

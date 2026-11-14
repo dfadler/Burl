@@ -15,8 +15,8 @@
 //   --source hid                   build the event from CGEventSourceCreate(HIDSystemState)
 //   --type moved|dragged           the event type `rel` posts
 // Posted events carry an absolute location, and on hosted macos-15 and macos-26 the cursor follows
-// it even while burl holds a Locked grab (CGAssociateMouseAndMouseCursorPosition(false)), so `pos`
-// cannot tell a lock from none. The check asserts burl's `grab:` log lines instead.
+// it even while gnarl holds a Locked grab (CGAssociateMouseAndMouseCursorPosition(false)), so `pos`
+// cannot tell a lock from none. The check asserts gnarl's `grab:` log lines instead.
 // Needs Accessibility, as CGEventPost does.
 #import <Cocoa/Cocoa.h>
 

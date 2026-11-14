@@ -18,7 +18,7 @@ case "$*" in
 *"--method"*) echo '{}' ;;
 "api repos/octo/cat --jq"*) echo main ;;
 "api user --jq .id") echo 4242 ;;
-"api repos/octo/cat/rulesets") echo '[{"id":7,"name":"burl-master","enforcement":"active"}]' ;;
+"api repos/octo/cat/rulesets") echo '[{"id":7,"name":"gnarl-master","enforcement":"active"}]' ;;
 *"/branches/main/protection"*) echo "Not Found" >&2; exit 1 ;;
 "api repos/octo/cat/environments") echo '{"environments":[{"name":"release"}]}' ;;
 *"deployment-branch-policies"*) echo '{"branch_policies":[]}' ;;

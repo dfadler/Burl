@@ -2,7 +2,7 @@
 
 `FIXTURE-N.png` is frame `N` of the untouched oracle (Gource 0.57, `src/`) rendering `FIXTURE`, 640x360, 25 fps,
 cut from the `-o -` PPM stream. Four fixtures x four frames: `small-repo`, `file-removal`, `file-to-dir`
-(the simulation-gate logs in `tests/golden/sim/`, 10 s) and `real-burl-git-250` (`tests/golden/real/`, 30 s).
+(the simulation-gate logs in `tests/golden/sim/`, 10 s) and `real-gnarl-git-250` (`tests/golden/real/`, 30 s).
 This is the **structural set**: `--hide mouse,date,dirnames,filenames,usernames,progress,bloom`, so no text, no
 overlays, no bloom. `PROVENANCE.txt` records the image digest, source sha, flags and frame indices.
 

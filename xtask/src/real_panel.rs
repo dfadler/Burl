@@ -1,5 +1,5 @@
 //! `cargo xtask display-harness --real-panel` (#210): box 79's real-Retina crispness check on the
-//! machine's own main display. No virtual display, nothing is moved or pressed; burl opens where
+//! machine's own main display. No virtual display, nothing is moved or pressed; gnarl opens where
 //! it opens, `screencapture -l` takes the window, and the pure checks in [`crate::pixels`] and
 //! [`crate::edges`] judge it. macOS only; never run by hosted CI (only its pure parts are tested).
 
@@ -93,19 +93,19 @@ pub fn run_real_panel(root: &Path) -> Result<(), String> {
     eprintln!("panel: {panel:?}");
 
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
-    eprintln!("+ cargo build --release -p burl");
+    eprintln!("+ cargo build --release -p gnarl");
     run(Command::new(&cargo)
-        .args(["build", "--release", "-p", "burl"])
+        .args(["build", "--release", "-p", "gnarl"])
         .current_dir(root))?;
     let target =
         std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root.join("target"), PathBuf::from);
-    let burl_bin = target.join("release/burl");
+    let gnarl_bin = target.join("release/gnarl");
 
-    let burl_out = dir.join("burl.out");
+    let gnarl_out = dir.join("gnarl.out");
     let log = root.join("tests/golden/sim/small-repo.log");
-    let f = std::fs::File::create(&burl_out).map_err(|e| e.to_string())?;
-    let _burl = Proc(
-        Command::new(&burl_bin)
+    let f = std::fs::File::create(&gnarl_out).map_err(|e| e.to_string())?;
+    let _gnarl = Proc(
+        Command::new(&gnarl_bin)
             .arg(&log)
             .args([
                 "--log-format",
@@ -133,30 +133,30 @@ pub fn run_real_panel(root: &Path) -> Result<(), String> {
             .stderr(f)
             .stdin(Stdio::null())
             .spawn()
-            .map_err(|e| format!("{}: {e}", burl_bin.display()))?,
+            .map_err(|e| format!("{}: {e}", gnarl_bin.display()))?,
     );
     let window = || -> Option<Window> {
-        let o = Command::new(dir.join("wid")).arg("burl").output().ok()?;
+        let o = Command::new(dir.join("wid")).arg("gnarl").output().ok()?;
         String::from_utf8_lossy(&o.stdout)
             .lines()
             .find_map(parse_window)
     };
-    poll("burl's window", 60, window)?;
-    let start = poll("burl's `display: event=start` line", 30, || {
-        parse_display_events(&read(&burl_out)).first().cloned()
+    poll("gnarl's window", 60, window)?;
+    let start = poll("gnarl's `display: event=start` line", 30, || {
+        parse_display_events(&read(&gnarl_out)).first().cloned()
     })?;
     if start.scale != 2.0 || start.physical != (640, 360) {
         return Err(format!(
-            "burl itself reports {start:?}, expected scale 2 and a 640x360 px window"
+            "gnarl itself reports {start:?}, expected scale 2 and a 640x360 px window"
         ));
     }
     // Let the scene build up; the capture does not need a still frame (edge widths do not depend
     // on where the avatars are).
     std::thread::sleep(Duration::from_secs(8));
-    let w = window().ok_or("burl's window vanished (minimized or on another Space?)")?;
+    let w = window().ok_or("gnarl's window vanished (minimized or on another Space?)")?;
     if w.x < 0 || w.y < 0 || w.x >= panel.bounds.0 as i32 || w.y >= panel.bounds.1 as i32 {
         return Err(format!(
-            "burl's window at ({}, {}) is not on the main display ({}x{} pt): another display or \
+            "gnarl's window at ({}, {}) is not on the main display ({}x{} pt): another display or \
              Space? Nothing is moved by this command",
             w.x, w.y, panel.bounds.0, panel.bounds.1
         ));
@@ -175,7 +175,7 @@ pub fn run_real_panel(root: &Path) -> Result<(), String> {
         }
     }
     check_capture((img.w as u32, img.h as u32), (w.w, w.h), 2.0, colours.len())?;
-    let logical = parse_display_events(&read(&burl_out))
+    let logical = parse_display_events(&read(&gnarl_out))
         .last()
         .ok_or("no display: line")?
         .logical;

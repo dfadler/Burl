@@ -226,7 +226,7 @@ mod tests {
         assert!(check_edges(&flat).unwrap_err().contains("too few"));
     }
 
-    /// The calibration frames (real Burl, 640x360): genuine passes, the same frames stretched,
+    /// The calibration frames (real Gnarl, 640x360): genuine passes, the same frames stretched,
     /// blurred or doubled fail.
     #[test]
     fn real_captures_pass_and_their_degraded_copies_fail() {

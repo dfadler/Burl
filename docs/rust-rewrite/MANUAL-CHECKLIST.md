@@ -2,7 +2,7 @@
 
 Skeleton for ticket #20 item 5. **Unsigned**: the user fills in and signs. Rows derive from `Gource::keyPress`, `mouseMove`, `mouseClick`, `mouseWheel`, `updateCamera` (src/gource.cpp) and the display setup. Run each row against the C++ gource 0.57 where behaviour is in doubt. Platforms: macOS Retina, macOS non-Retina, Linux X11 (release gates); Wayland best-effort.
 
-Command: `cargo run --release -p burl -- <repo>` (add `-800x600` for the exact-pixel rows).
+Command: `cargo run --release -p gnarl -- <repo>` (add `-800x600` for the exact-pixel rows).
 
 | # | Row | Expect | mac Retina | mac non-Retina | Linux X11 |
 |---|-----|--------|:---:|:---:|:---:|
@@ -27,4 +27,4 @@ Command: `cargo run --release -p burl -- <repo>` (add `-800x600` for the exact-p
 
 Rows K4-K11 are not implemented yet; mark N/A until their PRs land.
 
-Signed: ______________  Date: ________  Burl commit: ________
+Signed: ______________  Date: ________  Gnarl commit: ________

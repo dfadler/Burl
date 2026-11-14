@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Soak `cargo xtask display-harness` to catch the local flake (#169). Each run gets a window-list
-# sampler beside it (0.25 s: on-screen/all burl windows, frontmost app, display count). Logs of
+# sampler beside it (0.25 s: on-screen/all gnarl windows, frontmost app, display count). Logs of
 # passing runs are deleted; failing runs keep harness output, sampler log and a setup snapshot.
 #   scripts/display-harness-soak.sh [-n RUNS] [-d DEADLINE_MIN] [-o OUT_DIR] [-- harness args...]
 # Defaults: 50 runs, 180 min deadline, OUT_DIR=target/soak. macOS only; needs swiftc.
@@ -46,7 +46,7 @@ import CoreGraphics
 setbuf(stdout, nil)
 func count(_ opt: CGWindowListOption) -> Int {
 	let l = CGWindowListCopyWindowInfo([opt, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
-	return l.filter { ($0[kCGWindowOwnerName as String] as? String) == "burl" && ($0[kCGWindowLayer as String] as? Int) == 0 }.count
+	return l.filter { ($0[kCGWindowOwnerName as String] as? String) == "gnarl" && ($0[kCGWindowLayer as String] as? Int) == 0 }.count
 }
 while true {
 	let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? "?"
@@ -75,7 +75,7 @@ for i in $(seq 1 "$RUNS"); do
 		echo "load: $(uptime)"
 		echo "front: $(osascript -e 'tell application "System Events" to name of first process whose frontmost is true' 2>&1)"
 		echo "stray vd: $(pgrep -x vd | tr '\n' ' ')"
-		echo "stray burl: $(pgrep -x burl | tr '\n' ' ')"
+		echo "stray gnarl: $(pgrep -x gnarl | tr '\n' ' ')"
 	} >"$base.setup"
 	"$SAMPLER" >"$base.sampler" 2>&1 &
 	spid=$!

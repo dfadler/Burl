@@ -105,8 +105,22 @@ so a negative x is fine), `up`. Then 2x back to 1x. Artifacts in `target/display
   `--high-dpi` (exact-pixel `-640x360`); the logical-size-kept assertion is the expected winit
   behaviour, not a measurement: if a hosted run shows burl's logical size changing on the 2x display
   (deviation G3), record the measured numbers here and relax the assertion.
+- **Asserted, per crossing, coarse scene placement** (`check_scene_fills_window`, on the capture
+  with the title bar cropped): seven probe patches (four corners and the left, right and bottom
+  edge midpoints, inset 12 px x scale) are each within 24 levels of the median luma of the whole
+  content, so an unfilled bar, a clear-colour block or a scene drawn in a corner fails. There is no
+  top-centre probe: the date caption sits there, and the first hosted run (macos-15 and macos-26)
+  read luma 99.7 at that point at 2x while every other probe read 26.0, so the caption check below
+  covers that band instead. The near-white pixels (all
+  channels > 200) in the top 15% number at least 40 x scale^2 with their centroid x within +-5% of
+  the content centre, so the date caption is present and centred. The dark field makes the median
+  a robust reference; the tolerances are deliberately generous (baselines measure 0 off the median,
+  caption 492 px, centroid 325.8 of 640). Failures and the `ok` line print the measured numbers so
+  a hosted run can be recalibrated. This catches a GL surface that did not follow the move; it is
+  not a layout review.
 - **Not asserted:** the cursor position (synthetic events carry absolute locations, see `--grab`),
-  layout by eye (overlap, clipping, text size), crispness, doubled lines, and pixel equality
+  layout by eye (overlap, clipping of small labels, text size, anything subtle; that stays a manual
+  checklist box), crispness, doubled lines, and pixel equality
   between a dragged capture and a `set position` one (the sim is not paused in `--drag`, so frames
   differ; reusing the Space-pause loop would mean refactoring `run_harness`).
 - **Unverified until a hosted run:** that a `CGEventPost` title-bar drag across the virtual display

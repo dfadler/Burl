@@ -252,6 +252,126 @@ pub fn check_baseline(got: &Image, baseline: &Image, min_ssim: f64) -> Result<f6
     Ok(s)
 }
 
+fn luma(px: &[u8]) -> f64 {
+    0.299 * f64::from(px[0]) + 0.587 * f64::from(px[1]) + 0.114 * f64::from(px[2])
+}
+
+/// Allowed distance of a probe's luma from the median luma of the whole content, in 0..255 levels.
+/// The scene is a dark, mostly empty field (~28) with soft glows; measured baseline probes sit
+/// within a few levels of the median. 24 is generous on purpose: this catches an unfilled bar or a
+/// clear-colour block (black ~0 or white ~255 against a ~28 field), not subtle shading.
+pub const FILL_LUMA_TOLERANCE: f64 = 24.0;
+/// Inset of the probe points from the content edges, in 1x pixels (scaled by the capture scale):
+/// keeps rounded window corners out of the sample.
+const FILL_INSET: usize = 12;
+/// Caption band: the top 15% of the content.
+const CAPTION_BAND: f64 = 0.15;
+/// Near-white pixels (all channels above this) in the band are caption text; the dimmer coloured
+/// beam is excluded.
+const CAPTION_WHITE: u8 = 200;
+/// Fewest near-white pixels in the band, at 1x; multiplied by scale squared. The date caption
+/// measures several hundred; this is a low floor meaning "some bright text is there".
+pub const CAPTION_MIN_PX_1X: f64 = 40.0;
+/// The caption's centroid x must be within this fraction of the content width from the centre.
+pub const CAPTION_CENTRE_TOL: f64 = 0.05;
+
+/// Coarse structural check on a window's content area (title bar already cropped, see [`content`]):
+/// the scene fills the whole window and the date caption is at top-centre. Catches a GL surface or
+/// viewport that did not follow a display move (scene in a corner, offset, unfilled bars); says
+/// nothing about subtle layout. `Ok` carries the measured numbers for the log, `Err` the same
+/// numbers plus the reason, so a failing run can be calibrated.
+pub fn check_scene_fills_window(img: &Image, scale: f64) -> Result<String, String> {
+    let (w, h) = (img.w, img.h);
+    let inset = (FILL_INSET as f64 * scale).round() as usize;
+    if w < 2 * inset + 8 || h < 2 * inset + 8 {
+        return Err(format!("content {w}x{h} too small to judge"));
+    }
+    let mut hist = [0usize; 256];
+    for px in img.rgb.as_chunks::<3>().0 {
+        hist[luma(px).round() as usize] += 1;
+    }
+    let (mut acc, mut median) = (0, 0);
+    for (v, n) in hist.iter().enumerate() {
+        acc += n;
+        if acc * 2 >= w * h {
+            median = v;
+            break;
+        }
+    }
+    let median = median as f64;
+    // Mean luma of a (2r+1)^2 patch, r = 2 px at 1x, so one noisy pixel does not decide.
+    let r = (2.0 * scale).round() as usize;
+    let patch = |cx: usize, cy: usize| {
+        let (mut s, mut n) = (0.0, 0.0);
+        for y in cy - r..=cy + r {
+            for x in cx - r..=cx + r {
+                s += luma(&img.rgb[(y * w + x) * 3..][..3]);
+                n += 1.0;
+            }
+        }
+        s / n
+    };
+    let (l, rt, t, b) = (inset + r, w - 1 - inset - r, inset + r, h - 1 - inset - r);
+    let (mx, my) = (w / 2, h / 2);
+    // No top-centre probe: the date caption lives there, and at 2x the inset row lands inside the
+    // text (hosted macos-15 and macos-26 read luma 99.7 there, every other probe 26.0). The
+    // caption check below covers that band, and the top corners still probe the top edge.
+    let probes = [
+        ("top-left", l, t),
+        ("top-right", rt, t),
+        ("left", l, my),
+        ("right", rt, my),
+        ("bottom-left", l, b),
+        ("bottom", mx, b),
+        ("bottom-right", rt, b),
+    ];
+    let lumas: Vec<(&str, f64)> = probes.iter().map(|&(n, x, y)| (n, patch(x, y))).collect();
+    let band_h = (h as f64 * CAPTION_BAND) as usize;
+    let (mut count, mut sum_x) = (0usize, 0usize);
+    for y in 0..band_h {
+        for x in 0..w {
+            if img.rgb[(y * w + x) * 3..][..3]
+                .iter()
+                .all(|&c| c > CAPTION_WHITE)
+            {
+                count += 1;
+                sum_x += x;
+            }
+        }
+    }
+    let min_px = (CAPTION_MIN_PX_1X * scale * scale).ceil() as usize;
+    let centroid = if count > 0 {
+        sum_x as f64 / count as f64
+    } else {
+        f64::NAN
+    };
+    let nums = format!(
+        "median luma {median}, probes [{}], caption {count} px (min {min_px}), centroid x {centroid:.1} of width {w} (centre {:.1} +-{:.1})",
+        lumas
+            .iter()
+            .map(|(n, v)| format!("{n} {v:.1}"))
+            .collect::<Vec<_>>()
+            .join(", "),
+        w as f64 / 2.0,
+        w as f64 * CAPTION_CENTRE_TOL
+    );
+    if let Some((n, v)) = lumas
+        .iter()
+        .find(|(_, v)| (v - median).abs() > FILL_LUMA_TOLERANCE)
+    {
+        return Err(format!(
+            "scene does not fill the window: {n} probe luma {v:.1} is more than {FILL_LUMA_TOLERANCE} from the median: {nums}"
+        ));
+    }
+    if count < min_px {
+        return Err(format!("date caption missing at top-centre: {nums}"));
+    }
+    if (centroid - w as f64 / 2.0).abs() > w as f64 * CAPTION_CENTRE_TOL {
+        return Err(format!("date caption is not centred: {nums}"));
+    }
+    Ok(nums)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -408,6 +528,125 @@ mod tests {
         );
         assert!(check_crisp(&blurred(&real)).is_err());
         assert!(check_crisp(&upscale(&downscale(&real, 2), 2, Upscale::Nearest)).is_err());
+    }
+
+    /// 640x360 (at k=1) dark field with a white caption block at x offset `cx` (centre), plus a
+    /// dim coloured beam near the top that must not count as caption.
+    fn fill_scene(k: usize, cx: usize, caption: bool) -> Image {
+        let (w, h) = (640 * k, 360 * k);
+        let mut img = Image {
+            w,
+            h,
+            rgb: [28u8, 28, 28].repeat(w * h),
+        };
+        let mut rect = |x0: usize, y0: usize, x1: usize, y1: usize, c: [u8; 3]| {
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    img.rgb[(y * w + x) * 3..][..3].copy_from_slice(&c);
+                }
+            }
+        };
+        rect(460 * k, 0, 480 * k, 20 * k, [200, 120, 120]);
+        if caption {
+            rect(
+                (cx - 100) * k,
+                18 * k,
+                (cx + 100) * k,
+                30 * k,
+                [255, 255, 255],
+            );
+        }
+        img
+    }
+
+    #[test]
+    fn a_filled_scene_with_centred_caption_passes_at_1x_and_2x() {
+        for k in [1, 2] {
+            let r = check_scene_fills_window(&fill_scene(k, 320, true), k as f64);
+            assert!(r.is_ok(), "{k}x: {r:?}");
+        }
+    }
+
+    /// The first hosted run failed on a probe at top-centre that fell inside the caption text at 2x
+    /// (luma 99.7 against a median of 26). A caption covering the inset row must not fail the fill.
+    #[test]
+    fn a_caption_covering_the_top_inset_row_is_not_an_unfilled_edge() {
+        let mut img = fill_scene(2, 320, true);
+        for y in 20..36 {
+            for x in 540..740 {
+                img.rgb[(y * img.w + x) * 3..][..3].fill(255);
+            }
+        }
+        let r = check_scene_fills_window(&img, 2.0);
+        assert!(r.is_ok(), "{r:?}");
+    }
+
+    #[test]
+    fn a_white_bar_on_the_top_edge_fails() {
+        let mut img = fill_scene(1, 320, true);
+        for y in 0..40 {
+            for x in 0..img.w {
+                img.rgb[(y * img.w + x) * 3..][..3].fill(255);
+            }
+        }
+        let e = check_scene_fills_window(&img, 1.0).unwrap_err();
+        assert!(e.contains("does not fill"), "{e}");
+    }
+
+    #[test]
+    fn a_scene_in_the_top_left_quarter_fails() {
+        // Scene drawn at half size in the top-left; the rest is the clear colour (black).
+        let s = fill_scene(1, 160, true);
+        let mut img = Image {
+            w: s.w,
+            h: s.h,
+            rgb: vec![0; s.rgb.len()],
+        };
+        for y in 0..s.h / 2 {
+            for x in 0..s.w / 2 {
+                img.rgb[(y * s.w + x) * 3..][..3]
+                    .copy_from_slice(&s.rgb[(y * 2 * s.w + x * 2) * 3..][..3]);
+            }
+        }
+        // Black bars dominate: the median itself is black, so the lit quarter is what stands out.
+        assert!(check_scene_fills_window(&img, 1.0).is_err());
+    }
+
+    #[test]
+    fn a_white_bar_on_one_edge_fails() {
+        let mut img = fill_scene(1, 320, true);
+        for y in 0..img.h {
+            for x in img.w - 40..img.w {
+                img.rgb[(y * img.w + x) * 3..][..3].fill(255);
+            }
+        }
+        let e = check_scene_fills_window(&img, 1.0).unwrap_err();
+        assert!(e.contains("does not fill"), "{e}");
+    }
+
+    #[test]
+    fn a_missing_caption_fails() {
+        let e = check_scene_fills_window(&fill_scene(1, 320, false), 1.0).unwrap_err();
+        assert!(e.contains("missing"), "{e}");
+    }
+
+    #[test]
+    fn an_off_centre_caption_fails() {
+        let e = check_scene_fills_window(&fill_scene(1, 200, true), 1.0).unwrap_err();
+        assert!(e.contains("not centred"), "{e}");
+    }
+
+    #[test]
+    fn real_captures_fill_the_window_with_a_centred_caption() {
+        for png in [
+            &include_bytes!("../../tools/display-harness/baselines/macos-26/1x.png")[..],
+            &include_bytes!("../../tools/display-harness/baselines/macos-26/2x.png")[..],
+        ] {
+            let img = crate::ssim::decode(png).unwrap();
+            let r = check_scene_fills_window(&img, 1.0);
+            eprintln!("baseline: {r:?}");
+            assert!(r.is_ok(), "{r:?}");
+        }
     }
 
     #[test]

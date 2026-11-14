@@ -1050,6 +1050,7 @@ pub fn run_drag_check(root: &Path) -> Result<(), String> {
         .map_err(|e| format!("drag {}: {e}: {why}", leg_label(leg)))?;
         let png = dir.join(format!("drag-{}.png", to.name));
         let mut last = String::new();
+        let mut fill = String::new();
         poll("a capture of the right size", 30, || {
             let w = window().unwrap_or(landed.0);
             let shot = Command::new("screencapture")
@@ -1062,8 +1063,17 @@ pub fn run_drag_check(root: &Path) -> Result<(), String> {
             }
             match distinct_colours(&png)
                 .and_then(|(px, c)| check_capture(px, (w.w, w.h), to.scale, c))
-            {
-                Ok(()) => Some(()),
+                .and_then(|()| {
+                    let img = crate::ssim::decode(
+                        &std::fs::read(&png).map_err(|e| format!("{}: {e}", png.display()))?,
+                    )?;
+                    let c = pixels::content(&img, landed.1, to.scale)?;
+                    pixels::check_scene_fills_window(&c, to.scale)
+                }) {
+                Ok(nums) => {
+                    fill = nums;
+                    Some(())
+                }
                 Err(e) => {
                     last = e;
                     None
@@ -1078,7 +1088,7 @@ pub fn run_drag_check(root: &Path) -> Result<(), String> {
             )
         })?;
         eprintln!(
-            "ok   drag {}: window {}x{} pt and logical {:?} unchanged, capture {}",
+            "ok   drag {}: window {}x{} pt and logical {:?} unchanged, capture {}, scene fills window: {fill}",
             leg_label(leg),
             landed.0.w,
             landed.0.h,

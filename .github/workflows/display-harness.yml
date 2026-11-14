@@ -10,6 +10,7 @@ on:
       - ".github/workflows/display-harness.yml"
       - "tools/display-harness/**"
       - "xtask/src/display_harness.rs"
+      - "xtask/src/crisp_control.rs"
       - "xtask/src/main.rs"
       - "xtask/src/pixels.rs"
       - "xtask/src/ssim.rs"
@@ -87,6 +88,10 @@ jobs:
       # First hosted run is the experiment (see tools/display-harness/README.md).
       - run: cargo xtask display-harness --roundtrip
         if: ${{ !cancelled() }}
+      # Real negative control for the crispness check: a non-hi-res OpenGL window magnified by the
+      # compositor on the 2x display (lowres.m). Experiment: prints both scores and capture sizes.
+      - run: cargo xtask crisp-control
+        if: ${{ !cancelled() }}
       # Always kept: a passing run's captures are what the regression baselines are taken from.
       - name: Keep the captures
         if: ${{ !cancelled() }}
@@ -104,6 +109,8 @@ jobs:
             target/display-harness-roundtrip/*.png
             target/display-harness-roundtrip/burl.out
             target/display-harness-roundtrip/vd.out
+            target/crisp-control/*.png
+            target/crisp-control/*.out
           if-no-files-found: ignore
           retention-days: 7
 

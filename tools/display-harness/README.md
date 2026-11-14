@@ -60,6 +60,37 @@ follows the DPI ratio; artifacts go to `target/display-harness-high-dpi/`. Measu
   filter may differ from bilinear), and doubled lines.
 
 
+## Real upscale control, `cargo xtask crisp-control`
+
+```
+cargo xtask crisp-control
+```
+
+The blurred copy above is synthetic. This builds a real negative control with the actual
+compositor, without touching burl (burl cannot be made non-hi-res: glutin 0.32.3 forces
+`setWantsBestResolutionOpenGLSurface(true)`). `lowres.m` is a standalone window with an
+`NSOpenGLView` (deprecated since macOS 10.14, still shipped; I could not confirm the status on
+macOS 15 or 26 from Apple's docs, the pages did not render, so it is **unverified** until a hosted
+run) whose `wantsBestResolutionOpenGLSurface` is set from `YES|NO` before the view is first
+displayed. It draws one fixed card (1 and 2 px lines at three orientations, 1 px diagonals, a fine
+checker) in drawable pixels with immediate-mode GL, no shaders. The xtask starts `vd`, runs
+`lowres YES` then `lowres NO`, moves each onto the 2x display, captures with
+`screencapture -x -o -l`, crops the title bar and runs `pixels::crispness` / `check_crisp`.
+Artifacts in `target/crisp-control/` (`native.png`, `lowres.png`, `*-content.png`, `*.out` with the
+drawable size `lowres` itself reported).
+
+- **Asserted:** the native capture is 2x its window's points and passes `check_crisp`.
+- **Printed, not asserted:** both crispness scores and both capture sizes, plus one of three
+  findings: the upscale scored below `MIN_CRISPNESS` (the control works); it scored at or above
+  it (the check would not reject a real upscale, nothing is weakened); or `screencapture` returned
+  the 1x backing (no upscale in the capture at all).
+- **Open until the first hosted run:** what `screencapture -l` returns for a non-hi-res window on
+  a 2x display (2x upscaled pixels, or the 1x backing) and with what filter; whether the real
+  upscale scores below 1.8; that `wantsBestResolutionOpenGLSurface` set before display takes
+  effect for a bare executable with no Info.plist (`NSHighResolutionCapable`); that the window of
+  an unbundled, non-activated app is listed by `wid` and System Events. Record the measured
+  numbers here after the run.
+
 ## Cursor grab, `--grab`
 
 ```
@@ -171,6 +202,8 @@ on the same display at the same point size. Own file (`xtask/src/roundtrip.rs`),
 
 - `vd.m`: creates the displays, pumps AppKit events, prints each display's global bounds, scale
   and pixels, then `ready`; runs until SIGTERM/SIGINT or its parent exits.
+- `lowres.m`: the test-card window for `crisp-control`, `lowres YES|NO`; runs until killed or its
+  parent exits.
 - `wid.m`: prints `id x y w h` of burl's on-screen windows taller than 100 points.
 
 ## Caveats

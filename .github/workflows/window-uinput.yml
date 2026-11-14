@@ -1,0 +1,50 @@
+# X11 cursor grab with a real evdev device (#212): a kernel uinput mouse read by Xorg (dummy video
+# driver) through libinput, no Docker and no XTest. Non-required, like display-harness.yml.
+name: window-uinput
+on:
+  pull_request:
+    paths: [".github/workflows/window-uinput.yml", "scripts/window-uinput.sh", "scripts/uinput-mouse.c", "scripts/cursor-alpha.c", "crates/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: window-uinput-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  uinput:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Packages (Xorg dummy + libinput, openbox, xdotool, headers for the helpers)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            xserver-xorg-core xserver-xorg-video-dummy xserver-xorg-input-libinput \
+            openbox xdotool x11-utils x11-xserver-utils libx11-dev libxfixes-dev \
+            libegl1 libegl-mesa0 libgl1-mesa-dri libxkbcommon-x11-0 libxcursor1 libxi6 libxrandr2
+      - name: /dev/uinput
+        run: |
+          sudo modprobe uinput || true
+          ls -l /dev/uinput
+          sudo chmod a+rw /dev/uinput
+          sudo udevadm info --version || true
+      - name: Build burl
+        run: cargo build --release --locked -p burl
+      - name: Window checks with a uinput mouse
+        run: bash scripts/window-uinput.sh target/window-uinput
+      - name: Keep the logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: window-uinput
+          path: |
+            target/window-uinput/*.log
+            target/window-uinput/*.out
+            target/window-uinput/*.err
+            target/window-uinput/xorg.conf

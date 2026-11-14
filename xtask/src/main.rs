@@ -156,6 +156,25 @@ fn display_harness_cmd(args: &[String]) -> ExitCode {
     }
 }
 
+/// `cursor-lab`: an experiment that prints measurements; exit 1 only on an infrastructure error.
+fn cursor_lab_cmd(args: &[String]) -> ExitCode {
+    if !args.is_empty() {
+        eprintln!("usage: cargo xtask cursor-lab");
+        return ExitCode::from(2);
+    }
+    if !cfg!(target_os = "macos") {
+        eprintln!("cursor-lab: needs macOS");
+        return ExitCode::FAILURE;
+    }
+    match xtask::cursor_lab::run_lab(&workspace_root()) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("cursor-lab: infrastructure error: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if let Some(cmd) = args.first().filter(|c| c.starts_with("ssim")) {
@@ -167,11 +186,14 @@ fn main() -> ExitCode {
     if args.first().map(String::as_str) == Some("display-harness") {
         return display_harness_cmd(&args[1..]);
     }
+    if args.first().map(String::as_str) == Some("cursor-lab") {
+        return cursor_lab_cmd(&args[1..]);
+    }
     if args.first().map(String::as_str) == Some("sim-compare") {
         return sim_compare(&args[1..]);
     }
     if args.first().map(String::as_str) != Some("ci") || args[1..].iter().any(|a| a != "--pcre2") {
-        eprintln!("usage: cargo xtask ci [--pcre2] | sim-compare .. | ssim* .. | display-harness [--high-dpi | --grab | --drag]");
+        eprintln!("usage: cargo xtask ci [--pcre2] | sim-compare .. | ssim* .. | display-harness [--high-dpi | --grab | --drag] | cursor-lab");
         return ExitCode::from(2);
     }
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());

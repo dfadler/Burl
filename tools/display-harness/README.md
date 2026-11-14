@@ -127,6 +127,39 @@ so a negative x is fine), `up`. Then 2x back to 1x. Artifacts in `target/display
   boundary moves the window and makes winit fire `ScaleFactorChanged`. The path is a straight line
   between display centres, so it assumes the displays touch; a gap or offset may clamp the pointer.
 
+## Cursor lab (experiment)
+
+```
+cargo xtask cursor-lab
+```
+
+A measurement lab, not a check: it prints a table to `target/cursor-lab/lab.log` and fails only on
+an infrastructure error (a helper will not build, no window, a helper cannot post). The workflow
+runs it with `continue-on-error` and uploads the log. It runs burl as `--grab` does, then measures
+each variant with no grab (`moved` events) and under a held grab (`dragged`, then `moved` events),
+5 events of 10 points. Never run it on a machine somebody is using: it posts events and moves the
+cursor. First lines of the log: `sw_vers`, `csrutil status`, `nvram boot-args`.
+
+| Variant | What it does | Trustworthy lock assertion if |
+| --- | --- | --- |
+| V1 | `mouse drag/move X Y DX DY`, absolute location (control) | never; it moved 50 pt under a lock |
+| V2 | `mouse rel DX DY`: location left at the current cursor, only the delta fields set | the cursor moves ~50 pt with no grab and stays within 5 pt under the grab, on both runners and on repeat |
+| V3 | V2 at `session` / `annotated` taps, and with a `CGEventSourceCreate(HIDSystemState)` source (also an absolute one with that source) | same, for any one row: that row is the injection path to assert with |
+| V4 | `tapwatch`: a listen-only `CGEventTapCreate` at the session tap during each row | not an assertion itself: tells whether deltas are delivered while detached (`n`, sum dx) and whether the location field moves. Delta delivered with a still cursor is what a locked game sees |
+| V5 | `screencapture -C -x` (screen and `-l` window) before the press and during the hold; 48x48 px crop mean luma, `sprite` (with `-C` vs without), `noise` (two `-C` in a row), `hide` (before vs held) | `sprite` well above `noise` (the sprite is in captures at all) AND `hide` at least half of `sprite`: verdict `GoneWhileHeld`. `NoSpriteInCaptures` means no assertion is possible this way |
+| V6 | `hid.m`: `IOHIDUserDeviceCreateWithProperties` for a relative mouse, plain, then ad-hoc signed with `com.apple.developer.hid.virtual.device`; if created, relative reports with and without a grab | `create=ok` and the cursor moves with no grab and not under the grab: a real device path. `create=fail`, or the process killed by a signal (reported), closes it |
+
+`CGCursorIsVisible` (deprecated) is printed per row. winit hides the cursor with an invisible cursor
+rect, not `NSCursor.hide`, so expect `1` regardless; only a change to `0` under the grab would
+mean something. Each row also notes whether a `warp` right before a variant changes it (`V2 rel
+@hid after warp`): a warp may re-associate the cursor.
+
+Reading the `== per variant ==` lines: `Detached` (cursor followed with no grab, stayed still under
+the grab) is an assertable lock; `IgnoresLock` means that injection bypasses the detach;
+`Uninformative` means it did not move the cursor even with no grab. `tapwatch` needs Input
+Monitoring or Accessibility; if `CGEventTapCreate` fails the log says so with the access flags and
+the tap column reads `tap unavailable`. Nothing here is verified until a hosted run.
+
 ## Needs
 
 - macOS with a logged-in GUI session, `clang`, and a Rust toolchain.
@@ -139,6 +172,8 @@ so a negative x is fine), `up`. Then 2x back to 1x. Artifacts in `target/display
 - `vd.m`: creates the displays, pumps AppKit events, prints each display's global bounds, scale
   and pixels, then `ready`; runs until SIGTERM/SIGINT or its parent exits.
 - `wid.m`: prints `id x y w h` of burl's on-screen windows taller than 100 points.
+- `mouse.m`, `tapwatch.m`, `hid.m`: synthetic mouse input, an event-tap observer and a virtual HID
+  mouse (the last two only for the cursor lab).
 
 ## Caveats
 

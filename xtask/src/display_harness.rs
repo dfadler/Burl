@@ -788,7 +788,7 @@ pub fn run_grab_check(root: &Path) -> Result<(), String> {
     // change between any of the three then shows up as noise instead of faking a sprite.
     let shot_again = screen_shot(&dir, "cursor-before-again", true)?;
     mouse(&mouse_bin, &["down".into(), s(p.0), s(p.1)])?;
-    let held = (|| -> Result<f64, String> {
+    let held = (|| -> Result<pixels::CursorScores, String> {
         poll("burl's `grab: event=on` line after the press", 15, || {
             parse_grab_events(&read(&burl_out))
                 .get(before..)?
@@ -823,11 +823,11 @@ pub fn run_grab_check(root: &Path) -> Result<(), String> {
             return Err(format!("the grab changed during the drag: {now:?}"));
         }
         eprintln!("ok   the grab holds through drag motion");
-        Ok(scores.sprite)
+        Ok(scores)
     })();
     // Release whatever happened, so a failure above cannot leave the button down.
     mouse(&mouse_bin, &["up".into(), s(p.0), s(p.1)])?;
-    let sprite_before = held?;
+    let before_scores = held?;
 
     // Phase C, release: burl lets go, and the whole cycle is on, locked, off.
     poll(
@@ -844,22 +844,18 @@ pub fn run_grab_check(root: &Path) -> Result<(), String> {
     check_grab_cycle(&parse_grab_events(&read(&burl_out))[before..])?;
     eprintln!("ok   burl reports grab off: one press, one locked grab, one release");
 
-    // NOT asserted, printed so the first hosted runs can calibrate it: is the cursor drawn again
-    // after the release? winit calls `set_cursor_visible(true)`, but the window server may only
-    // apply the cursor rect on the next mouse move, and the lab never measured this.
+    // The sprite comes back without a mouse move (measured on hosted macos-15 and macos-26).
     std::thread::sleep(Duration::from_millis(500));
     let after = screen_shot(&dir, "cursor-after", true)?;
     let after_none = screen_shot(&dir, "cursor-after-none", false)?;
-    match (
-        pixels::cursor_crop(&after, hot),
-        pixels::cursor_crop(&after_none, hot),
-    ) {
-        (Some(a), Some(n)) => eprintln!(
-            "info the cursor after the release: sprite {:.2} (before the press {sprite_before:.2}); not asserted",
-            pixels::crop_diff(&a, &n)
-        ),
-        _ => eprintln!("info the cursor after the release: the crop leaves the capture; not asserted"),
-    }
+    let crop = |img: &crate::ssim::Image| {
+        pixels::cursor_crop(img, hot).ok_or("cursor after the release: the crop leaves the capture")
+    };
+    let after_sprite = pixels::crop_diff(&crop(&after)?, &crop(&after_none)?);
+    let nums =
+        pixels::check_cursor_returned(after_sprite, before_scores.sprite, before_scores.noise)
+            .map_err(|e| format!("cursor after the release: {e}"))?;
+    eprintln!("ok   the cursor sprite returns after the release: {nums}");
     Ok(())
 }
 

@@ -512,9 +512,52 @@ pub fn check_cursor_hidden(s: &CursorScores) -> Result<String, String> {
     }
 }
 
+/// How far the sprite score after the release may drift from the pre-press one, as a fraction of it.
+/// Measured on hosted macos-15 and macos-26: equal (4.98, 5.26) with 0.00 noise.
+const RETURN_TOLERANCE: f64 = 0.3;
+
+/// After the grab is released the sprite must be back: significant against the capture noise (same
+/// threshold as `check_cursor_hidden`) and within `RETURN_TOLERANCE` of the pre-press score. A score
+/// far from the pre-press one means the background moved under the crop, so it is not comparable.
+pub fn check_cursor_returned(after: f64, before: f64, noise: f64) -> Result<String, String> {
+    let nums = format!(
+        "sprite after the release {after:.2}, before the press {before:.2}, capture noise {noise:.2}"
+    );
+    if after <= 3.0 * noise.max(0.5) {
+        Err(format!(
+            "the cursor sprite did not return after the release: {nums}"
+        ))
+    } else if (after - before).abs() > RETURN_TOLERANCE * before {
+        Err(format!(
+            "the sprite after the release differs from before the press (or the background moved under it): {nums}"
+        ))
+    } else {
+        Ok(nums)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cursor_returned_passes_when_the_sprite_matches_before() {
+        assert!(check_cursor_returned(4.98, 4.98, 0.0).is_ok());
+        assert!(check_cursor_returned(5.5, 5.0, 0.2).is_ok());
+    }
+
+    #[test]
+    fn cursor_returned_fails_when_the_sprite_is_still_gone() {
+        assert!(check_cursor_returned(0.1, 5.0, 0.0).is_err());
+        // Close to the pre-press score, but both are within the noise: nothing proves a sprite.
+        assert!(check_cursor_returned(1.4, 1.5, 0.5).is_err());
+    }
+
+    #[test]
+    fn cursor_returned_fails_when_the_background_moved() {
+        assert!(check_cursor_returned(12.0, 5.0, 0.0).is_err());
+        assert!(check_cursor_returned(3.0, 5.0, 0.0).is_err());
+    }
 
     /// Text-like test card: thin 1px lines and a diagonal, so a 1x render and a true 2x render of
     /// it genuinely differ the way glyphs do.

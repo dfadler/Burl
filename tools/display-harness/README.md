@@ -112,8 +112,9 @@ lands on the background, which grabs) and **without** `--hide mouse` (that drops
    clearly above the repeat-capture noise before the press and gone while held
    (`pixels::check_cursor_hidden`). A sprite that is still there, or one that never showed, fails.
 3. **Release:** burl logs `grab: event=off`; the whole cycle must be on, locked, off. The sprite's
-   score after the release is printed as `info`, not asserted (it may only return on the next mouse
-   move; the first hosted runs calibrate it).
+   score after the release must be significant against the same noise and within 30% of the
+   pre-press score, with no mouse move (`pixels::check_cursor_returned`; measured on hosted
+   `macos-15` and `macos-26`: equal to before the press).
 
 **Not asserted: where the cursor goes.** The first hosted runs (`macos-15`, `macos-26`) showed the
 cursor following 50 points of synthetic drag while burl held the lock (`(412, 390) -> (462, 390)`),

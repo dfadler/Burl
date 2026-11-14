@@ -189,7 +189,32 @@ Reading the `== per variant ==` lines: `Detached` (cursor followed with no grab,
 the grab) is an assertable lock; `IgnoresLock` means that injection bypasses the detach;
 `Uninformative` means it did not move the cursor even with no grab. `tapwatch` needs Input
 Monitoring or Accessibility; if `CGEventTapCreate` fails the log says so with the access flags and
-the tap column reads `tap unavailable`. Nothing here is verified until a hosted run.
+the tap column reads `tap unavailable`. A held-grab row is only given a lock verdict when burl's
+`grab: event=on` line reported `mode=locked`; otherwise the verdict is `Inconclusive`.
+
+### Measured on hosted `macos-15` and `macos-26` (2026-11-14, first run)
+
+Both images agree on every row below. SIP is disabled on the runners (`csrutil status`) and
+`boot-args` is empty; the event tap could be created (it observed the posted events).
+
+- **Lock effect: no injection route works.** Absolute-location events (V1, and V3 absolute with the
+  HID source) move the cursor the full 50 pt with no grab and under the held grab: `IgnoresLock`.
+  Relative-only events (V2, V3 at the HID, session and annotated taps, with and without the HID
+  source, and right after a `warp`) do not move the cursor even with no grab: `Uninformative`, so
+  they cannot tell a lock from none. The tap saw the five posted events (none at the annotated
+  tap), so the events are delivered; the cursor just follows the location, not the delta.
+- **Real HID device: closed on hosted runners.** `IOHIDUserDeviceCreateWithProperties` fails
+  (`create=fail`, exit 3). Ad-hoc signed with `com.apple.developer.hid.virtual.device` the helper is
+  killed by signal 9 even with SIP disabled, so the entitlement is enforced.
+- **Cursor hidden: assertable with a full-screen `screencapture -C`.** The sprite shows before the
+  press (crop difference 4.98 on macos-26, 5.26 on macos-15, against 0.00 between two identical
+  captures) and is gone while the grab is held (held cursor-versus-no-cursor difference 0.00):
+  `GoneWhileHeld` on both. The per-window `screencapture -C -l` works on macos-26 but sees no sprite
+  on macos-15 (`NoSpriteInCaptures`), so use the full screen. `CGCursorIsVisible` reads 1 the whole
+  time (winit hides the cursor with an invisible cursor rect, not `NSCursor.hide`), so it is useless.
+- Consequence: on hosted runners the cursor-grab box can be split. "Hidden while grabbed" can be
+  asserted from the screen capture; "detached from the device" cannot, by any route tried here, and
+  stays a manual check on a real mouse.
 
 ## Drag round trip, `--roundtrip`
 

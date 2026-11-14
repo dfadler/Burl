@@ -46,17 +46,22 @@ int main(void) {
   while (fgets(line, sizeof line, stdin)) {
     int dx, dy, count;
     if (sscanf(line, "move %d %d %d", &dx, &dy, &count) == 3) {
+      int sent = 0, failed = 0;
       for (int i = 0; i < count; i++) {
         uint8_t report[3] = {0, (uint8_t)(int8_t)dx, (uint8_t)(int8_t)dy};
         IOReturn r = IOHIDUserDeviceHandleReport(dev, report, sizeof report);
         if (r != kIOReturnSuccess) {
           printf("report-error 0x%x\n", (unsigned)r);
           fflush(stdout);
+          failed = 1;
           break;
         }
+        sent++;
         usleep(20000);
       }
-      printf("sent %d\n", count);
+      // The ACTUAL number of reports delivered, and an explicit marker after a failure: the lab
+      // reads `report-error`/`failed` and calls that measurement invalid.
+      printf("sent %d%s\n", sent, failed ? " failed" : "");
       fflush(stdout);
     } else if (!strncmp(line, "quit", 4)) {
       break;

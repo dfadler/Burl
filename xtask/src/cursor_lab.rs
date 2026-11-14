@@ -198,6 +198,15 @@ pub struct Row {
     pub after: (i32, i32),
     pub visible: Option<bool>,
     pub tap: Option<TapSummary>,
+    /// For a held-grab phase: burl's `grab: event=on` line was seen with `mode=locked`. A row
+    /// measured without a confirmed locked grab (no `on` line, `mode=none` meaning both grab
+    /// requests failed, or `confined`) must not yield a lock verdict. Always true outside a grab.
+    pub locked: bool,
+}
+
+/// Phases measured while burl holds a grab: `grab/..` and `<label>/grab` (not `no-grab/..`).
+pub fn is_grab_phase(phase: &str) -> bool {
+    phase.starts_with("grab/") || phase.ends_with("/grab")
 }
 
 pub fn header() -> String {
@@ -246,7 +255,7 @@ pub fn summary(rows: &[Row]) -> Vec<String> {
     let dx = |phase: &str, name: &str| {
         rows.iter()
             .find(|r| r.phase == phase && r.variant == name)
-            .map(|r| r.after.0 - r.before.0)
+            .map(|r| (r.after.0 - r.before.0, r.locked))
     };
     let mut names: Vec<&str> = Vec::new();
     for r in rows {
@@ -256,15 +265,21 @@ pub fn summary(rows: &[Row]) -> Vec<String> {
     }
     let mut out = Vec::new();
     for n in names {
-        let Some(none) = dx("no-grab/moved", n) else {
+        let Some((none, _)) = dx("no-grab/moved", n) else {
             continue;
         };
         for g in ["grab/dragged", "grab/moved"] {
-            let verdict = dx(g, n).map_or("not measured".to_string(), |gd| {
-                format!(
-                    "{:?} (no grab {none}, {g} {gd}, posted {posted})",
-                    classify(none, gd, posted)
-                )
+            let verdict = dx(g, n).map_or("not measured".to_string(), |(gd, locked)| {
+                if locked {
+                    format!(
+                        "{:?} (no grab {none}, {g} {gd}, posted {posted})",
+                        classify(none, gd, posted)
+                    )
+                } else {
+                    format!(
+                        "Inconclusive: burl's grab was not confirmed locked (no grab {none}, {g} {gd}, posted {posted})"
+                    )
+                }
             });
             out.push(format!("{n} vs {g}: {verdict}"));
         }
@@ -348,17 +363,26 @@ pub enum Hidden {
     NoSpriteInCaptures,
     /// The sprite shows before the press and the held crop differs by about as much: it went away.
     GoneWhileHeld,
-    /// The sprite shows before the press and the held crop is as before: still drawn.
+    /// The sprite shows before the press and is still in the held capture: still drawn.
     StillDrawn,
+    /// The numbers contradict each other: the held crop changed (`hide`) while the held
+    /// cursor-versus-no-cursor comparison still shows the sprite (the background moved under a
+    /// cursor that stayed), or the held comparison shows no sprite yet the crop did not change.
+    Inconclusive,
 }
 
+/// The held capture is judged by its own cursor-versus-no-cursor comparison (`held_sprite`), not
+/// by `hide` alone: `hide` also moves when the background under the crop changes.
 pub fn hidden_verdict(s: &ShotScores) -> Hidden {
-    if s.sprite <= 3.0 * s.noise.max(0.5) {
-        Hidden::NoSpriteInCaptures
-    } else if s.hide > 0.5 * s.sprite {
-        Hidden::GoneWhileHeld
-    } else {
-        Hidden::StillDrawn
+    let significant = |v: f64| v > 3.0 * s.noise.max(0.5);
+    if !significant(s.sprite) {
+        return Hidden::NoSpriteInCaptures;
+    }
+    let crop_changed = s.hide > 0.5 * s.sprite;
+    match (significant(s.held_sprite), crop_changed) {
+        (false, true) => Hidden::GoneWhileHeld,
+        (true, false) => Hidden::StillDrawn,
+        _ => Hidden::Inconclusive,
     }
 }
 
@@ -497,15 +521,21 @@ struct Ctx {
     log: Log,
     rows: RefCell<Vec<Row>>,
     tap_failed: Cell<bool>,
+    /// Set by `with_grab`: burl logged `grab: event=on mode=locked` for the current press.
+    locked: Cell<bool>,
     n: Cell<u32>,
 }
 
 impl Ctx {
+    /// Bounded like every other helper call: a hung `wid` must not block the caller's own poll.
     fn window(&self) -> Option<Window> {
-        let o = Command::new(&self.wid).arg("burl").output().ok()?;
-        String::from_utf8_lossy(&o.stdout)
-            .lines()
-            .find_map(parse_window)
+        let c = capture(
+            Command::new(&self.wid).arg("burl"),
+            10,
+            &self.dir.join("wid.out"),
+        )
+        .ok()?;
+        c.text.lines().find_map(parse_window)
     }
 
     fn mouse(&self, args: &[String]) -> Result<String, String> {
@@ -601,6 +631,7 @@ impl Ctx {
             after,
             visible,
             tap,
+            locked: !is_grab_phase(phase) || self.locked.get(),
         };
         self.log.line(&format_row(&row));
         self.rows.borrow_mut().push(row);
@@ -643,8 +674,20 @@ impl Ctx {
             p: self.p,
             down: false,
         };
-        self.mouse(&["down".into(), self.p.0.to_string(), self.p.1.to_string()])?;
+        // Armed BEFORE the press: if the helper posts the left-down and then times out before it
+        // exits, `?` returns early and only this guard can still release the button. An extra `up`
+        // is harmless when the press was never posted.
         button.down = true;
+        self.locked.set(false);
+        self.mouse(&["down".into(), self.p.0.to_string(), self.p.1.to_string()])?;
+        // The first `on` line after the press, with the mode burl reported (None until it arrives).
+        let first_on = || {
+            parse_grab_events(&read(&self.burl_out))
+                .get(seen..)?
+                .iter()
+                .find(|(on, _)| *on)
+                .map(|(_, mode)| mode.clone())
+        };
         let on = |want: bool| {
             poll("a grab line", 15, || {
                 parse_grab_events(&read(&self.burl_out))
@@ -655,9 +698,19 @@ impl Ctx {
             })
         };
         match on(true) {
-            Ok(()) => self.log.line("burl: grab on seen"),
+            Ok(()) => {
+                let mode = first_on().unwrap_or_default();
+                self.locked.set(mode == "locked");
+                if mode == "locked" {
+                    self.log.line("burl: grab on seen, mode=locked");
+                } else {
+                    self.log.line(&format!(
+                        "burl: grab on seen but mode={mode:?}, not locked: lock verdicts for this press are inconclusive"
+                    ));
+                }
+            }
             Err(e) => self.log.line(&format!(
-                "burl: NO grab on after the press ({e}); measuring anyway"
+                "burl: NO grab on after the press ({e}); measuring anyway, lock verdicts inconclusive"
             )),
         }
         sleep_ms(500);
@@ -792,7 +845,16 @@ impl Ctx {
             n += 1;
             writeln!(stdin, "move {STEP} 0 {EVENTS}").map_err(|e| e.to_string())?;
             stdin.flush().map_err(|e| e.to_string())?;
-            sent(n)
+            sent(n)?;
+            // The helper prints `sent <actual>` even after a failed report, so a failure must be
+            // read from `report-error`: otherwise a failed injection looks like "cursor held".
+            if read(&out).contains("report-error") {
+                return Err(format!(
+                    "{label}: IOHIDUserDeviceHandleReport failed, this measurement is invalid: {:?}",
+                    read(&out).trim().replace('\n', " | ")
+                ));
+            }
+            Ok(())
         };
         self.place()?;
         let r = self.measure(&format!("{label}/no-grab"), "V6 hid rel", &mut push);
@@ -917,6 +979,7 @@ pub fn run_lab(root: &Path) -> Result<(), String> {
         log,
         rows: RefCell::new(Vec::new()),
         tap_failed: Cell::new(false),
+        locked: Cell::new(false),
         n: Cell::new(0),
     };
     let w = poll("burl's window", 60, || ctx.window())?;
@@ -1096,7 +1159,33 @@ mod tests {
             after: (100 + dx, 100),
             visible: Some(true),
             tap: None,
+            locked: true,
         }
+    }
+
+    #[test]
+    fn a_held_row_without_a_confirmed_locked_grab_is_inconclusive() {
+        // The cursor "stayed still" under a grab that never locked (both grab requests failed, or
+        // it was confined, or no `on` line arrived): that must not read as Detached.
+        let unlocked = Row {
+            locked: false,
+            ..row("grab/dragged", "A", 0)
+        };
+        let rows = [
+            row("no-grab/moved", "A", 50),
+            unlocked,
+            row("grab/moved", "A", 50),
+        ];
+        let s = summary(&rows);
+        assert!(
+            s[0].starts_with("A vs grab/dragged: Inconclusive"),
+            "{}",
+            s[0]
+        );
+        assert!(!s[0].contains("Detached"));
+        assert!(s[1].contains("IgnoresLock"), "{}", s[1]);
+        assert!(is_grab_phase("grab/moved") && is_grab_phase("hid-signed/grab"));
+        assert!(!is_grab_phase("no-grab/moved") && !is_grab_phase("hid-signed/no-grab"));
     }
 
     #[test]
@@ -1138,6 +1227,23 @@ mod tests {
         // sprite stays while held
         let s = shot_scores(&sprite, &sprite, &flat, &sprite, &flat, hot).unwrap();
         assert_eq!(hidden_verdict(&s), Hidden::StillDrawn);
+        // the background changed under a cursor that stayed: the crop differs (`hide` is large)
+        // but the held cursor-versus-no-cursor comparison still shows the sprite, so it is NOT
+        // reported as gone
+        let bg = img(200, 200, |_, _| 160);
+        let sprite_on_bg = img(200, 200, |x, y| {
+            if (100..120).contains(&x) && (100..120).contains(&y) {
+                255
+            } else {
+                160
+            }
+        });
+        let s = shot_scores(&sprite, &sprite, &flat, &sprite_on_bg, &bg, hot).unwrap();
+        assert!(s.hide > 0.5 * s.sprite && s.held_sprite > 10.0, "{s:?}");
+        assert_eq!(hidden_verdict(&s), Hidden::Inconclusive);
+        // the held comparison shows no sprite and yet the crop did not change: also contradictory
+        let s = shot_scores(&sprite, &sprite, &flat, &sprite, &sprite, hot).unwrap();
+        assert_eq!(hidden_verdict(&s), Hidden::Inconclusive);
         // no sprite in captures at all
         let s = shot_scores(&flat, &flat, &flat, &flat, &flat, hot).unwrap();
         assert_eq!(hidden_verdict(&s), Hidden::NoSpriteInCaptures);

@@ -783,8 +783,10 @@ pub fn run_grab_check(root: &Path) -> Result<(), String> {
         .ok_or("burl printed no `display: event=start` line, so the capture scale is unknown")?;
     let hot = (f64::from(p.0) * scale, f64::from(p.1) * scale);
     let shot_before = screen_shot(&dir, "cursor-before", true)?;
-    let shot_again = screen_shot(&dir, "cursor-before-again", true)?;
     let shot_none = screen_shot(&dir, "cursor-before-none", false)?;
+    // Taken AFTER the no-cursor shot so the two cursor-enabled shots bracket it: a background
+    // change between any of the three then shows up as noise instead of faking a sprite.
+    let shot_again = screen_shot(&dir, "cursor-before-again", true)?;
     mouse(&mouse_bin, &["down".into(), s(p.0), s(p.1)])?;
     let held = (|| -> Result<f64, String> {
         poll("burl's `grab: event=on` line after the press", 15, || {

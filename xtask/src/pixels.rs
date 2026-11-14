@@ -856,6 +856,17 @@ mod tests {
     }
 
     #[test]
+    fn a_background_change_with_no_sprite_drawn_cannot_pass_as_a_visible_cursor() {
+        // No cursor in any capture; the background goes 100 -> 160 after the first shot. The
+        // bracketing repeat shot (taken after the no-cursor one) sees it, so noise matches sprite.
+        let (first, later) = (screen(100, false), screen(160, false));
+        let s = scores(&first, &later, &later, &later, &later);
+        assert!(s.sprite > 10.0 && s.noise > 10.0, "{s:?}");
+        let e = check_cursor_hidden(&s).unwrap_err();
+        assert!(e.contains("not visible"), "{e}");
+    }
+
+    #[test]
     fn capture_noise_as_large_as_the_sprite_cannot_prove_it_was_visible() {
         let (with, without) = (screen(100, true), screen(100, false));
         // two "identical" captures that differ as much as the sprite does

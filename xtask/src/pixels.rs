@@ -286,7 +286,11 @@ pub const CAPTION_CENTRE_TOL: f64 = 0.05;
 pub fn check_scene_fills_window(img: &Image, scale: f64) -> Result<String, String> {
     let (w, h) = (img.w, img.h);
     let inset = (FILL_INSET as f64 * scale).round() as usize;
-    if w < 2 * inset + 8 || h < 2 * inset + 8 {
+    // Mean luma of a (2r+1)^2 patch, r = 2 px at 1x, so one noisy pixel does not decide.
+    let r = (2.0 * scale).round() as usize;
+    // Also keeps the right/bottom sample lines at or after the left/top ones (no usize underflow).
+    let min_side = (2 * (inset + r) + 1).max(2 * inset + 8);
+    if w < min_side || h < min_side {
         return Err(format!("content {w}x{h} too small to judge"));
     }
     let mut hist = [0usize; 256];
@@ -302,8 +306,6 @@ pub fn check_scene_fills_window(img: &Image, scale: f64) -> Result<String, Strin
         }
     }
     let median = median as f64;
-    // Mean luma of a (2r+1)^2 patch, r = 2 px at 1x, so one noisy pixel does not decide.
-    let r = (2.0 * scale).round() as usize;
     let patch = |cx: usize, cy: usize| {
         let (mut s, mut n) = (0.0, 0.0);
         for y in cy - r..=cy + r {
@@ -628,6 +630,20 @@ mod tests {
             }
             let r = check_scene_fills_window(&img, k as f64);
             assert!(r.is_ok(), "{k}x: {r:?}");
+        }
+    }
+
+    #[test]
+    fn a_window_too_small_for_the_sample_lines_is_an_error_not_a_panic() {
+        // 56x56 at 2x: inset 24, r 4, so the right/bottom lines (27) would precede left/top (28).
+        for (side, k) in [(56usize, 2usize), (80, 3), (84, 3)] {
+            let img = Image {
+                w: side,
+                h: side,
+                rgb: vec![128; side * side * 3],
+            };
+            let e = check_scene_fills_window(&img, k as f64).unwrap_err();
+            assert!(e.contains("too small to judge"), "{side}@{k}x: {e}");
         }
     }
 

@@ -301,6 +301,38 @@ in `target/display-harness-real-panel/`.
   tests (`edges::tests`) do run on the hosted macOS leg of `cargo test`.
 - It steals focus like any window opening; do not run it from an agent session on a desktop in use.
 
+## Findings and decisions
+
+Folded in from the original handoff (#215). The `CGVirtualDisplay` gotchas and the cursor-lab
+numbers are above (Caveats, Cursor lab); this adds what they leave out.
+
+**Hosted runners (`macos-15`, `macos-26`).** The window server and `screencapture` work, Screen
+Recording and Accessibility are already granted, SIP is disabled and `boot-args` is empty, so no
+self-hosted Mac or VM was needed. The labels are moving, so the image cannot be pinned to a build;
+the "Record macOS build and runner image" step logs `sw_vers`, `ImageOS` and `ImageVersion` instead.
+`CGVirtualDisplay` is private, so a runner update can break the harness with no Burl change; the
+workflow is not a required check and the weekly-failure canary reports it.
+
+**Cursor, in one place.** Hidden is assertable (full-screen `screencapture -C`). `CGCursorIsVisible`
+is useless (winit hides with a cursor rect). Synthetic absolute events bypass a `Locked` grab, and
+delta-only events do not move the cursor even with no grab. No virtual HID device on hosted runners
+(AMFI kills the entitled ad-hoc binary), so "detached from a real device" stays manual.
+
+**Decided not to build.**
+
+- **Reusable action or separate repository:** no second consumer (the other CI users of
+  `CGVirtualDisplay` keep private copies). If one appears, a composite action under
+  `.github/actions/` is the cheap route.
+- **F12/framebuffer readback:** it would change G10 and the DEVIATIONS register hash.
+- **Real-compositor crispness control inside burl:** burl has no way to get a 1x surface on the 2x
+  display without a test-only hook and a new dependency in production code. `crisp-control` above is
+  the standalone substitute.
+- **Pinning the runner image:** not possible, see above.
+
+**Still undone** (tracked, not restated): #210 real-panel Retina crispness, #211 real-device
+relative motion under a `Locked` grab, #212 X11 `Confined` with a real evdev device, #213 assert
+the cursor sprite returns after release, #214 dispatch-test the weekly-failure canary.
+
 ## Needs
 
 - macOS with a logged-in GUI session, `clang`, and a Rust toolchain.

@@ -16,7 +16,7 @@ Behavioural risk of the default: a user whose existing Gource filter uses look-a
 
 ## Cost of shipping it
 
-- **Build time.** Measured here (macOS, debug, clean scratch target dir, `PCRE2_SYS_STATIC=1`, `cargo build -p burl-util --features pcre2`): 24 s wall for the whole feature-enabled dependency set, of which the C build of PCRE2 is part. Release-profile and CI timings not measured.
+- **Build time.** Measured here (macOS, debug, clean scratch target dir, `PCRE2_SYS_STATIC=1`, `cargo build -p gnarl-util --features pcre2`): 24 s wall for the whole feature-enabled dependency set, of which the C build of PCRE2 is part. Release-profile and CI timings not measured.
 - **C compiler at build time.** `pcre2-sys/build.rs` compiles the bundled PCRE2 C sources with `cc` unless it finds `libpcre2-8` through `pkg-config`. The release Dockerfile's build stage (`rust:1-slim-trixie`) has a C toolchain for linking; whether it has `pkg-config` and `libpcre2-dev` is not checked here.
 - **System-library trap.** With `pkg-config` and a system `libpcre2-8` present, `pcre2-sys` links it dynamically (it is present on this Mac: `pkg-config --exists libpcre2-8` succeeds). A release tarball would then depend on a library the user may not have. The build script skips the probe when `PCRE2_SYS_STATIC` is set, so a shipped build would need `PCRE2_SYS_STATIC=1` in `release.yml` and `docker/release.Dockerfile`.
 - **Binary size.** Not measured for a release build. The debug static archive is 1.4 MB (`libpcre2.a`, includes debug info); the release increase will be smaller.

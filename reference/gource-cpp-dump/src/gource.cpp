@@ -250,7 +250,7 @@ void Gource::update(float t, float dt) {
 
     gDumpFrame = framecount;
 
-    // state-dump fork: block on the async log load so frame 0 is the load frame (D2), as Burl does
+    // state-dump fork: block on the async log load so frame 0 is the load frame (D2), as Gnarl does
     if(gDump.out && commitlog == 0) {
         while(!logmill->isFinished()) SDL_Delay(1);
     }

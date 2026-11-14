@@ -3,7 +3,7 @@
 # Run from anywhere on a host with Docker; commit the result only in a `golden-refresh` PR.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../../../../.." && pwd)
-IMG=burl-golden:amd64
+IMG=gnarl-golden:amd64
 docker build --platform linux/amd64 -t "$IMG" -f "$ROOT/docker/golden.Dockerfile" "$ROOT/docker"
 docker run --rm --platform linux/amd64 -v "$ROOT":/repo \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \

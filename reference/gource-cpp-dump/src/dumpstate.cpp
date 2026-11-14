@@ -1,4 +1,4 @@
-// State-dump fork additions (Burl). Not part of upstream Gource.
+// State-dump fork additions (Gnarl). Not part of upstream Gource.
 
 #include "dumpstate.h"
 

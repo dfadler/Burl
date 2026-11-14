@@ -28,7 +28,7 @@ int main(void) {
     @kIOHIDReportDescriptorKey : [NSData dataWithBytes:kDescriptor length:sizeof kDescriptor],
     @kIOHIDVendorIDKey : @(0x1209),
     @kIOHIDProductIDKey : @(0x0001),
-    @kIOHIDProductKey : @"burl cursor lab mouse",
+    @kIOHIDProductKey : @"gnarl cursor lab mouse",
     @kIOHIDTransportKey : @"Virtual",
     @kIOHIDPrimaryUsagePageKey : @(1),
     @kIOHIDPrimaryUsageKey : @(2),

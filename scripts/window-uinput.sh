@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # X11 cursor grab with a REAL evdev device (#212): a kernel uinput mouse read by Xorg's libinput
-# driver on the dummy video driver, instead of xdotool/XTest under Xvfb. Runs burl, presses the right
+# driver on the dummy video driver, instead of xdotool/XTest under Xvfb. Runs gnarl, presses the right
 # button on the device, pushes relative motion past every window edge and checks with the server's
 # pointer position (XQueryPointer, via xdotool getmouselocation) that the pointer stays inside; then
 # releases and checks it is free. The cursor image (XFixesGetCursorImage) must be hidden while held.
 #   scripts/window-uinput.sh [OUT_DIR]     needs sudo, /dev/uinput, Xorg + xserver-xorg-video-dummy +
 #   xserver-xorg-input-libinput, openbox, xdotool, x11-utils, libx11-dev, libxfixes-dev, a C compiler
-#   and a built target/release/burl (BURL=path to override). Linux only; see window-uinput.yml.
+#   and a built target/release/gnarl (GNARL=path to override). Linux only; see window-uinput.yml.
 # Exit 1 if any check fails; all checks always run.
 # `test && ok ... || bad ...` below: `ok` only echoes and cannot fail, so `bad` never runs after a pass.
 # SC2329: cleanup is called by the EXIT trap.
@@ -23,7 +23,7 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT=${1:-"$ROOT/target/window-uinput"}
 mkdir -p "$OUT/bin"
 OUT=$(cd "$OUT" && pwd)
-BURL=${BURL:-"$ROOT/target/release/burl"}
+GNARL=${GNARL:-"$ROOT/target/release/gnarl"}
 LOG=$ROOT/tests/golden/sim/small-repo.log
 export DISPLAY=:98 LIBGL_ALWAYS_SOFTWARE=1 LP_NUM_THREADS=1
 fail=0
@@ -59,8 +59,8 @@ Section "Screen"
 EndSection
 # Flat acceleration: a relative count moves the pointer about one pixel.
 Section "InputClass"
-  Identifier "burl uinput mouse"
-  MatchProduct "burl-uinput-mouse"
+  Identifier "gnarl uinput mouse"
+  MatchProduct "gnarl-uinput-mouse"
   MatchIsPointer "on"
   MatchDevicePath "/dev/input/event*"
   Driver "libinput"
@@ -73,12 +73,12 @@ sudo Xorg "$DISPLAY" -config "$OUT/xorg.conf" -logfile "$OUT/Xorg.log" -ac -nore
 XORG=$!
 cleanup() {
 	exec 3>&- 2>/dev/null
-	kill "$BURLPID" 2>/dev/null
+	kill "$GNARLPID" 2>/dev/null
 	kill "$OPENBOX" 2>/dev/null
 	sudo kill "$XORG" 2>/dev/null
 	sudo chmod a+r "$OUT/Xorg.log" 2>/dev/null
 }
-BURLPID='' OPENBOX=''
+GNARLPID='' OPENBOX=''
 trap cleanup EXIT
 for _ in $(seq 100); do xdpyinfo >/dev/null 2>&1 && break || sleep 0.1; done
 xdpyinfo >/dev/null 2>&1 || {
@@ -96,9 +96,9 @@ if ! grep -q '^ready' "$OUT/uinput.out"; then
 	exit 1
 fi
 # Xorg must have taken it up as an evdev device through libinput: that is what makes it a real device.
-for _ in $(seq 50); do sudo grep -q "Using input driver 'libinput' for 'burl-uinput-mouse'" "$OUT/Xorg.log" && break || sleep 0.1; done
-sudo grep -E "burl-uinput-mouse" "$OUT/Xorg.log"
-sudo grep -q "Using input driver 'libinput' for 'burl-uinput-mouse'" "$OUT/Xorg.log" &&
+for _ in $(seq 50); do sudo grep -q "Using input driver 'libinput' for 'gnarl-uinput-mouse'" "$OUT/Xorg.log" && break || sleep 0.1; done
+sudo grep -E "gnarl-uinput-mouse" "$OUT/Xorg.log"
+sudo grep -q "Using input driver 'libinput' for 'gnarl-uinput-mouse'" "$OUT/Xorg.log" &&
 	ok "the uinput mouse is an evdev device Xorg reads through libinput" ||
 	bad "Xorg did not attach the uinput mouse through libinput"
 
@@ -106,18 +106,18 @@ openbox >"$OUT/openbox.log" 2>&1 &
 OPENBOX=$!
 for _ in $(seq 100); do xprop -root _NET_CLIENT_LIST 2>/dev/null | grep -q 'window id' && break || sleep 0.1; done
 
-"$BURL" "$LOG" --log-format custom -640x360 --seconds-per-day 10 --hash-seed 31 --prng glibc \
-	--disable-auto-skip --disable-auto-rotate --file-idle-time 0 >"$OUT/burl.log" 2>&1 &
-BURLPID=$!
+"$GNARL" "$LOG" --log-format custom -640x360 --seconds-per-day 10 --hash-seed 31 --prng glibc \
+	--disable-auto-skip --disable-auto-rotate --file-idle-time 0 >"$OUT/gnarl.log" 2>&1 &
+GNARLPID=$!
 CWID=
 for _ in $(seq 200); do
-	CWID=$(xdotool search --onlyvisible --pid "$BURLPID" 2>/dev/null | head -1)
+	CWID=$(xdotool search --onlyvisible --pid "$GNARLPID" 2>/dev/null | head -1)
 	[ -n "$CWID" ] && break
 	sleep 0.1
 done
 if [ -z "$CWID" ]; then
 	bad "uinput launch: window never appeared"
-	cat "$OUT/burl.log"
+	cat "$OUT/gnarl.log"
 	xwininfo -root -tree
 	exit 1
 fi
@@ -209,6 +209,6 @@ push 60 60
 pointer_inside && bad "pointer is still confined after the button went up (at $PX,$PY)" ||
 	ok "releasing the real button releases the confinement"
 
-echo "--- burl.log"
-cat "$OUT/burl.log"
+echo "--- gnarl.log"
+cat "$OUT/gnarl.log"
 exit "$fail"

@@ -6,7 +6,7 @@
 //! Downscale-and-compare is not used: it passes a window that was rendered at 1x and upscaled.
 //!
 //! Secondary: [`check_baseline`] compares a capture to a stored "regression baseline" taken from
-//! Burl itself on the hosted runner. It says "Burl still looks like it did", never "matches Gource".
+//! Gnarl itself on the hosted runner. It says "Gnarl still looks like it did", never "matches Gource".
 
 use crate::ssim::{ssim, Image};
 
@@ -93,7 +93,7 @@ pub fn downscale(img: &Image, k: usize) -> Image {
     Image { w, h, rgb }
 }
 
-/// Why this compares equal *physical* sizes: Burl lays the scene out in physical pixels (a fixed
+/// Why this compares equal *physical* sizes: Gnarl lays the scene out in physical pixels (a fixed
 /// pixel font size and camera zoom), so a 320x180 pt window on a 2x display (640x360 px) and a
 /// 640x360 pt window on a 1x display show the same 640x360 px frame, while a 320x180 px frame
 /// (what a 1x window of 320x180 pt shows) is framed differently. A native render therefore
@@ -241,7 +241,7 @@ pub fn check_native_2x(p: &Pair) -> Result<(), String> {
 /// Lowest SSIM against a regression baseline that still passes (see tools/display-harness/baselines/README.md).
 pub const MIN_BASELINE_SSIM: f64 = 0.85;
 
-/// Regression baseline, not parity: SSIM of `got` against a stored capture of Burl itself.
+/// Regression baseline, not parity: SSIM of `got` against a stored capture of Gnarl itself.
 pub fn check_baseline(got: &Image, baseline: &Image, min_ssim: f64) -> Result<f64, String> {
     let s = ssim(got, baseline)?;
     if s < min_ssim {
@@ -403,8 +403,8 @@ pub fn check_scene_fills_window(img: &Image, scale: f64) -> Result<String, Strin
 
 // ---- is the cursor hidden? (`--grab`, from full-screen captures) ----
 //
-// Measured on hosted macos-15 and macos-26 (cursor lab, Burl #205): a full-screen `screencapture -C`
-// shows the cursor sprite before the press and not while burl holds its grab. `CGCursorIsVisible`
+// Measured on hosted macos-15 and macos-26 (cursor lab, Gnarl #205): a full-screen `screencapture -C`
+// shows the cursor sprite before the press and not while gnarl holds its grab. `CGCursorIsVisible`
 // reads "visible" throughout (winit hides the cursor with an invisible cursor rect), so only the
 // pixels can say.
 
@@ -696,7 +696,7 @@ mod tests {
         assert!(check_crisp(&flat).is_err());
     }
 
-    /// Real Burl captures (the regression baselines): the genuine one passes, the same capture
+    /// Real Gnarl captures (the regression baselines): the genuine one passes, the same capture
     /// downscaled and stretched back, and stretched from half size, fail.
     #[test]
     fn real_capture_passes_and_its_blurred_copies_fail() {

@@ -6,7 +6,7 @@
 #                                    bloom set (bloom drawn, files bloom-*.png), else the structural set
 #   scripts/visual.sh self [N]       N (default 10) further oracle renders, each frame SSIM'd against
 #                                    the committed references; prints the worst and the proposed threshold
-#   scripts/visual.sh burl [bloom]   render the fixtures with Burl (--prng glibc, like the oracle's unseeded
+#   scripts/visual.sh gnarl [bloom]   render the fixtures with Gnarl (--prng glibc, like the oracle's unseeded
 #                                    rand()) and print each frame's SSIM against the references; the
 #                                    structural set exits 1 below 0.959 (ticket #12), bloom only reports
 set -euo pipefail
@@ -20,9 +20,9 @@ esac
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 OUT="$ROOT/target/visual"
 REFS="$ROOT/tests/golden/visual"
-IMG=burl-golden:amd64
+IMG=gnarl-golden:amd64
 # fixture:frame indices (-r 25: the 10 s fixtures run ~355 frames, the 30 s real-repo one ~1070)
-FIXTURES=${VISUAL_FIXTURES:-"small-repo:30,70,110,170 file-removal:30,70,110,170 file-to-dir:30,70,110,170 real-burl-git-250:100,300,500,800"}
+FIXTURES=${VISUAL_FIXTURES:-"small-repo:30,70,110,170 file-removal:30,70,110,170 file-to-dir:30,70,110,170 real-gnarl-git-250:100,300,500,800"}
 
 # Optional second word: `bloom` selects the bloom set (bloom drawn, refs named bloom-*).
 export BLOOM='' PFX=''
@@ -37,8 +37,8 @@ in_image() {
 # SSIM maths needs the comparator (cargo xtask ssim, PR #56); cutting frames does not.
 xtask() { (cd "$ROOT" && cargo run -q --locked -p xtask -- "$@"); }
 
-# The burl mode compares against committed references and needs no oracle binary.
-[ "$1" = burl ] || in_image build
+# The gnarl mode compares against committed references and needs no oracle binary.
+[ "$1" = gnarl ] || in_image build
 case "$1" in
 refs)
 	for f in $FIXTURES; do
@@ -69,15 +69,15 @@ self)
 	done
 	xtask ssim-threshold $(sed 's/.*ssim=//' "$OUT/self.txt")
 	;;
-burl)
-	docker build -q --platform linux/amd64 -t burl-visual:amd64 -f "$ROOT/docker/visual.Dockerfile" "$ROOT" > /dev/null
+gnarl)
+	docker build -q --platform linux/amd64 -t gnarl-visual:amd64 -f "$ROOT/docker/visual.Dockerfile" "$ROOT" > /dev/null
 	fail=0
 	for f in $FIXTURES; do
-		docker run --rm --platform linux/amd64 -e BLOOM -v "$ROOT":/repo -v "$OUT":/out burl-visual:amd64 \
-			bash /repo/scripts/visual-in-container.sh burl "${f%%:*}" /out/burl.ppm
-		in_image cut /out/burl.ppm /out/burl "${f##*:}" > /dev/null
+		docker run --rm --platform linux/amd64 -e BLOOM -v "$ROOT":/repo -v "$OUT":/out gnarl-visual:amd64 \
+			bash /repo/scripts/visual-in-container.sh gnarl "${f%%:*}" /out/gnarl.ppm
+		in_image cut /out/gnarl.ppm /out/gnarl "${f##*:}" > /dev/null
 		for idx in $(echo "${f##*:}" | tr , ' '); do
-			v=$(xtask ssim "$REFS/$PFX${f%%:*}-$idx.png" "$OUT/burl-$idx.png")
+			v=$(xtask ssim "$REFS/$PFX${f%%:*}-$idx.png" "$OUT/gnarl-$idx.png")
 			echo "${f%%:*} frame=$idx $v"
 			awk -v v="${v#ssim=}" -v t="$THRESHOLD" 'BEGIN { exit !(v < t) }' && fail=1
 		done

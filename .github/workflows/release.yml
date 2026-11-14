@@ -51,7 +51,7 @@ jobs:
         with:
           persist-credentials: false
       - run: cargo xtask ci
-      - run: cargo build --release --locked -p burl
+      - run: cargo build --release --locked -p gnarl
       - name: Third-party licence list
         # cargo-deny pinned and locked; `list` prints every dependency's licence.
         run: |
@@ -59,16 +59,16 @@ jobs:
           cargo deny list --layout crate --format human > THIRD-PARTY-LICENSES.txt
       - name: Package
         env:
-          NAME: burl-${{ github.ref_name }}-${{ matrix.target }}
+          NAME: gnarl-${{ github.ref_name }}-${{ matrix.target }}
         run: |
           mkdir "$NAME"
-          cp target/release/burl COPYING dist/NOTICE.md THIRD-PARTY-LICENSES.txt "$NAME/"
+          cp target/release/gnarl COPYING dist/NOTICE.md THIRD-PARTY-LICENSES.txt "$NAME/"
           tar -czf "$NAME.tar.gz" "$NAME"
           shasum -a 256 "$NAME.tar.gz" > "$NAME.tar.gz.sha256"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: tarball-${{ matrix.target }}
-          path: burl-*.tar.gz*
+          path: gnarl-*.tar.gz*
           if-no-files-found: error
 
   image:
@@ -80,10 +80,10 @@ jobs:
         with:
           persist-credentials: false
       - name: Build the headless image
-        run: docker build --platform linux/amd64 -t burl:release -f docker/release.Dockerfile .
+        run: docker build --platform linux/amd64 -t gnarl:release -f docker/release.Dockerfile .
       - name: Image exports a valid PPM stream for a fixture
-        run: bash scripts/check-image.sh burl:release
-      - run: docker save burl:release -o image.tar
+        run: bash scripts/check-image.sh gnarl:release
+      - run: docker save gnarl:release -o image.tar
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: image
@@ -115,7 +115,7 @@ jobs:
           tags=("${GITHUB_REF_NAME#v}")
           case "$GITHUB_REF_NAME" in *-*) ;; *) tags+=(latest) ;; esac
           for t in "${tags[@]}"; do
-            docker tag burl:release "$ref:$t"
+            docker tag gnarl:release "$ref:$t"
             docker push "$ref:$t"
           done
       - name: Draft the GitHub release

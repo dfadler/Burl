@@ -9,12 +9,12 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/dfadler/Burl"
 
 [workspace.dependencies]
-burl-util = { path = "crates/burl-util" }
-burl-conf = { path = "crates/burl-conf" }
-burl-formats = { path = "crates/burl-formats" }
-burl-sim = { path = "crates/burl-sim" }
-burl-render = { path = "crates/burl-render" }
-burl-gl = { path = "crates/burl-gl" }
+gnarl-util = { path = "crates/gnarl-util" }
+gnarl-conf = { path = "crates/gnarl-conf" }
+gnarl-formats = { path = "crates/gnarl-formats" }
+gnarl-sim = { path = "crates/gnarl-sim" }
+gnarl-render = { path = "crates/gnarl-render" }
+gnarl-gl = { path = "crates/gnarl-gl" }
 # One glam for the whole workspace (the sim pins the same version).
 glam = "=0.34.2"
 regex = "1"

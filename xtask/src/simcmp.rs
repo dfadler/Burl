@@ -1,17 +1,17 @@
 //! The simulation-gate comparator (ticket #11, parity-test-spec 2.6): reads two schema-1 JSONL
-//! dumps (the fork's golden and Burl's), aligns them on `frame - loaded_frame0`, and reports the
+//! dumps (the fork's golden and Gnarl's), aligns them on `frame - loaded_frame0`, and reports the
 //! first divergent field path.
 //!
 //! Tiers:
 //! - **exact**: everything that is not a float (integers, bools, strings, key sets, array
-//!   lengths). Which numbers are integers is `burl_sim::dump::INT_KEYS`;
+//!   lengths). Which numbers are integers is `gnarl_sim::dump::INT_KEYS`;
 //! - **bit-exact f32**: every other number, compared as f32 bit patterns;
-//! - **tolerance**: `burl_sim::dump::LIBM_KEYS` (`sinf`/`cosf` results) at 1e-5 relative.
+//! - **tolerance**: `gnarl_sim::dump::LIBM_KEYS` (`sinf`/`cosf` results) at 1e-5 relative.
 //!
 //! A difference listed in the allowlist (`ID path`, ids checked against `DEVIATIONS.md`) is
 //! counted under its id instead of failing; there is no tolerance flag for deviations.
 
-use burl_sim::dump::{BUILD_KEYS, INT_KEYS, LIBM_KEYS, SCHEMA};
+use gnarl_sim::dump::{BUILD_KEYS, INT_KEYS, LIBM_KEYS, SCHEMA};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -355,7 +355,7 @@ fn path_string(path: &[String]) -> String {
     s
 }
 
-/// Compare a golden dump with Burl's. `Err` is a malformed input, not a divergence.
+/// Compare a golden dump with Gnarl's. `Err` is a malformed input, not a divergence.
 pub fn compare(golden: &str, actual: &str, o: &Options) -> Result<Report, String> {
     let g = parse(golden, "golden")?;
     let a = parse(actual, "actual")?;
@@ -574,7 +574,7 @@ mod tests {
             allow,
             ..Options::default()
         };
-        // the fork loaded at frame 3, Burl at 0
+        // the fork loaded at frame 3, Gnarl at 0
         let a2 = frame(3, 3, "1", 7, "[0,1]", POS);
         let r = run(&g, &a2, &o);
         assert!(r.ok(), "{r}");
@@ -599,7 +599,7 @@ mod tests {
 
     #[test]
     fn frames_align_on_the_load_frame() {
-        // the fork loaded at frame 2, Burl at frame 0: same relative frame, same content
+        // the fork loaded at frame 2, Gnarl at frame 0: same relative frame, same content
         let g = frame(2, 2, "1", 7, "[0,1]", POS);
         let a = frame(0, 0, "1", 7, "[0,1]", POS);
         let o = Options {
@@ -673,7 +673,7 @@ mod tests {
     }
 
     #[test]
-    fn extra_frames_and_extra_keys_in_burl_fail() {
+    fn extra_frames_and_extra_keys_in_gnarl_fail() {
         let one = frame(0, 0, "1", 7, "[0,1]", POS);
         let two = format!("{one}{}", frame(1, 0, "1", 7, "[0,1]", POS));
         let r = run(&one, &two, &Options::default());

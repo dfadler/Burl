@@ -1,7 +1,7 @@
 # display-harness
 
-Checks Burl's scale-factor handling on macOS: it creates a 2x and a 1x virtual display, runs the
-real `burl` with `--log-level debug`, moves its window onto each display and asserts the
+Checks Gnarl's scale-factor handling on macOS: it creates a 2x and a 1x virtual display, runs the
+real `gnarl` with `--log-level debug`, moves its window onto each display and asserts the
 `display:` log lines and the captured pixel sizes, then compares the captured pixels. Part of map
 #147.
 
@@ -9,8 +9,8 @@ real `burl` with `--log-level debug`, moves its window onto each display and ass
 cargo xtask display-harness
 ```
 
-It builds the release `burl`, compiles `vd.m` and `wid.m` into `target/display-harness/`, and
-leaves the logs and captures (`vd.out`, `burl.out`, `1x.png`, `2x.png`) there. Exit 1 with one
+It builds the release `gnarl`, compiles `vd.m` and `wid.m` into `target/display-harness/`, and
+leaves the logs and captures (`vd.out`, `gnarl.out`, `1x.png`, `2x.png`) there. Exit 1 with one
 message per failed step or assertion. Not part of `cargo xtask ci`; other OSes print a message
 and exit 1.
 
@@ -20,10 +20,10 @@ logical = physical / scale, and a scale change shows `scale-changed` then `resiz
 
 ## Pixel comparison (#155)
 
-- **Same frame:** burl's sim is time dependent, so the harness presses Space once (System Events
+- **Same frame:** gnarl's sim is time dependent, so the harness presses Space once (System Events
   key, read back from the pixels: the camera keeps settling for 10 to 45 s, then the frame stops
   changing) and every capture after that, on either display, is the same frame.
-- **Same physical size, not same point size:** Burl lays out in physical pixels (fixed pixel font
+- **Same physical size, not same point size:** Gnarl lays out in physical pixels (fixed pixel font
   size, camera zoom), so a 320x180 pt window on the 2x display and a 640x360 pt window on the 1x
   display both show 640x360 px of the same frame, while a 320x180 pt window on 1x is framed
   differently. The harness resizes to exactly those, crops the title bar, and compares.
@@ -41,7 +41,7 @@ logical = physical / scale, and a scale change shows `scale-changed` then `resiz
 cargo xtask display-harness --high-dpi
 ```
 
-Same flow, but burl gets `--high-dpi`, so `-640x360` is a logical-size window and font scale
+Same flow, but gnarl gets `--high-dpi`, so `-640x360` is a logical-size window and font scale
 follows the DPI ratio; artifacts go to `target/display-harness-high-dpi/`. Measured on macOS 26
 (Apple Silicon): the window is 640x360 pt on both displays; physical 640x360 on 1x and 1280x720 on
 2x; `display:` lines say logical 640x360 on both; the 2x capture is 1280x784 (title bar included).
@@ -67,7 +67,7 @@ cargo xtask crisp-control
 ```
 
 The blurred copy above is synthetic. This builds a real negative control with the actual
-compositor, without touching burl (burl cannot be made non-hi-res: glutin 0.32.3 forces
+compositor, without touching gnarl (gnarl cannot be made non-hi-res: glutin 0.32.3 forces
 `setWantsBestResolutionOpenGLSurface(true)`). `lowres.m` is a standalone window with an
 `NSOpenGLView` (deprecated since macOS 10.14, still shipped; I could not confirm the status on
 macOS 15 or 26 from Apple's docs, the pages did not render, so it is **unverified** until a hosted
@@ -97,13 +97,13 @@ drawable size `lowres` itself reported).
 cargo xtask display-harness --grab
 ```
 
-No virtual display needed. Opens burl with the tree, files, users and slider hidden (so a click
+No virtual display needed. Opens gnarl with the tree, files, users and slider hidden (so a click
 lands on the background, which grabs) and **without** `--hide mouse` (that drops button presses).
-`mouse.m` posts a real left press and release with `CGEventPost`, and the check reads burl's
+`mouse.m` posts a real left press and release with `CGEventPost`, and the check reads gnarl's
 `grab:` debug lines. Three phases:
 
 1. **Control:** motion with no button down logs no grab, so the `on` below is the press's.
-2. **Press:** burl logs `grab: event=on mode=locked` and keeps it through drag motion. winit's macOS
+2. **Press:** gnarl logs `grab: event=on mode=locked` and keeps it through drag motion. winit's macOS
    `Locked` is `CGAssociateMouseAndMouseCursorPosition(false)` and `Confined` is unsupported there,
    so `locked` also means the OS call returned `Ok`. **The cursor must be hidden:** full-screen
    `screencapture -C` shots (`target/display-harness-grab/cursor-*.png`) are taken with the cursor
@@ -111,13 +111,13 @@ lands on the background, which grabs) and **without** `--hide mouse` (that drops
    shot. The cursor-sized crop's difference between the pair is the sprite's score: it must be
    clearly above the repeat-capture noise before the press and gone while held
    (`pixels::check_cursor_hidden`). A sprite that is still there, or one that never showed, fails.
-3. **Release:** burl logs `grab: event=off`; the whole cycle must be on, locked, off. The sprite's
+3. **Release:** gnarl logs `grab: event=off`; the whole cycle must be on, locked, off. The sprite's
    score after the release must be significant against the same noise and within 30% of the
    pre-press score, with no mouse move (`pixels::check_cursor_returned`; measured on hosted
    `macos-15` and `macos-26`: equal to before the press).
 
 **Not asserted: where the cursor goes.** The first hosted runs (`macos-15`, `macos-26`) showed the
-cursor following 50 points of synthetic drag while burl held the lock (`(412, 390) -> (462, 390)`),
+cursor following 50 points of synthetic drag while gnarl held the lock (`(412, 390) -> (462, 390)`),
 so `CGEventPost` bypasses the detach and a position check cannot tell a lock from none. Also not
 covered: that the cursor is detached from the device (a real device's relative motion; no HID route
 exists on hosted runners), so the checklist's cursor-grab box stays manual for that part.
@@ -129,20 +129,20 @@ cargo xtask display-harness --drag
 ```
 
 The real cross-display drag the earlier text said stayed manual. Needs the virtual displays.
-Burl is moved to the 1x display with System Events once, then `mouse.m` does what a user does:
+Gnarl is moved to the 1x display with System Events once, then `mouse.m` does what a user does:
 `warp` to the title bar (window origin + half the width across, 12 pt down), `down`, 40 `drag`
 events stepping in a straight line to the centre of the other display (global bounds from `vd`,
 so a negative x is fine), `up`. Then 2x back to 1x. Artifacts in `target/display-harness-drag/`.
 
-- **Asserted, per crossing:** burl's `display:` lines after the drag pass `check_move` (target
+- **Asserted, per crossing:** gnarl's `display:` lines after the drag pass `check_move` (target
   scale, logical = physical / scale, `scale-changed` then `resized`), and `wid` shows the window's
   origin on the target display.
 - **Asserted, per crossing, once the window has settled on the target display** (`check_size_kept`,
-  `check_capture`): the window's point size (`wid` frame) is the same as before the drag; burl's last
+  `check_capture`): the window's point size (`wid` frame) is the same as before the drag; gnarl's last
   `display:` logical size is the same as before the drag; a `screencapture -o -l` of the window is
-  scale x its point size and has several distinct colours (not blank). This is burl without
+  scale x its point size and has several distinct colours (not blank). This is gnarl without
   `--high-dpi` (exact-pixel `-640x360`); the logical-size-kept assertion is the expected winit
-  behaviour, not a measurement: if a hosted run shows burl's logical size changing on the 2x display
+  behaviour, not a measurement: if a hosted run shows gnarl's logical size changing on the 2x display
   (deviation G3), record the measured numbers here and relax the assertion.
 - **Asserted, per crossing, coarse scene placement** (`check_scene_fills_window`, on the capture
   with the title bar cropped): the four corners (single patches) and each edge (the median of 7
@@ -175,7 +175,7 @@ cargo xtask cursor-lab
 
 A measurement lab, not a check: it prints a table to `target/cursor-lab/lab.log` and fails only on
 an infrastructure error (a helper will not build, no window, a helper cannot post). The workflow
-runs it with `continue-on-error` and uploads the log. It runs burl as `--grab` does, then measures
+runs it with `continue-on-error` and uploads the log. It runs gnarl as `--grab` does, then measures
 each variant with no grab (`moved` events) and under a held grab (`dragged`, then `moved` events),
 5 events of 10 points. Never run it on a machine somebody is using: it posts events and moves the
 cursor. First lines of the log: `sw_vers`, `csrutil status`, `nvram boot-args`.
@@ -198,7 +198,7 @@ Reading the `== per variant ==` lines: `Detached` (cursor followed with no grab,
 the grab) is an assertable lock; `IgnoresLock` means that injection bypasses the detach;
 `Uninformative` means it did not move the cursor even with no grab. `tapwatch` needs Input
 Monitoring or Accessibility; if `CGEventTapCreate` fails the log says so with the access flags and
-the tap column reads `tap unavailable`. A held-grab row is only given a lock verdict when burl's
+the tap column reads `tap unavailable`. A held-grab row is only given a lock verdict when gnarl's
 `grab: event=on` line reported `mode=locked`; otherwise the verdict is `Inconclusive`.
 
 ### Measured on hosted `macos-15` and `macos-26` (2026-11-14, first run)
@@ -252,9 +252,9 @@ on the same display at the same point size. Own file (`xtask/src/roundtrip.rs`),
 - **Negative control:** B shifted by 4 px and B blurred (downscale 2, upscale) are compared with A;
   the worse of the two must be at least 2x the limit (0.5) or the check fails as vacuous. Unit tests
   also require a shifted or blurred B to fail the check itself.
-- **Not compared:** the 2x capture with A. Its physical size doubles, so burl frames it differently
+- **Not compared:** the 2x capture with A. Its physical size doubles, so gnarl frames it differently
   (see Pixel comparison); no valid reference exists, so the 2x leg only gets the structural checks.
-- **Unverified until a hosted run:** that a paused burl redraws the identical frame after two
+- **Unverified until a hosted run:** that a paused gnarl redraws the identical frame after two
   scale changes (camera or font state could shift), that the cursor on the title bar does not alter
   the drawing, and that the real MAE is near 0 rather than near the limit.
 
@@ -267,7 +267,7 @@ numbers are above (Caveats, Cursor lab); this adds what they leave out.
 Recording and Accessibility are already granted, SIP is disabled and `boot-args` is empty, so no
 self-hosted Mac or VM was needed. The labels are moving, so the image cannot be pinned to a build;
 the "Record macOS build and runner image" step logs `sw_vers`, `ImageOS` and `ImageVersion` instead.
-`CGVirtualDisplay` is private, so a runner update can break the harness with no Burl change; the
+`CGVirtualDisplay` is private, so a runner update can break the harness with no Gnarl change; the
 workflow is not a required check and the weekly-failure canary reports it.
 
 **Cursor, in one place.** Hidden is assertable (full-screen `screencapture -C`). `CGCursorIsVisible`
@@ -281,7 +281,7 @@ delta-only events do not move the cursor even with no grab. No virtual HID devic
   `CGVirtualDisplay` keep private copies). If one appears, a composite action under
   `.github/actions/` is the cheap route.
 - **F12/framebuffer readback:** it would change G10 and the DEVIATIONS register hash.
-- **Real-compositor crispness control inside burl:** burl has no way to get a 1x surface on the 2x
+- **Real-compositor crispness control inside gnarl:** gnarl has no way to get a 1x surface on the 2x
   display without a test-only hook and a new dependency in production code. `crisp-control` above is
   the standalone substitute.
 - **Pinning the runner image:** not possible, see above.
@@ -295,7 +295,7 @@ the cursor sprite returns after release, #214 dispatch-test the weekly-failure c
 - macOS with a logged-in GUI session, `clang`, and a Rust toolchain.
 - Screen Recording and Accessibility granted to the terminal/app that runs it (`screencapture`,
   `osascript` System Events). Hosted `macos-15` / `macos-26` runners already have both.
-- It briefly adds two displays and opens and moves a burl window on your desktop.
+- It briefly adds two displays and opens and moves a gnarl window on your desktop.
 
 ## Files
 
@@ -303,7 +303,7 @@ the cursor sprite returns after release, #214 dispatch-test the weekly-failure c
   and pixels, then `ready`; runs until SIGTERM/SIGINT or its parent exits.
 - `lowres.m`: the test-card window for `crisp-control`, `lowres YES|NO`; runs until killed or its
   parent exits.
-- `wid.m`: prints `id x y w h` of burl's on-screen windows taller than 100 points.
+- `wid.m`: prints `id x y w h` of gnarl's on-screen windows taller than 100 points.
 - `mouse.m`, `tapwatch.m`, `hid.m`: synthetic mouse input, an event-tap observer and a virtual HID
   mouse (the last two only for the cursor lab).
 

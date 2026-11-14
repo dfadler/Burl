@@ -1,5 +1,5 @@
-# State-dump fork build image (Burl). Debian trixie amd64, clang, signed char, no FP contraction.
-# Build:  docker build --platform linux/amd64 -t burl-gource-dump reference/gource-cpp-dump
+# State-dump fork build image (Gnarl). Debian trixie amd64, clang, signed char, no FP contraction.
+# Build:  docker build --platform linux/amd64 -t gnarl-gource-dump reference/gource-cpp-dump
 # Pinned to the debian:trixie-slim index digest used for the issue #16 measurements.
 FROM debian@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
 

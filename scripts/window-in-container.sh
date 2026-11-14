@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs inside docker/window.Dockerfile: start Xvfb and a window manager, open the real `burl`
+# Runs inside docker/window.Dockerfile: start Xvfb and a window manager, open the real `gnarl`
 # window on a fixture, drive it with xdotool and check what the interactive checklist asks of the
 # Linux X11 window path. The session is recorded to /out/session.mp4 and every check writes a
 # PNG to /out. Exit 1 if any check fails; all checks always run.
@@ -57,10 +57,10 @@ luma() { # IMAGE CROP -> mean luma 0-255
 		sed -n 's/.*YAVG=//p' | head -1
 }
 
-# diag NAME PID: say why a check could not run (is burl alive, which windows it owns and in what
+# diag NAME PID: say why a check could not run (is gnarl alive, which windows it owns and in what
 # map state, what X has, what the screen shows). Saved as OUT/NAME-fail.png.
 diag() {
-	if kill -0 "$2" 2>/dev/null; then echo "  diag: burl is still running"; else echo "  diag: burl has exited"; fi
+	if kill -0 "$2" 2>/dev/null; then echo "  diag: gnarl is still running"; else echo "  diag: gnarl has exited"; fi
 	local w
 	for w in $(xdotool search --pid "$2" 2>/dev/null); do
 		echo "  diag: window $w: $(xwininfo -id "$w" 2>/dev/null | grep 'Map State')"
@@ -76,12 +76,12 @@ diag() {
 # Orientation, in a launch of its own with only the date caption drawn: the caption sits near the
 # top of the window, so a strip there must be brighter than the mirror strip near the bottom. A
 # vertically flipped window (the windowed blit once mirrored it) swaps them.
-burl "$LOG" --log-format custom -640x360 --seconds-per-day 1 --hash-seed 31 --prng glibc \
+gnarl "$LOG" --log-format custom -640x360 --seconds-per-day 1 --hash-seed 31 --prng glibc \
 	--hide tree,files,users,bloom,usernames,filenames,dirnames,progress,mouse &
-OBURL=$!
+OGNARL=$!
 OWID=
 for _ in $(seq 200); do
-	OWID=$(xdotool search --onlyvisible --pid "$OBURL" 2>/dev/null | head -1)
+	OWID=$(xdotool search --onlyvisible --pid "$OGNARL" 2>/dev/null | head -1)
 	[ -n "$OWID" ] && break
 	sleep 0.1
 done
@@ -101,22 +101,22 @@ if [ -n "$OWID" ]; then
 	fi
 else
 	bad "orientation launch: window never appeared"
-	diag orientation "$OBURL"
+	diag orientation "$OGNARL"
 fi
-kill "$OBURL" 2>/dev/null
-wait "$OBURL" 2>/dev/null
+kill "$OGNARL" 2>/dev/null
+wait "$OGNARL" 2>/dev/null
 
 # Selection and hover (#125), read from the `pointer:` debug line (`--log-level debug`) rather than
 # pixels: Tab selects a user, a background click clears it, sweeping the pointer finds a pawn whose
 # hover box would show, clicking it selects it, and a selected pawn gets no hover box. Where the box
 # is drawn, its text and the edge flip are not judged here; the pick itself is real X11 input.
 SLOG=$OUT/selection.log
-burl "$LOG" --log-format custom -640x360 --seconds-per-day 10 --hash-seed 31 --prng glibc \
+gnarl "$LOG" --log-format custom -640x360 --seconds-per-day 10 --hash-seed 31 --prng glibc \
 	--disable-auto-skip --disable-auto-rotate --file-idle-time 0 --log-level debug >"$SLOG" 2>&1 &
-SBURL=$!
+SGNARL=$!
 SWID=
 for _ in $(seq 200); do
-	SWID=$(xdotool search --onlyvisible --pid "$SBURL" 2>/dev/null | head -1)
+	SWID=$(xdotool search --onlyvisible --pid "$SGNARL" 2>/dev/null | head -1)
 	[ -n "$SWID" ] && break
 	sleep 0.1
 done
@@ -135,7 +135,7 @@ if [ -n "$SWID" ]; then
 		lastp | grep -q 'selected=user ' && break
 	done
 	lastp | grep -q 'selected=user ' && ok "selection: Tab selects a user ($(lastp))" ||
-		{ bad "selection: Tab selected no user ($(lastp))"; diag selection "$SBURL"; }
+		{ bad "selection: Tab selected no user ($(lastp))"; diag selection "$SGNARL"; }
 	# `selectBackground` needs the button still down when the frame draws, so hold it for a few frames
 	xdotool mousemove $((SX + 3)) $((SY + 3)) mousedown 1
 	sleep 0.3
@@ -172,21 +172,21 @@ if [ -n "$SWID" ]; then
 	fi
 else
 	bad "selection launch: window never appeared"
-	diag selection "$SBURL"
+	diag selection "$SGNARL"
 fi
-kill "$SBURL" 2>/dev/null
-wait "$SBURL" 2>/dev/null
+kill "$SGNARL" 2>/dev/null
+wait "$SGNARL" 2>/dev/null
 
 # Cursor confinement (winit X11 `Confined` = core GrabPointer with confine_to the window): holding
-# the right button grabs the mouse (`Live::set_grab`); `Locked` is unsupported on X11 so Burl falls
+# the right button grabs the mouse (`Live::set_grab`); `Locked` is unsupported on X11 so Gnarl falls
 # back to `Confined`. A pointer pushed far outside the window must stay clamped inside it while the
 # button is down and go free once it is up. No `--hide mouse`: that flag ignores buttons.
-burl "$LOG" --log-format custom -640x360 --seconds-per-day 10 --hash-seed 31 --prng glibc \
+gnarl "$LOG" --log-format custom -640x360 --seconds-per-day 10 --hash-seed 31 --prng glibc \
 	--disable-auto-skip --disable-auto-rotate --file-idle-time 0 &
-CBURL=$!
+CGNARL=$!
 CWID=
 for _ in $(seq 200); do
-	CWID=$(xdotool search --onlyvisible --pid "$CBURL" 2>/dev/null | head -1)
+	CWID=$(xdotool search --onlyvisible --pid "$CGNARL" 2>/dev/null | head -1)
 	[ -n "$CWID" ] && break
 	sleep 0.1
 done
@@ -253,10 +253,10 @@ if [ -n "$CWID" ]; then
 		bad "pointer is still confined after the button went up (at $PX,$PY)"
 else
 	bad "cursor-confine launch: window never appeared"
-	diag cursor "$CBURL"
+	diag cursor "$CGNARL"
 fi
-kill "$CBURL" 2>/dev/null
-wait "$CBURL" 2>/dev/null
+kill "$CGNARL" 2>/dev/null
+wait "$CGNARL" 2>/dev/null
 
 # Pointer pixels (#180, #125): what the state-based selection block above cannot judge: selected
 # sprites drawn white, the hover box (present, left and right of the pointer, flipped at the right
@@ -374,7 +374,7 @@ hover_at() {
 		[ "$n" -gt 150 ] && return 0
 	done
 	[ -n "$arrived" ] && return 1
-	bad "pointer never reached $1,$2 in 4 tries (environment, not Burl: the X server did not take the move; it is at ${px:-?},${py:-?})"
+	bad "pointer never reached $1,$2 in 4 tries (environment, not Gnarl: the X server did not take the move; it is at ${px:-?},${py:-?})"
 	return 2
 }
 
@@ -413,7 +413,7 @@ click_until() {
 			sleep 1
 			pointer_at "$2" "$3" && back=1 && break
 		done
-		[ -n "$back" ] || bad "pointer did not return to $2,$3 after the click (environment, not Burl: the X server did not take the move), so the shot would not show a hover box over the pawn"
+		[ -n "$back" ] || bad "pointer did not return to $2,$3 after the click (environment, not Gnarl: the X server did not take the move), so the shot would not show a hover box over the pawn"
 		shot "$1"
 		[ "$n" -gt "$4" ] && return 0
 	done
@@ -489,19 +489,19 @@ click_at() {
 # pause at an arbitrary moment could catch one half-faded. `user-idle-time` is config-file only;
 # a very long one keeps every user whole.
 printf '[gource]\nuser-idle-time=1000\n' >"$OUT/pointer.conf"
-burl "$LOG" --load-config "$OUT/pointer.conf" --log-format custom -640x360 --seconds-per-day 10 \
+gnarl "$LOG" --load-config "$OUT/pointer.conf" --log-format custom -640x360 --seconds-per-day 10 \
 	--hash-seed 31 --prng glibc --disable-auto-skip --disable-auto-rotate --file-idle-time 0 \
 	--hide bloom,tree,usernames,filenames,dirnames,progress,date &
-PBURL=$!
+PGNARL=$!
 PWID=
 for _ in $(seq 200); do
-	PWID=$(xdotool search --onlyvisible --pid "$PBURL" 2>/dev/null | head -1)
+	PWID=$(xdotool search --onlyvisible --pid "$PGNARL" 2>/dev/null | head -1)
 	[ -n "$PWID" ] && break
 	sleep 0.1
 done
 if [ -z "$PWID" ]; then
 	bad "pointer launch: window never appeared"
-	diag pointer "$PBURL"
+	diag pointer "$PGNARL"
 elif win_rect "$PWID" && scene_ready && xdotool windowfocus --sync "$PWID" key space && settle p-base; then
 	# Tab walks the users in order; some are out of view or cut by the window edge (their visible
 	# part is too small or too near the edge to click), so press it until a whole pawn well inside
@@ -522,7 +522,7 @@ elif win_rect "$PWID" && scene_ready && xdotool windowfocus --sync "$PWID" key s
 	# that never passed must not slip through on a partial re-check.
 	if [ -z "$found" ] || [ $((x1 - x0)) -gt 80 ] || [ $((y1 - y0)) -gt 80 ]; then
 		bad "window did not react to Tab within 8 tries, or no whole pawn well inside the window was selected, so no pawn to aim at: input not delivered or no selectable user (environment, not a pointer check; changed pixels: $n, box $x0-$x1 x $y0-$y1)"
-		diag pointer-tab "$PBURL"
+		diag pointer-tab "$PGNARL"
 	else
 		rx=$((x0 - 4)) ry=$((y0 - 4)) rw=$((x1 - x0 + 9)) rh=$((y1 - y0 + 9))
 		bgx=$((WX + 12)) bgy=$((WY + WH - 14))
@@ -583,7 +583,7 @@ elif win_rect "$PWID" && scene_ready && xdotool windowfocus --sync "$PWID" key s
 			read -r hx ry1 < <(inner_edge p-narrow "$WX" "$WY" "$WW" "$WH" right)
 			if [ "$n" -lt 100 ] || [ $((x1 - x0)) -lt $((WW - 60)) ] || [ "$lx" = 0 ] || [ "$hx" = 0 ]; then
 				bad "narrow window: no file to aim at on both side edges ($n px, x $x0-$x1 of $WX-$((WX + WW)), left $lx,$ly right $hx,$ry1)"
-				diag pointer-narrow "$PBURL"
+				diag pointer-narrow "$PGNARL"
 			else
 				# (a return of 2 has already said the pointer never arrived: no shot to judge)
 				hover_at "$lx" "$ly" p-hov-l
@@ -643,28 +643,28 @@ elif win_rect "$PWID" && scene_ready && xdotool windowfocus --sync "$PWID" key s
 			fi
 		else
 			bad "narrow window never stopped changing"
-			diag pointer-narrow "$PBURL"
+			diag pointer-narrow "$PGNARL"
 		fi
 	fi
 else
 	bad "pointer checks: the scene never filled in, or never stopped moving after pausing"
-	diag pointer "$PBURL"
+	diag pointer "$PGNARL"
 fi
-kill "$PBURL" 2>/dev/null
-wait "$PBURL" 2>/dev/null
+kill "$PGNARL" 2>/dev/null
+wait "$PGNARL" 2>/dev/null
 
 # Scale factor 2: winit on X11 reads WINIT_X11_SCALE_FACTOR first (then Xft.dpi, then the XRandR mm
 # size), so the variable forces 2 on this 96 dpi Xvfb. With `--high-dpi`, `-640x360` is logical: the
 # `display:` debug line must say scale=2 logical=640x360 physical=1280x720 and the X window must be
 # 1280x720 real pixels. If winit ignores the variable, the FAIL message carries what it reported.
 DLOG=$OUT/scale2.log
-WINIT_X11_SCALE_FACTOR=2 burl "$LOG" --log-format custom -640x360 --high-dpi --seconds-per-day 10 \
+WINIT_X11_SCALE_FACTOR=2 gnarl "$LOG" --log-format custom -640x360 --high-dpi --seconds-per-day 10 \
 	--hash-seed 31 --prng glibc --disable-auto-skip --disable-auto-rotate --file-idle-time 0 \
 	--hide mouse --log-level debug >"$DLOG" 2>&1 &
-DBURL=$!
+DGNARL=$!
 DWID=
 for _ in $(seq 200); do
-	DWID=$(xdotool search --onlyvisible --pid "$DBURL" 2>/dev/null | head -1)
+	DWID=$(xdotool search --onlyvisible --pid "$DGNARL" 2>/dev/null | head -1)
 	[ -n "$DWID" ] && break
 	sleep 0.1
 done
@@ -677,29 +677,29 @@ if [ -n "$DWID" ]; then
 	done
 	dsize=$(xwininfo -id "$DWID" | awk '/Width:/ {w = $2} /Height:/ {h = $2} END {print w "x" h}')
 	if [ "$dline" = "display: event=start scale=2 physical=1280x720 logical=640x360" ] && [ "$dsize" = 1280x720 ]; then
-		ok "scale factor 2: burl reports scale=2 logical=640x360 physical=1280x720 and the X window is 1280x720 pixels"
+		ok "scale factor 2: gnarl reports scale=2 logical=640x360 physical=1280x720 and the X window is 1280x720 pixels"
 	else
 		bad "scale factor 2: want scale=2 logical=640x360 physical=1280x720 and a 1280x720 X window; got '${dline:-no display: line}', X window $dsize"
-		diag scale2 "$DBURL"
+		diag scale2 "$DGNARL"
 	fi
 else
 	bad "scale-factor-2 launch: window never appeared"
-	diag scale2 "$DBURL"
+	diag scale2 "$DGNARL"
 fi
-kill "$DBURL" 2>/dev/null
-wait "$DBURL" 2>/dev/null
+kill "$DGNARL" 2>/dev/null
+wait "$DGNARL" 2>/dev/null
 
 # Same flags as the visual gate: fixed seeds, no auto-rotate, glibc PRNG.
 # 10 s per day: the fixture spans a few days, so the clock is still running for the first ~30 s.
-burl "$LOG" --log-format custom -640x360 --seconds-per-day 10 --hash-seed 31 \
+gnarl "$LOG" --log-format custom -640x360 --seconds-per-day 10 --hash-seed 31 \
 	--disable-auto-skip --disable-auto-rotate --file-idle-time 0 --time-scale 1 \
 	--hide mouse --prng glibc &
-BURL=$!
+GNARL=$!
 # Poll for the window (any map state) instead of `xdotool search --sync`, which never returns
 # if it does not appear; give up after 20 s and say what X has.
 WID=
 for _ in $(seq 200); do
-	WID=$(xdotool search --pid "$BURL" 2>/dev/null | head -1)
+	WID=$(xdotool search --pid "$GNARL" 2>/dev/null | head -1)
 	[ -n "$WID" ] && break
 	sleep 0.1
 done
@@ -753,7 +753,7 @@ if [ "$(size)" = 1280x720 ]; then
 	ok "Alt+Return goes fullscreen"
 else
 	bad "fullscreen size $(size), want 1280x720"
-	diag fullscreen "$BURL"
+	diag fullscreen "$GNARL"
 fi
 key alt+Return
 sleep 1
@@ -761,14 +761,14 @@ sleep 1
 
 key Escape
 for _ in $(seq 50); do
-	kill -0 "$BURL" 2>/dev/null || break
+	kill -0 "$GNARL" 2>/dev/null || break
 	sleep 0.1
 done
-if kill -0 "$BURL" 2>/dev/null; then
+if kill -0 "$GNARL" 2>/dev/null; then
 	bad "Esc did not quit"
-	kill "$BURL"
+	kill "$GNARL"
 else
-	wait "$BURL" && ok "Esc quits cleanly" || bad "Esc quit with a non-zero status"
+	wait "$GNARL" && ok "Esc quits cleanly" || bad "Esc quit with a non-zero status"
 fi
 
 finish

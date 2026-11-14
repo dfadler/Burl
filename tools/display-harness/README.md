@@ -158,6 +158,39 @@ so a negative x is fine), `up`. Then 2x back to 1x. Artifacts in `target/display
   boundary moves the window and makes winit fire `ScaleFactorChanged`. The path is a straight line
   between display centres, so it assumes the displays touch; a gap or offset may clamp the pointer.
 
+## Drag round trip, `--roundtrip`
+
+```
+cargo xtask display-harness --roundtrip
+```
+
+Automates "moving the window between displays of different scale does not break layout" with an
+objective reference: after 1x -> 2x -> 1x the window must show the **same frame** as before it left,
+on the same display at the same point size. Own file (`xtask/src/roundtrip.rs`), so `--drag` and
+`run_harness` are untouched. Needs the virtual displays; artifacts in
+`target/display-harness-roundtrip/`.
+
+1. Window to the 1x display, 6 s of scene, then the Space pause as in the default scenario (press
+   once, wait for two identical consecutive captures, frame-to-frame MAE 0).
+2. Cursor parked on the title bar, capture **A** (settled: two identical captures, `check_capture`,
+   `check_scene_fills_window`).
+3. Real drag to 2x, then back to 1x (as `--drag`): per crossing `check_move`, window on the target
+   display, `check_size_kept`; the 2x leg also gets a settled capture with the fill and caption check.
+4. Capture **B**, same settle. Then: window point size and logical size equal to A's, capture size
+   equal (checked before any pixel compare), and `MAE(A content, B content) <= 0.25`.
+
+- **Threshold:** `MAX_ROUNDTRIP_MAE` = `MAX_NATIVE_MAE` 0.25. The 1x vs 2x pair of the default
+  scenario measures 0.04 to 0.05, residue from rounded window corners; the same window on the same
+  display has none, so 0.25 (5x the worst measured) is generous.
+- **Negative control:** B shifted by 4 px and B blurred (downscale 2, upscale) are compared with A;
+  the worse of the two must be at least 2x the limit (0.5) or the check fails as vacuous. Unit tests
+  also require a shifted or blurred B to fail the check itself.
+- **Not compared:** the 2x capture with A. Its physical size doubles, so burl frames it differently
+  (see Pixel comparison); no valid reference exists, so the 2x leg only gets the structural checks.
+- **Unverified until a hosted run:** that a paused burl redraws the identical frame after two
+  scale changes (camera or font state could shift), that the cursor on the title bar does not alter
+  the drawing, and that the real MAE is near 0 rather than near the limit.
+
 ## Needs
 
 - macOS with a logged-in GUI session, `clang`, and a Rust toolchain.

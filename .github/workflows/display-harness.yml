@@ -84,6 +84,10 @@ jobs:
       # experiment: whether the synthetic drag moves the window across the virtual displays.
       - run: cargo xtask display-harness --drag
         if: ${{ !cancelled() }}
+      # Paused 1x -> 2x -> 1x drag round trip: the window must show the same frame afterwards.
+      # First hosted run is the experiment (see tools/display-harness/README.md).
+      - run: cargo xtask display-harness --roundtrip
+        if: ${{ !cancelled() }}
       # Real negative control for the crispness check: a non-hi-res OpenGL window magnified by the
       # compositor on the 2x display (lowres.m). Experiment: prints both scores and capture sizes.
       - run: cargo xtask crisp-control
@@ -102,6 +106,9 @@ jobs:
             target/display-harness-grab/burl.out
             target/display-harness-drag/burl.out
             target/display-harness-drag/vd.out
+            target/display-harness-roundtrip/*.png
+            target/display-harness-roundtrip/burl.out
+            target/display-harness-roundtrip/vd.out
             target/crisp-control/*.png
             target/crisp-control/*.out
           if-no-files-found: ignore

@@ -3,7 +3,14 @@ name = "gnarl-sim"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Gnarl: the simulation (Gource::logic and the scene it drives) and its state dump"
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+description = "Gnarl: the Gource simulation (scene graph, layout and its state dump)"
+readme = "README.md"
+keywords = ["gource", "simulation", "visualization", "git", "gnarl"]
+categories = ["simulation", "visualization"]
+include = ["LICENSE", "src/**", "README.md"]
 
 [dependencies]
 gnarl-util.workspace = true

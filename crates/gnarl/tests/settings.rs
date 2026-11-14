@@ -356,3 +356,14 @@ fn filters_reach_the_custom_log() {
     assert!(filtered.stdout.len() < all.stdout.len());
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// Each published crate ships the licence text as `LICENSE`; it must be the repo's `COPYING`.
+#[test]
+fn every_crate_ships_the_licence_text() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let want = std::fs::read(root.join("COPYING")).unwrap();
+    for entry in std::fs::read_dir(root.join("crates")).unwrap() {
+        let dir = entry.unwrap().path();
+        assert_eq!(std::fs::read(dir.join("LICENSE")).unwrap(), want, "{dir:?}");
+    }
+}

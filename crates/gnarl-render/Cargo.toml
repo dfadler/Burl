@@ -3,7 +3,14 @@ name = "gnarl-render"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
 description = "Gnarl: CPU-side render batches in Gource's fixed pass order (no GL)"
+readme = "README.md"
+keywords = ["gource", "rendering", "visualization", "gnarl"]
+categories = ["rendering", "visualization"]
+include = ["LICENSE", "src/**", "assets/**", "README.md"]
 
 [dependencies]
 glam.workspace = true

@@ -1,6 +1,6 @@
 # Visual-equivalence gate: procedure and measurements
 
-Ticket [#12](https://github.com/dfadler/Burl/issues/12). Tools: `cargo xtask ssim` (PR #56), reference frames in
+Ticket [#12](https://github.com/dfadler/Gnarl/issues/12). Tools: `cargo xtask ssim` (PR #56), reference frames in
 `tests/golden/visual/` (PR #62), `scripts/visual.sh`. Measured 2026-11-03 on an Apple-silicon Mac (Docker
 Desktop): amd64 containers are emulated, arm64 native. Image `debian@sha256:f6b08b09...3ec4`, Mesa 25.0.7, LLVM 19.1.7.
 Oracle: untouched `src/` built with clang 19, `-O1 -fsigned-char -ffp-contract=off`.

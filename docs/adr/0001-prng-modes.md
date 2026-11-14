@@ -2,7 +2,7 @@
 
 Status: accepted (decided with the user, 2026-11-01). Register row: D3 in `docs/rust-rewrite/DEVIATIONS.md`.
 
-Sources: [#22](https://github.com/dfadler/Burl/issues/22) (how the mode is selected), [#11](https://github.com/dfadler/Burl/issues/11) item 2 (which modes the parity gate uses). This record restates those resolutions and names the code that implements them; it adds no decision.
+Sources: [#22](https://github.com/dfadler/Gnarl/issues/22) (how the mode is selected), [#11](https://github.com/dfadler/Gnarl/issues/11) item 2 (which modes the parity gate uses). This record restates those resolutions and names the code that implements them; it adds no decision.
 
 ## Context
 

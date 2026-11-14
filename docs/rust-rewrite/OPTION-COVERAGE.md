@@ -6,8 +6,8 @@ Audit of every option and config key in Gource 0.57's settings against Gnarl. Wr
 
 - **Parse: complete.** The C++ option table (`arg_types[...]` in `src/gource_settings.cpp` plus the display options in `reference/gource-cpp-dump/src/core/settings.cpp`) has **114** entries. Gnarl's `ARG_TYPES` (`crates/gnarl-conf/src/args.rs`) has **120**: the same 114 with identical types, plus the six hidden test controls of ticket #22 (`--debug-dump-state/-every/-max-frames`, `--prng`, `--prng-seed`, `--rand-script`). The only type differences are `--ffp` and `--stop-on-idle`: `bool` in C++, `Ignored` in Gnarl (D4, D5d, ticket #8). Aliases and command-line-section routing were compared the same way.
 - **Store: complete.** Every gource option has a field in `GourceSettings` (`settings.rs:142`) or `DisplaySettings` (`settings.rs:28`) except the two `Ignored` ones.
-- **Changes behaviour (at `ceb39a8`):** every option is wired except `--selection-colour`, which was **Stored-unused** at that snapshot and is wired as of `6168c4a` (selected-name pass in `labels.rs`; pointer picking in `gnarl-sim/src/pointer.rs`; stack #119-#124, [#92](https://github.com/dfadler/Burl/issues/92)). Partial: `--hide-progress` (caption rows move, but the position slider is not drawn on `master`; PR #113), `--transparent` (no visible effect in `-o` by design). `--user-image-dir`, `--default-user-image` and `--colour-images` are wired in `-o` only until PR #107 (windowed, [#91](https://github.com/dfadler/Burl/issues/91)) merges. `--stop-on-idle` and `--ffp` are `Ignored` by design (D5d, D4). The earlier "Refused" options (`--start-position N`, `--loop`, `--follow-user`, `--camera-mode track`) and the silent `random` start position are all wired.
-- **Windowed vs `-o`:** both paths now draw the same frame (`crates/gnarl/src/frame.rs`, `FrameKit`: scene, names, date, title, captions, key, logo, background image), so the Windowed column is `Y` for those options. Open on the windowed path: multi-section runs stall on a stdin section ([#99](https://github.com/dfadler/Burl/issues/99)); avatars (PR #107, #91); the position slider (PR #113); the size after a resize (PR #109, #98).
+- **Changes behaviour (at `ceb39a8`):** every option is wired except `--selection-colour`, which was **Stored-unused** at that snapshot and is wired as of `6168c4a` (selected-name pass in `labels.rs`; pointer picking in `gnarl-sim/src/pointer.rs`; stack #119-#124, [#92](https://github.com/dfadler/Gnarl/issues/92)). Partial: `--hide-progress` (caption rows move, but the position slider is not drawn on `master`; PR #113), `--transparent` (no visible effect in `-o` by design). `--user-image-dir`, `--default-user-image` and `--colour-images` are wired in `-o` only until PR #107 (windowed, [#91](https://github.com/dfadler/Gnarl/issues/91)) merges. `--stop-on-idle` and `--ffp` are `Ignored` by design (D5d, D4). The earlier "Refused" options (`--start-position N`, `--loop`, `--follow-user`, `--camera-mode track`) and the silent `random` start position are all wired.
+- **Windowed vs `-o`:** both paths now draw the same frame (`crates/gnarl/src/frame.rs`, `FrameKit`: scene, names, date, title, captions, key, logo, background image), so the Windowed column is `Y` for those options. Open on the windowed path: multi-section runs stall on a stdin section ([#99](https://github.com/dfadler/Gnarl/issues/99)); avatars (PR #107, #91); the position slider (PR #113); the size after a resize (PR #109, #98).
 
 ## Status vocabulary
 
@@ -210,14 +210,14 @@ The original eleven-row list is kept as history in `git log` for this file; what
 
 | # | Gap | State |
 |---|---|---|
-| 1 | Windowed text, overlays, multi-section | **Landed** (`3c368c0`, `e6738ff`). Open: multi-section stdin stall ([#99](https://github.com/dfadler/Burl/issues/99)), resize ([#98](https://github.com/dfadler/Burl/issues/98), PR #109) |
+| 1 | Windowed text, overlays, multi-section | **Landed** (`3c368c0`, `e6738ff`). Open: multi-section stdin stall ([#99](https://github.com/dfadler/Gnarl/issues/99)), resize ([#98](https://github.com/dfadler/Gnarl/issues/98), PR #109) |
 | 2, 3 | `--start-position` random and N, `--loop`, `--follow-user`, `--camera-mode track` | **Landed** (`7b6e5e4`, `e1cc912`, `23e556b`) |
 | 4 | `--hide-root` | **Landed** (`scene.rs:148`) |
 | 5 | `--fixed-user-size` | **Landed** (`scene.rs:172`) |
 | 6 | `--font-file` | **Landed** (`export.rs:75`, `load_font_file`) |
-| 7 | Avatars | Export **landed** (G9). Windowed: PR #107; NFC keys: PR #110; G8 mip check: evidence in a comment on [#91](https://github.com/dfadler/Burl/issues/91) |
+| 7 | Avatars | Export **landed** (G9). Windowed: PR #107; NFC keys: PR #110; G8 mip check: evidence in a comment on [#91](https://github.com/dfadler/Gnarl/issues/91) |
 | 8 | `--transparent` | Closed, no visible effect in `-o` (unchanged) |
-| 9 | `--selection-colour`, pointer selection | **Landed after the `ceb39a8` snapshot, as of `6168c4a`** ([#92](https://github.com/dfadler/Burl/issues/92)): #119, #121, #122, #123, hover box #124. Gated by `sim_gate_small_repo_pick` and `sim_gate_small_repo_select`; real-display feel stays manual |
+| 9 | `--selection-colour`, pointer selection | **Landed after the `ceb39a8` snapshot, as of `6168c4a`** ([#92](https://github.com/dfadler/Gnarl/issues/92)): #119, #121, #122, #123, hover box #124. Gated by `sim_gate_small_repo_pick` and `sim_gate_small_repo_select`; real-display feel stays manual |
 | 10 | `--multi-sampling`, `--screen` | **Landed** (`6f160b5`) |
 | 11 | `--log-level` | **Landed** (`6e4f4fb`) |
 | 12 | Position slider | Windowed only; **PR #113** (never drawn in `-o`) |

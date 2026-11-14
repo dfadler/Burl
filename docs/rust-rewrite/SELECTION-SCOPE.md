@@ -1,6 +1,6 @@
 # Selection and pointer picking: scope decision
 
-Decision paper for [#92](https://github.com/dfadler/Burl/issues/92) (`OPTION-COVERAGE.md` Gap 9). It writes no feature code. The user picks an option; the chosen one becomes a ticket and, unless it is full parity, a row in `DEVIATIONS.md` (policy: #10). All C++ references are to `src/` at 0.57.
+Decision paper for [#92](https://github.com/dfadler/Gnarl/issues/92) (`OPTION-COVERAGE.md` Gap 9). It writes no feature code. The user picks an option; the chosen one becomes a ticket and, unless it is full parity, a row in `DEVIATIONS.md` (policy: #10). All C++ references are to `src/` at 0.57.
 
 **Status: historical.** Option B2 was chosen and has landed (#119-#124). Sections 2 to 7 describe `master` as it was before that stack; in particular `--selection-colour` is no longer unused (see `crates/gnarl/src/frame.rs` and `crates/gnarl-render/src/labels.rs`).
 

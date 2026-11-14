@@ -46,6 +46,17 @@ jobs:
           persist-credentials: false
       - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
 
+  package:
+    # Every crate packages and builds against its siblings as crates.io would see it; catches a
+    # missing `version` on a path dependency or a file outside a crate directory (#21 follow-up).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: cargo publish --workspace --exclude xtask --dry-run --locked
+
   golden-label:
     # Goldens and the reference fork change only in a PR labelled golden-refresh (#13).
     if: github.event_name == 'pull_request'

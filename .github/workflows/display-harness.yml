@@ -103,6 +103,7 @@ jobs:
             target/display-harness/burl.out
             target/display-harness-high-dpi/*.png
             target/display-harness-high-dpi/burl.out
+            target/display-harness-grab/*.png
             target/display-harness-grab/burl.out
             target/display-harness-drag/burl.out
             target/display-harness-drag/vd.out

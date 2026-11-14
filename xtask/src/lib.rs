@@ -1,5 +1,6 @@
 //! Helpers behind `cargo xtask` that tests also use.
 
+pub mod crisp_control;
 pub mod cursor_lab;
 pub mod display_harness;
 pub mod pixels;

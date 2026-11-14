@@ -10,6 +10,7 @@ on:
       - ".github/workflows/display-harness.yml"
       - "tools/display-harness/**"
       - "xtask/src/display_harness.rs"
+      - "xtask/src/crisp_control.rs"
       - "xtask/src/cursor_lab.rs"
       - "xtask/src/main.rs"
       - "xtask/src/pixels.rs"
@@ -88,6 +89,10 @@ jobs:
       # First hosted run is the experiment (see tools/display-harness/README.md).
       - run: cargo xtask display-harness --roundtrip
         if: ${{ !cancelled() }}
+      # Real negative control for the crispness check: a non-hi-res OpenGL window magnified by the
+      # compositor on the 2x display (lowres.m). Experiment: prints both scores and capture sizes.
+      - run: cargo xtask crisp-control
+        if: ${{ !cancelled() }}
       # Cursor lab (experiment): measures what the cursor does under a held grab, what an event tap
       # sees, whether the sprite shows in captures, and whether a virtual HID mouse can exist. It
       # prints a table and fails only on an infrastructure error; continue-on-error keeps this
@@ -125,6 +130,8 @@ jobs:
             target/display-harness-roundtrip/*.png
             target/display-harness-roundtrip/burl.out
             target/display-harness-roundtrip/vd.out
+            target/crisp-control/*.png
+            target/crisp-control/*.out
           if-no-files-found: ignore
           retention-days: 7
 

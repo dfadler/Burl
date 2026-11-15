@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/*", "xtask"]
 
 [workspace.package]
-version = "0.57.0"
+version = "0.58.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/dfadler/Gnarl"
@@ -14,12 +14,12 @@ rust-version = "1.88"
 [workspace.dependencies]
 # Path + version: the path is used in the workspace, the version when published. The release PR
 # bumps these with [workspace.package] version (`cargo build --locked` fails loudly if they differ).
-gnarl-util = { path = "crates/gnarl-util", version = "=0.57.0" }
-gnarl-conf = { path = "crates/gnarl-conf", version = "=0.57.0" }
-gnarl-formats = { path = "crates/gnarl-formats", version = "=0.57.0" }
-gnarl-sim = { path = "crates/gnarl-sim", version = "=0.57.0" }
-gnarl-render = { path = "crates/gnarl-render", version = "=0.57.0" }
-gnarl-gl = { path = "crates/gnarl-gl", version = "=0.57.0" }
+gnarl-util = { path = "crates/gnarl-util", version = "=0.58.0" }
+gnarl-conf = { path = "crates/gnarl-conf", version = "=0.58.0" }
+gnarl-formats = { path = "crates/gnarl-formats", version = "=0.58.0" }
+gnarl-sim = { path = "crates/gnarl-sim", version = "=0.58.0" }
+gnarl-render = { path = "crates/gnarl-render", version = "=0.58.0" }
+gnarl-gl = { path = "crates/gnarl-gl", version = "=0.58.0" }
 # One glam for the whole workspace (the sim pins the same version).
 glam = "=0.34.2"
 regex = "1"

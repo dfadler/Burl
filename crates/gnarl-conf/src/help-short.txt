@@ -1,4 +1,4 @@
-Gnarl v0.57
+Gnarl v0.58
 Usage: gnarl [options] [path]
 
 Options:

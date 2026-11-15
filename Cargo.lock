@@ -555,7 +555,7 @@ dependencies = [
 
 [[package]]
 name = "gnarl"
-version = "0.57.0"
+version = "0.58.0"
 dependencies = [
  "gnarl-conf",
  "gnarl-formats",
@@ -568,7 +568,7 @@ dependencies = [
 
 [[package]]
 name = "gnarl-conf"
-version = "0.57.0"
+version = "0.58.0"
 dependencies = [
  "chrono",
  "gnarl-util",
@@ -576,7 +576,7 @@ dependencies = [
 
 [[package]]
 name = "gnarl-formats"
-version = "0.57.0"
+version = "0.58.0"
 dependencies = [
  "gnarl-util",
  "roxmltree",
@@ -584,7 +584,7 @@ dependencies = [
 
 [[package]]
 name = "gnarl-gl"
-version = "0.57.0"
+version = "0.58.0"
 dependencies = [
  "glam",
  "glow",
@@ -598,7 +598,7 @@ dependencies = [
 
 [[package]]
 name = "gnarl-render"
-version = "0.57.0"
+version = "0.58.0"
 dependencies = [
  "fontdue",
  "gif",
@@ -612,7 +612,7 @@ dependencies = [
 
 [[package]]
 name = "gnarl-sim"
-version = "0.57.0"
+version = "0.58.0"
 dependencies = [
  "glam",
  "gnarl-formats",
@@ -621,7 +621,7 @@ dependencies = [
 
 [[package]]
 name = "gnarl-util"
-version = "0.57.0"
+version = "0.58.0"
 dependencies = [
  "chrono",
  "glam",
@@ -2232,7 +2232,7 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 
 [[package]]
 name = "xtask"
-version = "0.57.0"
+version = "0.58.0"
 dependencies = [
  "gnarl-sim",
  "png",

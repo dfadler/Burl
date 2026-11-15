@@ -4,6 +4,7 @@ pub mod crisp_control;
 pub mod cursor_lab;
 pub mod display_harness;
 pub mod edges;
+pub mod hid_rig;
 pub mod pixels;
 pub mod real_panel;
 pub mod roundtrip;

@@ -2,6 +2,8 @@
 //! runs them (the workflow calls this command, so the two cannot drift).
 //! `cargo xtask sim-compare GOLDEN ACTUAL [--floats exact|report]`: the simulation-gate comparator.
 //! `cargo xtask display-harness`: the macOS virtual-display harness (ticket #152, macOS only).
+//! `cargo xtask display-harness --grab-device [--port PATH]`: a real HID device's relative motion
+//! under a `Locked` grab (ticket #211); SKIPS (exit 0, not a pass) with no rig, see tools/hid-rig/.
 //! `cargo xtask ssim A B [--min X]`, `ssim-frames STREAM.ppm PREFIX I,J,..`, `ssim-threshold V..`:
 //! the visual-equivalence gate's comparator and helpers (ticket #12).
 
@@ -136,6 +138,9 @@ fn harness_args_ok(args: &[String]) -> bool {
 
 /// `display-harness`: macOS only (private CGVirtualDisplay API); exit 1 on a failed step or assertion.
 fn display_harness_cmd(args: &[String]) -> ExitCode {
+    if args.first().map(String::as_str) == Some("--grab-device") {
+        return grab_device_cmd(args);
+    }
     let has = |f: &str| args.iter().any(|a| a == f);
     let (high_dpi, grab, drag, roundtrip, real_panel) = (
         has("--high-dpi"),
@@ -164,6 +169,46 @@ fn display_harness_cmd(args: &[String]) -> ExitCode {
         xtask::display_harness::run_harness(&workspace_root(), high_dpi)
     };
     match result {
+        Ok(()) => {
+            eprintln!("display-harness: all assertions passed");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("display-harness: FAIL: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// `display-harness --grab-device [--port PATH]`: exit 0 pass OR SKIPPED (no device; not a pass),
+/// 1 on a failed assertion or a device the user named that does not work, 2 on bad usage.
+fn grab_device_cmd(args: &[String]) -> ExitCode {
+    let port = match xtask::hid_rig::parse_args(args) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("{e}");
+            return ExitCode::from(2);
+        }
+    };
+    if !cfg!(target_os = "macos") {
+        eprintln!("display-harness: needs macOS");
+        return ExitCode::FAILURE;
+    }
+    let mut dev = match xtask::hid_rig::pick_backend(port.as_deref()) {
+        Ok(Some(d)) => d,
+        Ok(None) => {
+            eprintln!(
+                "display-harness --grab-device: SKIPPED (not a pass): no HID rig found (no /dev/cu.usbmodem* answering `ping`, and ${} unset). See tools/hid-rig/README.md.",
+                xtask::hid_rig::HELPER_ENV
+            );
+            return ExitCode::SUCCESS;
+        }
+        Err(e) => {
+            eprintln!("display-harness: FAIL: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match xtask::display_harness::run_grab_device_check(&workspace_root(), dev.as_mut()) {
         Ok(()) => {
             eprintln!("display-harness: all assertions passed");
             ExitCode::SUCCESS
@@ -234,7 +279,7 @@ fn main() -> ExitCode {
         return sim_compare(&args[1..]);
     }
     if args.first().map(String::as_str) != Some("ci") || args[1..].iter().any(|a| a != "--pcre2") {
-        eprintln!("usage: cargo xtask ci [--pcre2] | sim-compare .. | ssim* .. | display-harness [--high-dpi | --grab | --drag | --roundtrip | --real-panel] | crisp-control | cursor-lab");
+        eprintln!("usage: cargo xtask ci [--pcre2] | sim-compare .. | ssim* .. | display-harness [--high-dpi | --grab | --drag | --roundtrip | --real-panel | --grab-device [--port PATH]] | crisp-control | cursor-lab");
         return ExitCode::from(2);
     }
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());

@@ -677,8 +677,16 @@ fn screen_shot(dir: &Path, name: &str, cursor: bool) -> Result<crate::ssim::Imag
 /// 50 points of synthetic `CGEventPost` drag while gnarl held a locked grab (`(412, 390) -> (462, 390)`),
 /// so synthetic events bypass the detach and a position check cannot tell a lock from none. It needs
 /// no virtual display.
-pub fn run_grab_check(root: &Path) -> Result<(), String> {
-    let dir = root.join("target/display-harness-grab");
+/// gnarl running for a grab check: built, started, its window found and in front.
+struct GrabRig {
+    dir: PathBuf,
+    gnarl_out: PathBuf,
+    w: Window,
+    _gnarl: Proc,
+}
+
+fn start_grab_rig(root: &Path, dir_name: &str) -> Result<GrabRig, String> {
+    let dir = root.join(dir_name);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let src = root.join("tools/display-harness");
     for (m, bin) in [("mouse.m", "mouse"), ("wid.m", "wid")] {
@@ -747,7 +755,21 @@ pub fn run_grab_check(root: &Path) -> Result<(), String> {
         "tell application \"System Events\" to set frontmost of (first process whose name is \"gnarl\") to true",
     ]))?;
     std::thread::sleep(Duration::from_secs(3));
+    Ok(GrabRig {
+        dir,
+        gnarl_out,
+        w,
+        _gnarl,
+    })
+}
 
+pub fn run_grab_check(root: &Path) -> Result<(), String> {
+    let GrabRig {
+        dir,
+        gnarl_out,
+        w,
+        _gnarl,
+    } = start_grab_rig(root, "target/display-harness-grab")?;
     let mouse_bin = dir.join("mouse");
     // Well inside the content area, clear of the title bar and the window edges.
     let p = (w.x + (w.w as i32) / 2 - 100, w.y + (w.h as i32) * 3 / 4);
@@ -860,6 +882,114 @@ pub fn run_grab_check(root: &Path) -> Result<(), String> {
         pixels::check_cursor_returned(after_sprite, before_scores.sprite, before_scores.noise)
             .map_err(|e| format!("cursor after the release: {e}"))?;
     eprintln!("ok   the cursor sprite returns after the release: {nums}");
+    Ok(())
+}
+
+// ---- real device under the grab (`--grab-device`, ticket #211) ----
+
+/// UNRUN until a rig exists. Device counts sent per phase: `STEPS` reports of `STEP_COUNTS` right.
+const DEVICE_STEPS: i32 = 20;
+const DEVICE_STEP_COUNTS: i32 = 5;
+
+/// Sends the motion through the device, one report at a time, then lets the cursor settle.
+fn device_push(dev: &mut dyn crate::hid_rig::RelativeMouse) -> Result<(), String> {
+    for _ in 0..DEVICE_STEPS {
+        dev.rel(DEVICE_STEP_COUNTS, 0)?;
+        std::thread::sleep(Duration::from_millis(30));
+    }
+    std::thread::sleep(Duration::from_millis(400));
+    Ok(())
+}
+
+/// The control (no grab): the device moves the cursor. Then press and hold the device's button on
+/// gnarl's background (a real press: gnarl grabs `Locked`), send the same motion, and the cursor must
+/// not follow. The harness's own `mouse warp` only PLACES the cursor beforehand.
+pub fn run_grab_device_check(
+    root: &Path,
+    dev: &mut dyn crate::hid_rig::RelativeMouse,
+) -> Result<(), String> {
+    let GrabRig {
+        dir,
+        gnarl_out,
+        w,
+        _gnarl,
+    } = start_grab_rig(root, "target/display-harness-grab-device")?;
+    let mouse_bin = dir.join("mouse");
+    let p = (w.x + (w.w as i32) / 2 - 100, w.y + (w.h as i32) * 3 / 4);
+    let place = || -> Result<(), String> {
+        mouse(&mouse_bin, &["warp".into(), s(p.0), s(p.1)])?;
+        std::thread::sleep(Duration::from_millis(300));
+        let at = cursor(&mouse_bin)?;
+        if (at.0 - p.0).abs() > 3 || (at.1 - p.1).abs() > 3 {
+            return Err(format!(
+                "the helper could not place the cursor at {p:?} (it is at {at:?})"
+            ));
+        }
+        Ok(())
+    };
+    let delta = |a: (i32, i32), b: (i32, i32)| (b.0 - a.0, b.1 - a.1);
+    let sent = (DEVICE_STEPS * DEVICE_STEP_COUNTS, 0);
+
+    place()?;
+    let before = parse_grab_events(&read(&gnarl_out)).len();
+    device_push(dev)?;
+    let control = delta(p, cursor(&mouse_bin)?);
+    eprintln!("info control (no grab): sent {sent:?} counts, cursor moved {control:?} pt");
+    if parse_grab_events(&read(&gnarl_out)).len() != before {
+        return Err("gnarl logged a grab during the no-button control".into());
+    }
+
+    place()?;
+    dev.down()?;
+    let held = (|| -> Result<(i32, i32), String> {
+        // The firmware releases a held button after 5 s without serial traffic, so every poll
+        // sends a ping: the wait can be long and the button still stays down until `dev.up()`.
+        poll(
+            "gnarl's `grab: event=on` line after the device press",
+            15,
+            || {
+                if let Err(e) = dev.available() {
+                    return Some(Err(format!("the device stopped answering while held: {e}")));
+                }
+                parse_grab_events(&read(&gnarl_out))
+                    .get(before..)?
+                    .iter()
+                    .any(|(on, _)| *on)
+                    .then_some(Ok(()))
+            },
+        )??;
+        std::thread::sleep(Duration::from_millis(500));
+        let at = cursor(&mouse_bin)?;
+        device_push(dev)?;
+        Ok(delta(at, cursor(&mouse_bin)?))
+    })();
+    // Release whatever happened, so a failure above cannot leave the device's button down.
+    dev.up()?;
+    let locked = held?;
+    eprintln!("info locked: sent {sent:?} counts, cursor moved {locked:?} pt");
+    poll(
+        "gnarl's `grab: event=off` line after the device release",
+        15,
+        || {
+            parse_grab_events(&read(&gnarl_out))
+                .get(before..)?
+                .iter()
+                .any(|(on, _)| !*on)
+                .then_some(())
+        },
+    )?;
+    check_grab_cycle(&parse_grab_events(&read(&gnarl_out))[before..])?;
+    // The grab is off: the same motion must move the cursor again (the log line alone does not
+    // prove the cursor was freed).
+    let freed_at = cursor(&mouse_bin)?;
+    device_push(dev)?;
+    let released = delta(freed_at, cursor(&mouse_bin)?);
+    eprintln!("info released: sent {sent:?} counts, cursor moved {released:?} pt");
+    crate::hid_rig::check_device_motion(control, locked, released, sent)?;
+    eprintln!(
+        "ok   {}: relative motion moves the cursor with no grab, not under the Locked grab, and again after the release",
+        dev.name()
+    );
     Ok(())
 }
 

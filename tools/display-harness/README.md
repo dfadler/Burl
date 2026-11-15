@@ -122,6 +122,12 @@ so `CGEventPost` bypasses the detach and a position check cannot tell a lock fro
 covered: that the cursor is detached from the device (a real device's relative motion; no HID route
 exists on hosted runners), so the checklist's cursor-grab box stays manual for that part.
 
+**Real device, `--grab-device`:** `cargo xtask display-harness --grab-device [--port PATH]` sends
+relative motion from a real HID device (a Pico rig, or a Karabiner virtual device on a local Mac),
+first with no grab (the cursor must move) and then under a held grab (it must not). It needs
+hardware, so it **skips with exit 0, "SKIPPED (not a pass)"** when no rig answers, and has **never
+run**. See `tools/hid-rig/README.md`.
+
 ## Real window drag, `--drag`
 
 ```
